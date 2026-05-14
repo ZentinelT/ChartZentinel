@@ -6,7 +6,7 @@
 <title>Zentinel Charts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://unpkg.com/lightweight-charts@5.0.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
     --bg-primary:   #0a0a0c;
@@ -905,17 +905,15 @@ function initChart() {
       rightOffset:         8,
       barSpacing:          10,
     },
-    watermark: {
-      visible:  true,
-      fontSize: 52,
-      horzAlign: 'center',
-      vertAlign: 'center',
-      color:    'rgba(201,168,76,0.03)',
-      text:     'ZENTINEL',
-    },
   });
 
-  candleSeries = chart.addCandlestickSeries({
+  // Watermark v5
+  LightweightCharts.createTextWatermark(chart.panes()[0], {
+    horzAlign: 'center', vertAlign: 'center',
+    lines: [{ text: 'ZENTINEL', color: 'rgba(201,168,76,0.03)', fontSize: 52, fontFamily: "'Cinzel', serif" }],
+  });
+
+  candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
     upColor:          '#26a69a',
     downColor:        '#ef5350',
     borderUpColor:    '#26a69a',
@@ -925,11 +923,10 @@ function initChart() {
   });
 
   // Volume pane
-  volumeSeries = chart.addHistogramSeries({
+  volumeSeries = chart.addSeries(LightweightCharts.HistogramSeries, {
     color:      '#c9a84c22',
     priceFormat:{ type: 'volume' },
     priceScaleId: 'vol',
-    scaleMargins: { top: 0.82, bottom: 0 },
   });
   chart.priceScale('vol').applyOptions({
     scaleMargins: { top: 0.82, bottom: 0 },
@@ -1126,19 +1123,19 @@ function initDrawingLayer() {
     const opts = { color:'#c9a84c88', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false };
 
     if (tool === 'hline') {
-      previewSeries = chart.addLineSeries(opts);
+      previewSeries = chart.addSeries(LightweightCharts.LineSeries, opts);
       previewSeries.setData([{time:candles[0].time, value:drawStart.price},{time:candles[candles.length-1].time, value:drawStart.price}]);
     } else if (tool === 'trendline') {
       const t1 = Math.min(drawStart.time, t2);
       const t2e = Math.max(drawStart.time, t2);
       if (t1 !== t2e) {
-        previewSeries = chart.addLineSeries(opts);
+        previewSeries = chart.addSeries(LightweightCharts.LineSeries, opts);
         const p1 = drawStart.time <= t2 ? drawStart.price : price2;
         const p2 = drawStart.time <= t2 ? price2 : drawStart.price;
         previewSeries.setData([{time:t1,value:p1},{time:t2e,value:p2}]);
       }
     } else if (tool === 'rect' || tool === 'fib') {
-      previewSeries = chart.addLineSeries(opts);
+      previewSeries = chart.addSeries(LightweightCharts.LineSeries, opts);
       const hi = Math.max(drawStart.price, price2);
       const t1 = candles[0].time;
       const tend = candles[candles.length-1].time;
@@ -1158,7 +1155,7 @@ function initDrawingLayer() {
     const C = '#c9a84c';
 
     if (tool === 'hline') {
-      const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+      const s = chart.addSeries(LightweightCharts.LineSeries, { color:C, lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
       s.setData([{time:candles[0].time,value:drawStart.price},{time:candles[candles.length-1].time,value:drawStart.price}]);
       drawings.push({ type:'hline', series:[s] });
 
@@ -1168,7 +1165,7 @@ function initDrawingLayer() {
       if (t1 !== tend) {
         const p1 = drawStart.time <= t2 ? drawStart.price : price2;
         const p2 = drawStart.time <= t2 ? price2 : drawStart.price;
-        const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+        const s = chart.addSeries(LightweightCharts.LineSeries, { color:C, lineWidth:1, lineStyle:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
         s.setData([{time:t1,value:p1},{time:tend,value:p2}]);
         drawings.push({ type:'trendline', series:[s] });
       }
@@ -1180,7 +1177,7 @@ function initDrawingLayer() {
       const tend = Math.max(drawStart.time, t2);
       if (t1 !== tend) {
         const mkLine = (pts) => {
-          const s = chart.addLineSeries({ color:C+'99', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+          const s = chart.addSeries(LightweightCharts.LineSeries, { color:C+'99', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
           s.setData(pts); return s;
         };
         const top = mkLine([{time:t1,value:hi},{time:tend,value:hi}]);
@@ -1199,7 +1196,7 @@ function initDrawingLayer() {
       const colors = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
       const seriesList = levels.map((lvl, i) => {
         const val = hi - (hi - lo) * lvl;
-        const s = chart.addLineSeries({ color:colors[i]+'bb', lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+        const s = chart.addSeries(LightweightCharts.LineSeries, { color:colors[i]+'bb', lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
         s.setData([{time:t1,value:val},{time:tend,value:val}]);
         return s;
       });
@@ -1274,7 +1271,7 @@ function addIndicatorSeries(name) {
   if (!rawData.length) return;
 
   const calcData = def.calc(rawData);
-  const series = chart.addLineSeries({
+  const series = chart.addSeries(LightweightCharts.LineSeries, {
     color:       def.color,
     lineWidth:   1,
     priceLineVisible: false,
