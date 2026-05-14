@@ -6,7 +6,7 @@
 <title>Zentinel Charts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@5.0.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
     --bg-primary:   #0a0a0c;
@@ -644,6 +644,40 @@
     color: var(--gold-bright); font-size: 12px; font-weight: 700;
     padding: 3px 10px; cursor: pointer;
   }
+  /* ─── TOOL CONFIG POPUP ─────────────────────────────── */
+  #tool-config {
+    position: fixed;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    min-width: 190px;
+    pointer-events: all;
+  }
+  #tool-config.open { display: flex; }
+  #tool-config .cfg-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-secondary);
+  }
+  #tool-config .cfg-row label { width: 46px; flex-shrink: 0; }
+  #tool-config input[type=color] {
+    width: 28px; height: 22px; border: none; border-radius: 4px;
+    background: none; cursor: pointer; padding: 0;
+  }
+  #tool-config select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: 4px; color: var(--text-primary);
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 3px 6px; flex: 1; outline: none;
+  }
+  #tool-config input[type=range] { flex: 1; accent-color: var(--gold); }
+  #tool-config .cfg-val { font-family: var(--font-mono); font-size: 11px; color: var(--gold); width: 16px; }
 </style>
 </head>
 <body>
@@ -856,6 +890,27 @@
   </div>
 </div>
 
+<!-- ══ TOOL CONFIG POPUP ══════════════════════════════════ -->
+<div id="tool-config">
+  <div class="cfg-row">
+    <label>Color</label>
+    <input type="color" id="cfg-color" value="#c9a84c">
+  </div>
+  <div class="cfg-row">
+    <label>Grosor</label>
+    <input type="range" id="cfg-width" min="1" max="4" value="1" step="1">
+    <span class="cfg-val" id="cfg-width-val">1</span>
+  </div>
+  <div class="cfg-row">
+    <label>Estilo</label>
+    <select id="cfg-style">
+      <option value="0">Sólida</option>
+      <option value="1">Punteada</option>
+      <option value="2">Discontinua</option>
+    </select>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════
 //  STATE
@@ -905,15 +960,17 @@ function initChart() {
       rightOffset:         8,
       barSpacing:          10,
     },
+    watermark: {
+      visible:   true,
+      fontSize:  52,
+      horzAlign: 'center',
+      vertAlign: 'center',
+      color:     'rgba(201,168,76,0.03)',
+      text:      'ZENTINEL',
+    },
   });
 
-  // Watermark v5
-  LightweightCharts.createTextWatermark(chart.panes()[0], {
-    horzAlign: 'center', vertAlign: 'center',
-    lines: [{ text: 'ZENTINEL', color: 'rgba(201,168,76,0.03)', fontSize: 52, fontFamily: "'Cinzel', serif" }],
-  });
-
-  candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
+  candleSeries = chart.addCandlestickSeries({
     upColor:          '#26a69a',
     downColor:        '#ef5350',
     borderUpColor:    '#26a69a',
@@ -923,9 +980,9 @@ function initChart() {
   });
 
   // Volume pane
-  volumeSeries = chart.addSeries(LightweightCharts.HistogramSeries, {
-    color:      '#c9a84c22',
-    priceFormat:{ type: 'volume' },
+  volumeSeries = chart.addHistogramSeries({
+    color:        '#c9a84c22',
+    priceFormat:  { type: 'volume' },
     priceScaleId: 'vol',
   });
   chart.priceScale('vol').applyOptions({
@@ -1123,19 +1180,19 @@ function initDrawingLayer() {
     const opts = { color:'#c9a84c88', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false };
 
     if (tool === 'hline') {
-      previewSeries = chart.addSeries(LightweightCharts.LineSeries, opts);
+      previewSeries = chart.addLineSeries(opts);
       previewSeries.setData([{time:candles[0].time, value:drawStart.price},{time:candles[candles.length-1].time, value:drawStart.price}]);
     } else if (tool === 'trendline') {
       const t1 = Math.min(drawStart.time, t2);
       const t2e = Math.max(drawStart.time, t2);
       if (t1 !== t2e) {
-        previewSeries = chart.addSeries(LightweightCharts.LineSeries, opts);
+        previewSeries = chart.addLineSeries(opts);
         const p1 = drawStart.time <= t2 ? drawStart.price : price2;
         const p2 = drawStart.time <= t2 ? price2 : drawStart.price;
         previewSeries.setData([{time:t1,value:p1},{time:t2e,value:p2}]);
       }
     } else if (tool === 'rect' || tool === 'fib') {
-      previewSeries = chart.addSeries(LightweightCharts.LineSeries, opts);
+      previewSeries = chart.addLineSeries(opts);
       const hi = Math.max(drawStart.price, price2);
       const t1 = candles[0].time;
       const tend = candles[candles.length-1].time;
@@ -1155,7 +1212,7 @@ function initDrawingLayer() {
     const C = '#c9a84c';
 
     if (tool === 'hline') {
-      const s = chart.addSeries(LightweightCharts.LineSeries, { color:C, lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+      const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
       s.setData([{time:candles[0].time,value:drawStart.price},{time:candles[candles.length-1].time,value:drawStart.price}]);
       drawings.push({ type:'hline', series:[s] });
 
@@ -1165,7 +1222,7 @@ function initDrawingLayer() {
       if (t1 !== tend) {
         const p1 = drawStart.time <= t2 ? drawStart.price : price2;
         const p2 = drawStart.time <= t2 ? price2 : drawStart.price;
-        const s = chart.addSeries(LightweightCharts.LineSeries, { color:C, lineWidth:1, lineStyle:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+        const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
         s.setData([{time:t1,value:p1},{time:tend,value:p2}]);
         drawings.push({ type:'trendline', series:[s] });
       }
@@ -1177,7 +1234,7 @@ function initDrawingLayer() {
       const tend = Math.max(drawStart.time, t2);
       if (t1 !== tend) {
         const mkLine = (pts) => {
-          const s = chart.addSeries(LightweightCharts.LineSeries, { color:C+'99', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+          const s = chart.addLineSeries({ color:C+'99', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
           s.setData(pts); return s;
         };
         const top = mkLine([{time:t1,value:hi},{time:tend,value:hi}]);
@@ -1196,7 +1253,7 @@ function initDrawingLayer() {
       const colors = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
       const seriesList = levels.map((lvl, i) => {
         const val = hi - (hi - lo) * lvl;
-        const s = chart.addSeries(LightweightCharts.LineSeries, { color:colors[i]+'bb', lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+        const s = chart.addLineSeries({ color:colors[i]+'bb', lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
         s.setData([{time:t1,value:val},{time:tend,value:val}]);
         return s;
       });
@@ -1271,7 +1328,7 @@ function addIndicatorSeries(name) {
   if (!rawData.length) return;
 
   const calcData = def.calc(rawData);
-  const series = chart.addSeries(LightweightCharts.LineSeries, {
+  const series = chart.addLineSeries({
     color:       def.color,
     lineWidth:   1,
     priceLineVisible: false,
