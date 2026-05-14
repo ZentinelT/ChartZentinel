@@ -1109,130 +1109,83 @@ function toggleVolume() {
   document.getElementById('btn-volume').classList.toggle('active', volumeVisible);
 }
 
-// ── Config popup ──────────────────────────────────────────
-const toolConfig = { color: '#c9a84c', width: 1, style: 0 };
-
-(function initToolConfig() {
-  const colorEl = document.getElementById('cfg-color');
-  const widthEl = document.getElementById('cfg-width');
-  const widthVal = document.getElementById('cfg-width-val');
-  const styleEl = document.getElementById('cfg-style');
-  if (colorEl) colorEl.addEventListener('input', e => { toolConfig.color = e.target.value; });
-  if (widthEl) widthEl.addEventListener('input', e => { toolConfig.width = parseInt(e.target.value); widthVal.textContent = e.target.value; });
-  if (styleEl) styleEl.addEventListener('change', e => { toolConfig.style = parseInt(e.target.value); });
-})();
-
-function showToolConfig(btnEl) {
-  const popup = document.getElementById('tool-config');
-  if (!popup) return;
-  const r = btnEl.getBoundingClientRect();
-  popup.style.left = (r.right + 8) + 'px';
-  popup.style.top  = r.top + 'px';
-  popup.classList.add('open');
-}
-function hideToolConfig() {
-  const popup = document.getElementById('tool-config');
-  if (popup) popup.classList.remove('open');
-}
-
-// ── Selection ─────────────────────────────────────────────
-let selectedDrawing = null;
-
-function deselectDrawing() {
-  if (!selectedDrawing) return;
-  const d = selectedDrawing;
-  d.series.forEach(s => { try { s.applyOptions({ color: d.origColor, lineWidth: d.origWidth }); } catch(e){} });
-  selectedDrawing = null;
-}
-
-function selectDrawing(d) {
-  deselectDrawing();
-  selectedDrawing = d;
-  d.series.forEach(s => { try { s.applyOptions({ color: '#ffffff', lineWidth: Math.min(d.origWidth + 1, 5) }); } catch(e){} });
-}
-
-function deleteSelected() {
-  if (!selectedDrawing) return;
-  selectedDrawing.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
-  if (selectedDrawing.label) selectedDrawing.label.remove();
-  const idx = drawings.indexOf(selectedDrawing);
-  if (idx > -1) drawings.splice(idx, 1);
-  selectedDrawing = null;
-}
-
-document.addEventListener('keydown', e => {
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawing) { e.preventDefault(); deleteSelected(); }
-  if (e.key === 'Escape') { hideToolConfig(); deselectDrawing(); }
-});
-
-// ── Tool selection ────────────────────────────────────────
 function setTool(btn, name) {
   document.querySelectorAll('.tool-btn').forEach(b => {
     if (b.id !== 'btn-volume') b.classList.remove('active');
   });
   btn.classList.add('active');
   STATE.activeTool = name;
-  deselectDrawing();
-  if (name !== 'cursor' && name !== 'cross') showToolConfig(btn);
-  else hideToolConfig();
 }
 
-// ── Drawings ──────────────────────────────────────────────
 const drawings = [];
 
 function clearDrawings() {
-  drawings.forEach(d => {
-    d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
-    if (d.label) d.label.remove();
-  });
+  drawings.forEach(d => d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} }));
   drawings.length = 0;
-  selectedDrawing = null;
+  document.querySelectorAll('.chart-label').forEach(el => el.remove());
 }
 
 function initDrawingLayer() {
   const container = document.getElementById('chart-container');
-  let drawStart = null;
-  let previewSeries = null;
 
-  function removePreview() {
-    if (previewSeries) { try { chart.removeSeries(previewSeries); } catch(e){} previewSeries = null; }
+  // SVG overlay — sits on top of chart, captures all pointer events when a draw tool is active
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+
+  // Preview element inside SVG
+  let previewEl = null;
+  let drawStart = null; // { x, y, price, time }
+
+  function syncSvgSize() {
+    svg.setAttribute('width',  container.clientWidth);
+    svg.setAttribute('height', container.clientHeight);
+  }
+  new ResizeObserver(syncSvgSize).observe(container);
+  syncSvgSize();
+
+  function clearPreview() {
+    if (previewEl) { previewEl.remove(); previewEl = null; }
   }
 
+  // Convert mouse event → pixel coords + chart coords
   function getCoords(e) {
     const rect = container.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    return { x, y, price: candleSeries.coordinateToPrice(y), time: chart.timeScale().coordinateToTime(x) };
+    const price = candleSeries.coordinateToPrice(y);
+    // coordinateToTime can return null when outside data range — clamp to nearest edge
+    let time = chart.timeScale().coordinateToTime(x);
+    const candles = window._lastCandles || [];
+    if (time === null && candles.length) {
+      // Determine which edge is closer
+      const firstX = chart.timeScale().timeToCoordinate(candles[0].time);
+      time = (x <= (firstX || 0)) ? candles[0].time : candles[candles.length - 1].time;
+    }
+    return { x, y, price, time };
   }
 
-  function mkLine(pts, color, w, s, showLast) {
-    const series = chart.addLineSeries({ color, lineWidth: w, lineStyle: s, priceLineVisible: false, lastValueVisible: !!showLast, crosshairMarkerVisible: false });
-    series.setData(pts);
-    return series;
-  }
-
-  // Click en cursor: seleccionar dibujo cercano
-  container.addEventListener('click', e => {
-    if (STATE.activeTool !== 'cursor') return;
-    const { y } = getCoords(e);
-    const THRESH = 10;
-    let best = null, bestDist = Infinity;
-    drawings.forEach(d => {
-      if (d.price == null) return;
-      const sy = candleSeries.priceToCoordinate(d.price);
-      if (sy === null) return;
-      const dist = Math.abs(sy - y);
-      if (dist < THRESH && dist < bestDist) { bestDist = dist; best = d; }
-    });
-    if (best) selectDrawing(best);
-    else deselectDrawing();
-  });
-
-  container.addEventListener('mousedown', e => {
+  // Enable pointer events on svg only when a draw tool is active
+  function updateSvgCapture() {
     const tool = STATE.activeTool;
-    if (tool === 'cursor' || tool === 'cross') return;
+    svg.style.pointerEvents = (tool === 'cursor' || tool === 'cross') ? 'none' : 'all';
+    svg.style.cursor = (tool === 'cursor' || tool === 'cross') ? '' :
+      tool === 'text' ? 'text' : 'crosshair';
+  }
+
+  // Patch setTool to also update svg capture
+  const _origSetTool = window.setTool;
+  window.setTool = function(btn, name) {
+    _origSetTool(btn, name);
+    updateSvgCapture();
+  };
+
+  // ── MOUSEDOWN ──────────────────────────────────────────────
+  svg.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const tool = STATE.activeTool;
     const { x, y, price, time } = getCoords(e);
-    if (price === null) return;
+    if (price === null || time === null) return;
     const candles = window._lastCandles || [];
     if (!candles.length) return;
 
@@ -1242,87 +1195,143 @@ function initDrawingLayer() {
       const label = document.createElement('div');
       label.className = 'chart-label';
       label.textContent = text;
-      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolConfig.color};font-family:var(--font-mono);font-size:${10 + toolConfig.width}px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.75);padding:1px 5px;border-radius:3px;`;
+      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:var(--gold);font-family:var(--font-mono);font-size:11px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;`;
       container.appendChild(label);
-      drawings.push({ type:'text', series:[], label, price, origColor: toolConfig.color, origWidth: toolConfig.width });
+      drawings.push({ type:'text', series:[], label });
       return;
     }
-    drawStart = { price, time: time || candles[0].time };
+
+    drawStart = { x, y, price, time };
   });
 
-  container.addEventListener('mousemove', e => {
+  // ── MOUSEMOVE ──────────────────────────────────────────────
+  svg.addEventListener('mousemove', e => {
     if (!drawStart) return;
+    e.preventDefault();
     const tool = STATE.activeTool;
-    const { price: p2, time: t2r } = getCoords(e);
-    if (p2 === null) return;
-    const candles = window._lastCandles || [];
-    if (!candles.length) return;
-    const t2 = t2r || candles[candles.length-1].time;
-    const prev = { color: toolConfig.color + '77', lineWidth: toolConfig.width, lineStyle: toolConfig.style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
-    removePreview();
+    const { x: x2, y: y2 } = getCoords(e);
+
+    clearPreview();
+
+    const GOLD = '#c9a84c';
+    const GOLDA = '#c9a84c88';
 
     if (tool === 'hline') {
-      previewSeries = chart.addLineSeries(prev);
-      previewSeries.setData([{ time: candles[0].time, value: drawStart.price }, { time: candles[candles.length-1].time, value: drawStart.price }]);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', 0); line.setAttribute('y1', drawStart.y);
+      line.setAttribute('x2', container.clientWidth); line.setAttribute('y2', drawStart.y);
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', '1');
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
+
     } else if (tool === 'trendline') {
-      const t1 = Math.min(drawStart.time, t2), tend = Math.max(drawStart.time, t2);
-      if (t1 !== tend) {
-        previewSeries = chart.addLineSeries(prev);
-        const p1 = drawStart.time <= t2 ? drawStart.price : p2;
-        const pp2 = drawStart.time <= t2 ? p2 : drawStart.price;
-        previewSeries.setData([{ time: t1, value: p1 }, { time: tend, value: pp2 }]);
-      }
-    } else if (tool === 'rect' || tool === 'fib') {
-      previewSeries = chart.addLineSeries(prev);
-      previewSeries.setData([{ time: candles[0].time, value: Math.max(drawStart.price, p2) }, { time: candles[candles.length-1].time, value: Math.max(drawStart.price, p2) }]);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
+      line.setAttribute('x2', x2);          line.setAttribute('y2', y2);
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', '1');
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
+
+    } else if (tool === 'rect') {
+      const rx = Math.min(drawStart.x, x2);
+      const ry = Math.min(drawStart.y, y2);
+      const rw = Math.abs(x2 - drawStart.x);
+      const rh = Math.abs(y2 - drawStart.y);
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', rx); rect.setAttribute('y', ry);
+      rect.setAttribute('width', rw); rect.setAttribute('height', rh);
+      rect.setAttribute('stroke', GOLDA); rect.setAttribute('stroke-width', '1');
+      rect.setAttribute('stroke-dasharray', '4,3');
+      rect.setAttribute('fill', 'rgba(201,168,76,0.06)');
+      svg.appendChild(rect); previewEl = rect;
+
+    } else if (tool === 'fib') {
+      const ry = Math.min(drawStart.y, y2);
+      const rh = Math.abs(y2 - drawStart.y);
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+      const fibColors = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
+      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+      levels.forEach((lvl, i) => {
+        const ly = ry + rh * lvl;
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1', 0); line.setAttribute('y1', ly);
+        line.setAttribute('x2', container.clientWidth); line.setAttribute('y2', ly);
+        line.setAttribute('stroke', fibColors[i]+'bb'); line.setAttribute('stroke-width', '1');
+        line.setAttribute('stroke-dasharray', '3,3');
+        group.appendChild(line);
+      });
+      svg.appendChild(group); previewEl = group;
     }
   });
 
-  container.addEventListener('mouseup', e => {
+  // ── MOUSEUP ────────────────────────────────────────────────
+  svg.addEventListener('mouseup', e => {
     if (!drawStart) return;
+    e.preventDefault();
     const tool = STATE.activeTool;
-    removePreview();
-    const { price: p2, time: t2r } = getCoords(e);
-    if (p2 === null) { drawStart = null; return; }
+    clearPreview();
+
+    const { price: price2, time: time2 } = getCoords(e);
+    if (price2 === null || time2 === null) { drawStart = null; return; }
     const candles = window._lastCandles || [];
     if (!candles.length) { drawStart = null; return; }
-    const t2 = t2r || candles[candles.length-1].time;
-    const C = toolConfig.color, W = toolConfig.width, S = toolConfig.style;
+    const C = '#c9a84c';
 
     if (tool === 'hline') {
-      const s = mkLine([{ time: candles[0].time, value: drawStart.price }, { time: candles[candles.length-1].time, value: drawStart.price }], C, W, S, true);
-      drawings.push({ type:'hline', series:[s], price: drawStart.price, origColor: C, origWidth: W });
+      const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+      s.setData([{time:candles[0].time,value:drawStart.price},{time:candles[candles.length-1].time,value:drawStart.price}]);
+      drawings.push({ type:'hline', series:[s] });
 
     } else if (tool === 'trendline') {
-      const t1 = Math.min(drawStart.time, t2), tend = Math.max(drawStart.time, t2);
+      const t1 = Math.min(drawStart.time, time2);
+      const tend = Math.max(drawStart.time, time2);
       if (t1 !== tend) {
-        const p1 = drawStart.time <= t2 ? drawStart.price : p2;
-        const pp2 = drawStart.time <= t2 ? p2 : drawStart.price;
-        const s = mkLine([{ time: t1, value: p1 }, { time: tend, value: pp2 }], C, W, S, false);
-        drawings.push({ type:'trendline', series:[s], price: (p1+pp2)/2, origColor: C, origWidth: W });
+        const p1 = drawStart.time <= time2 ? drawStart.price : price2;
+        const p2 = drawStart.time <= time2 ? price2 : drawStart.price;
+        const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+        s.setData([{time:t1,value:p1},{time:tend,value:p2}]);
+        drawings.push({ type:'trendline', series:[s] });
       }
 
     } else if (tool === 'rect') {
-      const hi = Math.max(drawStart.price, p2), lo = Math.min(drawStart.price, p2);
-      const t1 = Math.min(drawStart.time, t2), tend = Math.max(drawStart.time, t2);
-      if (t1 !== tend) {
-        const top = mkLine([{time:t1,value:hi},{time:tend,value:hi}], C, W, S);
-        const bot = mkLine([{time:t1,value:lo},{time:tend,value:lo}], C, W, S);
-        const lft = mkLine([{time:t1,value:lo},{time:t1,value:hi}], C, W, S);
-        const rgt = mkLine([{time:tend,value:lo},{time:tend,value:hi}], C, W, S);
-        drawings.push({ type:'rect', series:[top,bot,lft,rgt], price:(hi+lo)/2, origColor:C, origWidth:W });
+      const hi = Math.max(drawStart.price, price2);
+      const lo = Math.min(drawStart.price, price2);
+      const t1 = Math.min(drawStart.time, time2);
+      const tend = Math.max(drawStart.time, time2);
+      if (t1 !== tend && Math.abs(hi - lo) > 0) {
+        const mkLine = (pts) => {
+          const s = chart.addLineSeries({ color:C+'99', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+          s.setData(pts); return s;
+        };
+        const top = mkLine([{time:t1,value:hi},{time:tend,value:hi}]);
+        const bot = mkLine([{time:t1,value:lo},{time:tend,value:lo}]);
+        const lft = mkLine([{time:t1,value:lo},{time:t1,value:hi}]);
+        const rgt = mkLine([{time:tend,value:lo},{time:tend,value:hi}]);
+        drawings.push({ type:'rect', series:[top,bot,lft,rgt] });
       }
 
     } else if (tool === 'fib') {
-      const hi = Math.max(drawStart.price, p2), lo = Math.min(drawStart.price, p2);
-      const t1 = candles[0].time, tend = candles[candles.length-1].time;
-      const fibLvls = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-      const fibCols = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
-      const sl = fibLvls.map((lvl, i) => mkLine([{time:t1,value:hi-(hi-lo)*lvl},{time:tend,value:hi-(hi-lo)*lvl}], fibCols[i], W, S, true));
-      drawings.push({ type:'fib', series:sl, price:(hi+lo)/2, origColor:fibCols[3], origWidth:W });
+      const hi = Math.max(drawStart.price, price2);
+      const lo = Math.min(drawStart.price, price2);
+      const t1 = candles[0].time;
+      const tend = candles[candles.length-1].time;
+      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+      const colors = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
+      const seriesList = levels.map((lvl, i) => {
+        const val = hi - (hi - lo) * lvl;
+        const s = chart.addLineSeries({ color:colors[i]+'bb', lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+        s.setData([{time:t1,value:val},{time:tend,value:val}]);
+        return s;
+      });
+      drawings.push({ type:'fib', series:seriesList });
     }
 
     drawStart = null;
+  });
+
+  // Cancel drag if mouse leaves window
+  window.addEventListener('mouseup', () => {
+    if (drawStart) { clearPreview(); drawStart = null; }
   });
 }
 
