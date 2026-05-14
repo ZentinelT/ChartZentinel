@@ -73,19 +73,9 @@
     gap: 8px;
   }
   .logo svg { width: 20px; height: 20px; }
+  .logo-sep { width: 1px; height: 24px; background: var(--border-light); margin: 0 4px; }
 
-  .logo-sep {
-    width: 1px; height: 24px;
-    background: var(--border-light);
-    margin: 0 4px;
-  }
-
-  /* Symbol search */
-  #symbol-search-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
+  #symbol-search-wrap { position: relative; display: flex; align-items: center; }
   #symbol-input {
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
@@ -101,37 +91,15 @@
     text-transform: uppercase;
     transition: border-color .2s, box-shadow .2s;
   }
-  #symbol-input:focus {
-    border-color: var(--gold-dim);
-    box-shadow: 0 0 0 2px var(--gold-glow);
-  }
+  #symbol-input:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 2px var(--gold-glow); }
 
-  /* Price display */
-  #price-display {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  #price-last {
-    font-family: var(--font-mono);
-    font-size: 18px;
-    font-weight: 500;
-    color: var(--text-primary);
-  }
-  #price-change {
-    font-family: var(--font-mono);
-    font-size: 12px;
-  }
-  #price-change.up  { color: var(--green); }
-  #price-change.dn  { color: var(--red); }
+  #price-display { display: flex; align-items: baseline; gap: 8px; }
+  #price-last { font-family: var(--font-mono); font-size: 18px; font-weight: 500; color: var(--text-primary); }
+  #price-change { font-family: var(--font-mono); font-size: 12px; }
+  #price-change.up { color: var(--green); }
+  #price-change.dn { color: var(--red); }
 
-  #ohlcv-bar {
-    display: flex;
-    gap: 14px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-secondary);
-  }
+  #ohlcv-bar { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
   #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
 
   .topbar-spacer { flex: 1; }
@@ -148,19 +116,10 @@
     display: flex; align-items: center; gap: 5px;
     transition: background .15s, color .15s, border-color .15s;
   }
-  .topbar-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-    border-color: var(--border-light);
-  }
-  .topbar-btn.active {
-    background: var(--gold-glow);
-    color: var(--gold);
-    border-color: var(--gold-dim);
-  }
+  .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-light); }
+  .topbar-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
   .topbar-btn svg { width: 14px; height: 14px; }
 
-  /* api key badge */
   #api-badge {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -182,7 +141,7 @@
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
-    padding: 0 8px 0 230px; /* indent past sidebar */
+    padding: 0 8px 0 268px;
     gap: 2px;
     flex-shrink: 0;
   }
@@ -201,23 +160,11 @@
     transition: background .15s, color .15s;
   }
   .tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .tf-btn.active {
-    background: var(--gold-glow);
-    color: var(--gold);
-  }
-
-  .tf-sep {
-    width: 1px; height: 14px;
-    background: var(--border);
-    margin: 0 4px;
-  }
+  .tf-btn.active { background: var(--gold-glow); color: var(--gold); }
+  .tf-sep { width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
 
   /* ─── MAIN AREA ───────────────────────────────────────── */
-  #main {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
+  #main { display: flex; flex: 1; overflow: hidden; }
 
   /* ─── TOOLBAR (left) ─────────────────────────────────── */
   #toolbar {
@@ -247,14 +194,8 @@
   .tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .tool-btn.active { background: var(--gold-glow); color: var(--gold); }
   .tool-btn svg { width: 15px; height: 15px; }
+  .tool-sep { width: 20px; height: 1px; background: var(--border); margin: 4px 0; }
 
-  .tool-sep {
-    width: 20px; height: 1px;
-    background: var(--border);
-    margin: 4px 0;
-  }
-
-  /* tooltip */
   .tool-btn::after {
     content: attr(data-tip);
     position: absolute;
@@ -276,7 +217,7 @@
   }
   .tool-btn:hover::after { opacity: 1; }
 
-  /* ─── SIDEBAR (favorites) ─────────────────────────────── */
+  /* ─── SIDEBAR ─────────────────────────────────────────── */
   #sidebar {
     width: var(--sidebar-w);
     background: var(--bg-panel);
@@ -311,12 +252,7 @@
   }
   .sidebar-add-btn:hover { color: var(--gold); }
 
-  #watchlist {
-    flex: 1;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-light) transparent;
-  }
+  #watchlist { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; }
 
   .wl-item {
     display: flex;
@@ -329,164 +265,58 @@
     position: relative;
   }
   .wl-item:hover { background: var(--bg-hover); }
-  .wl-item.active {
-    background: var(--bg-active);
-    border-left: 2px solid var(--gold);
-  }
+  .wl-item.active { background: var(--bg-active); border-left: 2px solid var(--gold); }
   .wl-item.active .wl-sym { color: var(--gold); }
 
-  .wl-sym {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-primary);
-    letter-spacing: .5px;
-    flex: 1;
-  }
-  .wl-price {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-secondary);
-  }
-  .wl-chg {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    min-width: 46px;
-    text-align: right;
-  }
+  .wl-sym { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); letter-spacing: .5px; flex: 1; }
+  .wl-price { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+  .wl-chg { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 3px; min-width: 46px; text-align: right; }
   .wl-chg.up { color: var(--green); background: var(--green-dim); }
-  .wl-chg.dn { color: var(--red);   background: var(--red-dim); }
+  .wl-chg.dn { color: var(--red); background: var(--red-dim); }
 
-  .wl-remove {
-    background: none; border: none;
-    color: transparent;
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    transition: color .15s;
-    padding: 0 2px;
-  }
+  .wl-remove { background: none; border: none; color: transparent; cursor: pointer; font-size: 13px; line-height: 1; transition: color .15s; padding: 0 2px; }
   .wl-item:hover .wl-remove { color: var(--text-dim); }
   .wl-item:hover .wl-remove:hover { color: var(--red); }
 
-  /* sidebar bottom: indicator list */
-  .sidebar-indicators {
-    border-top: 1px solid var(--border);
-  }
+  .sidebar-indicators { border-top: 1px solid var(--border); }
   .sidebar-indicators .sidebar-header { border-bottom: none; }
-  #ind-list {
-    padding: 4px 0;
-    max-height: 140px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-light) transparent;
-  }
-  .ind-item {
-    padding: 5px 12px;
-    font-size: 11px;
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
+  #ind-list { padding: 4px 0; max-height: 140px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; }
+  .ind-item { padding: 5px 12px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   .ind-item span { flex: 1; }
   .ind-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .ind-remove {
-    background: none; border: none;
-    color: transparent; cursor: pointer;
-    font-size: 12px; line-height: 1;
-    transition: color .15s;
-  }
+  .ind-remove { background: none; border: none; color: transparent; cursor: pointer; font-size: 12px; line-height: 1; transition: color .15s; }
   .ind-item:hover .ind-remove { color: var(--red); }
 
   /* ─── CHART AREA ──────────────────────────────────────── */
-  #chart-wrap {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-  }
+  #chart-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  #chart-container { flex: 1; position: relative; }
 
-  #chart-container {
-    flex: 1;
-    position: relative;
-  }
-
-  /* loading overlay */
   #loading-overlay {
-    position: absolute;
-    inset: 0;
+    position: absolute; inset: 0;
     background: var(--bg-primary);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    z-index: 10;
-    transition: opacity .4s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; z-index: 10; transition: opacity .4s;
   }
   #loading-overlay.hidden { opacity: 0; pointer-events: none; }
 
-  .loader-logo {
-    font-family: var(--font-display);
-    font-size: 22px;
-    letter-spacing: 4px;
-    color: var(--gold);
-  }
-  .loader-bar {
-    width: 120px; height: 2px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .loader-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--gold-dim), var(--gold));
-    border-radius: 2px;
-    animation: loaderAnim 1.5s ease-in-out infinite;
-  }
-  @keyframes loaderAnim {
-    0%   { width: 0%; margin-left: 0; }
-    50%  { width: 70%; margin-left: 15%; }
-    100% { width: 0%; margin-left: 100%; }
-  }
-  .loader-msg {
-    font-size: 11px;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-  }
+  .loader-logo { font-family: var(--font-display); font-size: 22px; letter-spacing: 4px; color: var(--gold); }
+  .loader-bar { width: 120px; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .loader-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); border-radius: 2px; animation: loaderAnim 1.5s ease-in-out infinite; }
+  @keyframes loaderAnim { 0%{width:0%;margin-left:0} 50%{width:70%;margin-left:15%} 100%{width:0%;margin-left:100%} }
+  .loader-msg { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
 
-  /* crosshair info */
   #crosshair-info {
-    position: absolute;
-    top: 10px; left: 10px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-secondary);
-    pointer-events: none;
-    line-height: 1.7;
-    z-index: 5;
-    display: none;
+    position: absolute; top: 10px; left: 10px;
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+    pointer-events: none; line-height: 1.7; z-index: 5; display: none;
   }
   #crosshair-info span { color: var(--text-primary); }
 
   /* ─── STATUS BAR ──────────────────────────────────────── */
   #statusbar {
-    height: 22px;
-    background: var(--bg-panel);
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
-    gap: 20px;
-    font-size: 10px;
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    flex-shrink: 0;
+    height: 22px; background: var(--bg-panel); border-top: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px; gap: 20px;
+    font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); flex-shrink: 0;
   }
   #statusbar .sb-item { display: flex; gap: 5px; }
   #statusbar .sb-item b { color: var(--text-secondary); font-weight: 400; }
@@ -519,165 +349,129 @@
   }
   .modal-overlay.open .modal { transform: translateY(0); }
 
-  .modal h2 {
-    font-family: var(--font-display);
-    font-size: 13px;
-    letter-spacing: 2px;
-    color: var(--gold);
-    margin-bottom: 16px;
-    text-transform: uppercase;
-  }
-
-  .modal label {
-    display: block;
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
-    letter-spacing: .5px;
-  }
-
+  .modal h2 { font-family: var(--font-display); font-size: 13px; letter-spacing: 2px; color: var(--gold); margin-bottom: 16px; text-transform: uppercase; }
+  .modal label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; letter-spacing: .5px; }
   .modal input[type=text], .modal input[type=password] {
-    width: 100%;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
-    border-radius: 6px;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 8px 12px;
-    outline: none;
-    margin-bottom: 14px;
-    transition: border-color .2s;
+    width: 100%; background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 6px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    padding: 8px 12px; outline: none; margin-bottom: 14px; transition: border-color .2s;
   }
   .modal input:focus { border-color: var(--gold-dim); }
-
   .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 
   .btn-primary {
-    background: var(--gold-dim);
-    border: 1px solid var(--gold);
-    color: var(--gold-bright);
-    font-family: var(--font-ui);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 7px 18px;
-    border-radius: 5px;
-    cursor: pointer;
-    letter-spacing: .5px;
-    transition: background .15s;
+    background: var(--gold-dim); border: 1px solid var(--gold); color: var(--gold-bright);
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600; padding: 7px 18px;
+    border-radius: 5px; cursor: pointer; letter-spacing: .5px; transition: background .15s;
   }
   .btn-primary:hover { background: rgba(201,168,76,.3); }
 
   .btn-ghost {
-    background: none;
-    border: 1px solid var(--border-light);
-    color: var(--text-secondary);
-    font-family: var(--font-ui);
-    font-size: 12px;
-    padding: 7px 14px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all .15s;
+    background: none; border: 1px solid var(--border-light); color: var(--text-secondary);
+    font-family: var(--font-ui); font-size: 12px; padding: 7px 14px; border-radius: 5px;
+    cursor: pointer; transition: all .15s;
   }
   .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-  /* indicator modal list */
-  .ind-picker-list {
-    max-height: 260px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-light) transparent;
-    margin-bottom: 14px;
-  }
-  .ind-pick-row {
-    display: flex; align-items: center;
-    padding: 8px 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    gap: 10px;
-    transition: background .12s;
-  }
+  .ind-picker-list { max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; margin-bottom: 14px; }
+  .ind-pick-row { display: flex; align-items: center; padding: 8px 10px; border-radius: 5px; cursor: pointer; gap: 10px; transition: background .12s; }
   .ind-pick-row:hover { background: var(--bg-hover); }
   .ind-pick-row.selected { background: var(--gold-glow); }
   .ind-pick-name { font-size: 12px; color: var(--text-primary); flex: 1; }
   .ind-pick-desc { font-size: 10px; color: var(--text-dim); }
-  .ind-pick-check {
-    width: 14px; height: 14px;
-    border: 1px solid var(--border-light);
-    border-radius: 3px;
-    background: none;
-    flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .ind-pick-row.selected .ind-pick-check {
-    background: var(--gold);
-    border-color: var(--gold);
-    color: #000;
-    font-size: 10px;
-  }
+  .ind-pick-check { width: 14px; height: 14px; border: 1px solid var(--border-light); border-radius: 3px; background: none; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .ind-pick-row.selected .ind-pick-check { background: var(--gold); border-color: var(--gold); color: #000; font-size: 10px; }
 
-  /* ─── Add symbol form inside watchlist ─── */
-  #add-sym-form {
-    display: none;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    gap: 6px;
-    align-items: center;
-  }
+  #add-sym-form { display: none; padding: 8px 12px; border-bottom: 1px solid var(--border); gap: 6px; align-items: center; }
   #add-sym-form.open { display: flex; }
-  #add-sym-inp {
-    flex: 1;
-    background: var(--bg-secondary);
+  #add-sym-inp { flex: 1; background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 4px; color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; padding: 4px 8px; outline: none; text-transform: uppercase; letter-spacing: 1px; }
+  #add-sym-inp:focus { border-color: var(--gold-dim); }
+  #add-sym-ok { background: var(--gold-dim); border: none; border-radius: 4px; color: var(--gold-bright); font-size: 12px; font-weight: 700; padding: 3px 10px; cursor: pointer; }
+
+  /* ══════════════════════════════════════════════════════
+     DRAWING TOOLBAR (floating, contextual)
+  ══════════════════════════════════════════════════════ */
+  #draw-toolbar {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-panel);
     border: 1px solid var(--border-light);
-    border-radius: 4px;
-    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 6px 8px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    z-index: 300;
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+    user-select: none;
+  }
+  #draw-toolbar.visible { display: flex; }
+
+  .dtb-sep { width: 1px; height: 20px; background: var(--border-light); margin: 0 2px; }
+
+  .dtb-btn {
+    background: none;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-secondary);
     font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 8px;
-    outline: none;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
   }
-  #add-sym-inp:focus { border-color: var(--gold-dim); }
-  #add-sym-ok {
-    background: var(--gold-dim); border: none; border-radius: 4px;
-    color: var(--gold-bright); font-size: 12px; font-weight: 700;
-    padding: 3px 10px; cursor: pointer;
+  .dtb-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .dtb-btn.danger:hover { background: rgba(239,83,80,.15); color: var(--red); }
+  .dtb-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  .dtb-color-wrap {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
   }
-  /* ─── TOOL CONFIG POPUP ─────────────────────────────── */
-  #tool-config {
-    position: fixed;
-    background: var(--bg-panel);
+  .dtb-color-swatch {
+    width: 18px; height: 18px; border-radius: 4px;
     border: 1px solid var(--border-light);
-    border-radius: 8px;
-    padding: 10px 12px;
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 200;
-    box-shadow: 0 8px 32px rgba(0,0,0,.5);
-    min-width: 190px;
-    pointer-events: all;
+    cursor: pointer; overflow: hidden; position: relative;
   }
-  #tool-config.open { display: flex; }
-  #tool-config .cfg-row {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 11px; color: var(--text-secondary);
+  .dtb-color-swatch input[type=color] {
+    position: absolute; inset: -4px; width: 28px; height: 28px;
+    opacity: 0; cursor: pointer;
   }
-  #tool-config .cfg-row label { width: 46px; flex-shrink: 0; }
-  #tool-config input[type=color] {
-    width: 28px; height: 22px; border: none; border-radius: 4px;
-    background: none; cursor: pointer; padding: 0;
+
+  /* Width selector */
+  .dtb-select {
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 4px; color: var(--text-primary); font-family: var(--font-mono);
+    font-size: 11px; padding: 3px 6px; outline: none; cursor: pointer;
   }
-  #tool-config select {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
-    border-radius: 4px; color: var(--text-primary);
-    font-family: var(--font-mono); font-size: 11px;
-    padding: 3px 6px; flex: 1; outline: none;
+  .dtb-select option { background: var(--bg-panel); }
+
+  /* Extend toggle button */
+  .dtb-btn.active { background: var(--gold-glow); color: var(--gold); }
+
+  /* Lock button */
+  .dtb-label { font-size: 10px; color: var(--text-dim); padding: 0 4px; }
+
+  /* ══════════════════════════════════════════════════════
+     DRAWING SELECTION highlight on SVG
+  ══════════════════════════════════════════════════════ */
+  .drawing-handle {
+    fill: var(--gold);
+    stroke: var(--bg-panel);
+    stroke-width: 1.5;
+    cursor: move;
+    transition: r .1s;
   }
-  #tool-config input[type=range] { flex: 1; accent-color: var(--gold); }
-  #tool-config .cfg-val { font-family: var(--font-mono); font-size: 11px; color: var(--gold); width: 16px; }
+  .drawing-handle:hover { r: 7; }
+
+  /* Selected drawing glow */
+  .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
 </style>
 </head>
 <body>
@@ -695,8 +489,7 @@
   <div class="logo-sep"></div>
 
   <div id="symbol-search-wrap">
-    <input id="symbol-input" type="text" value="NQ1!" placeholder="Symbol" autocomplete="off"
-           title="Enter symbol and press Enter">
+    <input id="symbol-input" type="text" value="NQ1!" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
   </div>
 
   <div id="price-display">
@@ -715,9 +508,7 @@
   <div class="topbar-spacer"></div>
 
   <button class="topbar-btn" id="btn-indicators" onclick="openIndicatorModal()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     Indicators
   </button>
 
@@ -736,7 +527,7 @@
 <div id="tf-bar">
   <button class="tf-btn" data-tf="1min">1m</button>
   <button class="tf-btn" data-tf="3min">3m</button>
-  <button class="tf-btn" data-tf="5min" >5m</button>
+  <button class="tf-btn" data-tf="5min">5m</button>
   <button class="tf-btn" data-tf="15min">15m</button>
   <button class="tf-btn" data-tf="30min">30m</button>
   <div class="tf-sep"></div>
@@ -744,7 +535,7 @@
   <button class="tf-btn" data-tf="2h">2H</button>
   <button class="tf-btn" data-tf="4h">4H</button>
   <div class="tf-sep"></div>
-  <button class="tf-btn" data-tf="1day" >D</button>
+  <button class="tf-btn" data-tf="1day">D</button>
   <button class="tf-btn" data-tf="1week">W</button>
   <button class="tf-btn" data-tf="1month">M</button>
 </div>
@@ -755,35 +546,27 @@
   <!-- ── TOOLBAR ───────────────────────────────────────── -->
   <div id="toolbar">
     <button class="tool-btn active" data-tip="Cursor" onclick="setTool(this,'cursor')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M5 3l14 9-7 1-3 7z"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-7 1-3 7z"/></svg>
     </button>
     <button class="tool-btn" data-tip="Crosshair" onclick="setTool(this,'cross')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="12" y1="2" x2="12" y2="22"/>
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <circle cx="12" cy="12" r="3"/>
+        <line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="3"/>
       </svg>
     </button>
     <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Trend Line" onclick="setTool(this,'trendline')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="4" y1="20" x2="20" y2="4"/>
-        <circle cx="4" cy="20" r="2" fill="currentColor"/>
-        <circle cx="20" cy="4" r="2" fill="currentColor"/>
+        <circle cx="4" cy="20" r="2" fill="currentColor"/><circle cx="20" cy="4" r="2" fill="currentColor"/>
       </svg>
     </button>
     <button class="tool-btn" data-tip="Horizontal Line" onclick="setTool(this,'hline')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <circle cx="2" cy="12" r="2" fill="currentColor"/>
+        <line x1="2" y1="12" x2="22" y2="12"/><circle cx="2" cy="12" r="2" fill="currentColor"/>
       </svg>
     </button>
     <button class="tool-btn" data-tip="Rectangle" onclick="setTool(this,'rect')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="6" width="18" height="12" rx="1"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg>
     </button>
     <button class="tool-btn" data-tip="Fibonacci" onclick="setTool(this,'fib')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -794,25 +577,22 @@
     <button class="tool-btn" data-tip="Text Label" onclick="setTool(this,'text')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="4 7 4 4 20 4 20 7"/>
-        <line x1="9" y1="20" x2="15" y2="20"/>
-        <line x1="12" y1="4" x2="12" y2="20"/>
+        <line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
       </svg>
     </button>
     <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Clear All" onclick="clearDrawings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6l-1 14H6L5 6"/>
-        <path d="M10 11v6M14 11v6"/>
-        <path d="M9 6V4h6v2"/>
+        <path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
       </svg>
     </button>
     <div class="tool-sep"></div>
     <button class="tool-btn active" id="btn-volume" data-tip="Toggle Volume" onclick="toggleVolume()" style="margin-top:auto">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="2"  y="14" width="4" height="7" rx="1"/>
-        <rect x="9"  y="9"  width="4" height="12" rx="1"/>
-        <rect x="16" y="4"  width="4" height="17" rx="1"/>
+        <rect x="2" y="14" width="4" height="7" rx="1"/>
+        <rect x="9" y="9" width="4" height="12" rx="1"/>
+        <rect x="16" y="4" width="4" height="17" rx="1"/>
       </svg>
     </button>
   </div>
@@ -823,14 +603,11 @@
       Watchlist
       <button class="sidebar-add-btn" onclick="toggleAddSym()" title="Add symbol">+</button>
     </div>
-
     <div id="add-sym-form">
       <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20">
       <button id="add-sym-ok" onclick="addSymbol()">→</button>
     </div>
-
     <div id="watchlist"></div>
-
     <div class="sidebar-indicators">
       <div class="sidebar-header">
         Active Indicators
@@ -851,7 +628,6 @@
       <div id="crosshair-info"></div>
     </div>
   </div>
-
 </div>
 
 <!-- ── STATUS BAR ─────────────────────────────────────── -->
@@ -861,6 +637,77 @@
   <div class="sb-item"><b>Bars:</b><span id="sb-bars">—</span></div>
   <div class="sb-item"><b>Range:</b><span id="sb-range">—</span></div>
   <span id="status-conn" class="loading">● connecting…</span>
+</div>
+
+<!-- ══ FLOATING DRAWING TOOLBAR ══════════════════════════ -->
+<div id="draw-toolbar">
+  <!-- Color -->
+  <div class="dtb-color-wrap">
+    <span class="dtb-label">Color</span>
+    <div class="dtb-color-swatch" id="dtb-color-swatch" style="background:#c9a84c">
+      <input type="color" id="dtb-color" value="#c9a84c" oninput="onDtbColorChange(this.value)">
+    </div>
+  </div>
+  <div class="dtb-sep"></div>
+  <!-- Line width -->
+  <span class="dtb-label">Width</span>
+  <select class="dtb-select" id="dtb-width" onchange="onDtbWidthChange(this.value)">
+    <option value="1">1px</option>
+    <option value="2">2px</option>
+    <option value="3">3px</option>
+    <option value="4">4px</option>
+  </select>
+  <div class="dtb-sep"></div>
+  <!-- Line style -->
+  <span class="dtb-label">Style</span>
+  <select class="dtb-select" id="dtb-style" onchange="onDtbStyleChange(this.value)">
+    <option value="0">─── Solid</option>
+    <option value="1">- - - Dashed</option>
+    <option value="2">··· Dotted</option>
+  </select>
+  <div class="dtb-sep"></div>
+  <!-- Extend left -->
+  <button class="dtb-btn" id="dtb-ext-left" title="Extend Left" onclick="onDtbExtend('left')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="14" y1="8" x2="2" y2="8"/><polyline points="6,4 2,8 6,12"/>
+    </svg>
+    Left
+  </button>
+  <!-- Extend right -->
+  <button class="dtb-btn" id="dtb-ext-right" title="Extend Right" onclick="onDtbExtend('right')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="2" y1="8" x2="14" y2="8"/><polyline points="10,4 14,8 10,12"/>
+    </svg>
+    Right
+  </button>
+  <div class="dtb-sep"></div>
+  <!-- Lock -->
+  <button class="dtb-btn" id="dtb-lock" title="Lock drawing" onclick="onDtbLock()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="3" y="7" width="10" height="8" rx="1.5"/>
+      <path d="M5 7V5a3 3 0 016 0v2"/>
+    </svg>
+    Lock
+  </button>
+  <div class="dtb-sep"></div>
+  <!-- Clone -->
+  <button class="dtb-btn" title="Duplicate" onclick="onDtbClone()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="5" y="5" width="8" height="9" rx="1"/><rect x="3" y="2" width="8" height="9" rx="1"/>
+    </svg>
+    Clone
+  </button>
+  <div class="dtb-sep"></div>
+  <!-- Delete -->
+  <button class="dtb-btn danger" title="Delete drawing" onclick="onDtbDelete()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <polyline points="2 4 3.5 4 14 4"/>
+      <path d="M12.5 4l-.75 9.5H4.25L3.5 4"/>
+      <path d="M6.5 7v4M9.5 7v4"/>
+      <path d="M6 4V2.5h4V4"/>
+    </svg>
+    Delete
+  </button>
 </div>
 
 <!-- ══ MODAL: API KEY ════════════════════════════════════ -->
@@ -890,27 +737,6 @@
   </div>
 </div>
 
-<!-- ══ TOOL CONFIG POPUP ══════════════════════════════════ -->
-<div id="tool-config">
-  <div class="cfg-row">
-    <label>Color</label>
-    <input type="color" id="cfg-color" value="#c9a84c">
-  </div>
-  <div class="cfg-row">
-    <label>Grosor</label>
-    <input type="range" id="cfg-width" min="1" max="4" value="1" step="1">
-    <span class="cfg-val" id="cfg-width-val">1</span>
-  </div>
-  <div class="cfg-row">
-    <label>Estilo</label>
-    <select id="cfg-style">
-      <option value="0">Sólida</option>
-      <option value="1">Punteada</option>
-      <option value="2">Discontinua</option>
-    </select>
-  </div>
-</div>
-
 <script>
 // ══════════════════════════════════════════════════════════
 //  STATE
@@ -924,9 +750,303 @@ const STATE = {
   activeTool: 'cursor',
 };
 
-// LW Chart instances & series
 let chart, candleSeries, volumeSeries;
-const overlays = {}; // name → series
+const overlays = {};
+
+// ══════════════════════════════════════════════════════════
+//  DRAWING SYSTEM
+// ══════════════════════════════════════════════════════════
+
+/*
+  Each drawing object:
+  {
+    id: unique string,
+    type: 'hline'|'trendline'|'rect'|'fib'|'text',
+    series: [ LW series... ],
+    svgEls: [ svg elements ... ],
+    label: DOM element (for text),
+    locked: bool,
+    // style config
+    color: '#c9a84c',
+    width: 1,
+    style: 0,   // 0=solid 1=dashed 2=dotted
+    // geometry (price/time coordinates)
+    p1: { price, time },
+    p2: { price, time },
+    // extend flags
+    extLeft: false,
+    extRight: false,
+  }
+*/
+
+const drawings = [];
+let selectedDrawingId = null;
+
+// Default tool config (shared for new drawings)
+const toolDefaults = {
+  color: '#c9a84c',
+  width: 1,
+  style: 0,
+  extLeft: false,
+  extRight: false,
+};
+
+function genId() { return 'drw_' + Math.random().toString(36).slice(2,9); }
+
+// LW LineStyle enum: 0=Solid,1=Dashed,2=Dotted
+function lwStyle(s) {
+  return s == 0 ? 0 : s == 1 ? 1 : 2;
+}
+
+// ── SELECTION ───────────────────────────────────────────
+function selectDrawing(id) {
+  selectedDrawingId = id;
+  const d = drawings.find(x => x.id === id);
+  if (!d) { hideDrawToolbar(); return; }
+  // Update floating toolbar to reflect this drawing's current style
+  document.getElementById('dtb-color').value = d.color;
+  document.getElementById('dtb-color-swatch').style.background = d.color;
+  document.getElementById('dtb-width').value = d.width;
+  document.getElementById('dtb-style').value = d.style;
+  document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
+  document.getElementById('dtb-ext-right').classList.toggle('active', !!d.extRight);
+  document.getElementById('dtb-lock').classList.toggle('active', !!d.locked);
+  showDrawToolbar();
+  highlightSelectedSvg(id);
+}
+
+function deselectDrawing() {
+  selectedDrawingId = null;
+  hideDrawToolbar();
+  clearSvgHighlights();
+}
+
+function showDrawToolbar() {
+  document.getElementById('draw-toolbar').classList.add('visible');
+}
+function hideDrawToolbar() {
+  document.getElementById('draw-toolbar').classList.remove('visible');
+}
+
+// ── DRAWING TOOLBAR HANDLERS ─────────────────────────────
+function onDtbColorChange(val) {
+  document.getElementById('dtb-color-swatch').style.background = val;
+  toolDefaults.color = val;
+  applyStyleToSelected({ color: val });
+}
+function onDtbWidthChange(val) {
+  toolDefaults.width = parseInt(val);
+  applyStyleToSelected({ width: parseInt(val) });
+}
+function onDtbStyleChange(val) {
+  toolDefaults.style = parseInt(val);
+  applyStyleToSelected({ style: parseInt(val) });
+}
+function onDtbExtend(dir) {
+  const d = getSelected(); if (!d) return;
+  if (dir === 'left')  { d.extLeft  = !d.extLeft;  document.getElementById('dtb-ext-left').classList.toggle('active',  d.extLeft); }
+  if (dir === 'right') { d.extRight = !d.extRight; document.getElementById('dtb-ext-right').classList.toggle('active', d.extRight); }
+  redrawDrawing(d);
+}
+function onDtbLock() {
+  const d = getSelected(); if (!d) return;
+  d.locked = !d.locked;
+  document.getElementById('dtb-lock').classList.toggle('active', d.locked);
+}
+function onDtbClone() {
+  const d = getSelected(); if (!d) return;
+  const clone = JSON.parse(JSON.stringify({ ...d, id: genId(), series:[], svgEls:[], label:null }));
+  // offset price slightly
+  clone.p1.price += (d.p2?.price ?? d.p1.price) * 0.001;
+  if (clone.p2) clone.p2.price += clone.p1.price * 0.001;
+  drawings.push(clone);
+  buildDrawingOnChart(clone);
+  selectDrawing(clone.id);
+}
+function onDtbDelete() {
+  const d = getSelected(); if (!d) return;
+  removeDrawingById(d.id);
+  deselectDrawing();
+}
+
+function getSelected() { return drawings.find(x => x.id === selectedDrawingId) || null; }
+
+// Apply style update to currently selected drawing
+function applyStyleToSelected(patch) {
+  const d = getSelected(); if (!d) return;
+  Object.assign(d, patch);
+  redrawDrawing(d);
+}
+
+// ── REDRAW (update series with new style) ─────────────────
+function redrawDrawing(d) {
+  // Remove old series
+  d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
+  d.series = [];
+  // Remove old svg elements
+  d.svgEls.forEach(el => el.remove());
+  d.svgEls = [];
+  // Rebuild
+  buildDrawingOnChart(d);
+  highlightSelectedSvg(d.id);
+}
+
+// ── REMOVE ───────────────────────────────────────────────
+function removeDrawingById(id) {
+  const idx = drawings.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  const d = drawings[idx];
+  d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
+  d.svgEls.forEach(el => el.remove());
+  if (d.label) d.label.remove();
+  drawings.splice(idx,1);
+}
+
+function clearDrawings() {
+  [...drawings].forEach(d => removeDrawingById(d.id));
+  deselectDrawing();
+}
+
+// ── BUILD DRAWING ON CHART ────────────────────────────────
+function buildDrawingOnChart(d) {
+  const candles = window._lastCandles || [];
+  if (!candles.length) return;
+
+  const C  = d.color;
+  const lw = d.width;
+  const ls = lwStyle(d.style);
+
+  // Future extension: add phantom bars beyond the last candle
+  // We compute an extended time using bar-interval estimation
+  const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
+  const FUTURE_BARS = 50;
+
+  const tFirst  = candles[0].time;
+  const tLast   = candles[candles.length-1].time;
+  const tFuture = tLast + barInterval * FUTURE_BARS;
+  const tPast   = Math.max(0, tFirst - barInterval * FUTURE_BARS);
+
+  function mkLine(pts, opts={}) {
+    const s = chart.addLineSeries({
+      color: opts.color || C,
+      lineWidth: opts.width || lw,
+      lineStyle: opts.style !== undefined ? opts.style : ls,
+      priceLineVisible: false,
+      lastValueVisible: opts.lastValue !== undefined ? opts.lastValue : true,
+      crosshairMarkerVisible: false,
+    });
+    s.setData(pts);
+    d.series.push(s);
+    return s;
+  }
+
+  if (d.type === 'hline') {
+    const t1 = d.extLeft  ? tPast  : (d.extRight ? tFirst : tFirst);
+    const t2 = d.extRight ? tFuture : tLast;
+    mkLine([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}]);
+
+  } else if (d.type === 'trendline') {
+    const rawT1  = d.p1.time;
+    const rawT2  = d.p2.time;
+    const rawP1  = d.p1.price;
+    const rawP2  = d.p2.price;
+    const slope  = (rawT2 !== rawT1) ? (rawP2 - rawP1) / (rawT2 - rawT1) : 0;
+
+    let t1 = rawT1, t2 = rawT2, p1 = rawP1, p2 = rawP2;
+
+    if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1);   }
+    if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
+
+    mkLine([{time:t1,value:p1},{time:t2,value:p2}]);
+
+  } else if (d.type === 'rect') {
+    const hi = Math.max(d.p1.price, d.p2.price);
+    const lo = Math.min(d.p1.price, d.p2.price);
+    const t1 = Math.min(d.p1.time, d.p2.time);
+    const t2_raw = Math.max(d.p1.time, d.p2.time);
+    const t2 = d.extRight ? tFuture : t2_raw;
+
+    const mkR = (pts) => {
+      const s = chart.addLineSeries({ color: C+'aa', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+      s.setData(pts); d.series.push(s); return s;
+    };
+    mkR([{time:t1,value:hi},{time:t2,value:hi}]);
+    mkR([{time:t1,value:lo},{time:t2,value:lo}]);
+    mkR([{time:t1,value:lo},{time:t1,value:hi}]);
+    mkR([{time:t2,value:lo},{time:t2,value:hi}]);
+
+  } else if (d.type === 'fib') {
+    const hi = Math.max(d.p1.price, d.p2.price);
+    const lo = Math.min(d.p1.price, d.p2.price);
+    const levels  = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+    const colors  = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
+    const t1 = d.extLeft  ? tPast   : tFirst;
+    const t2 = d.extRight ? tFuture : tLast;
+    levels.forEach((lvl, i) => {
+      const val = hi - (hi - lo) * lvl;
+      mkLine([{time:t1,value:val},{time:t2,value:val}], { color: colors[i]+'cc', style: 1, lastValue: true });
+    });
+  }
+
+  // attach drawing id for hit-testing later
+  d.series.forEach(s => { s._drawingId = d.id; });
+}
+
+// ── SVG HIGHLIGHT ──────────────────────────────────────────
+function highlightSelectedSvg(id) {
+  clearSvgHighlights();
+  // We re-draw selection handles on the SVG overlay after the chart has rendered
+  // using the price→pixel coordinate system
+  requestAnimationFrame(() => {
+    const d = drawings.find(x => x.id === id);
+    if (!d || !window._drawingLayerSvg) return;
+    const svg = window._drawingLayerSvg;
+    const container = document.getElementById('chart-container');
+
+    function priceToY(price) { return candleSeries.priceToCoordinate(price); }
+    function timeToX(time)  { return chart.timeScale().timeToCoordinate(time); }
+
+    function addHandle(x, y, dId) {
+      if (x === null || y === null) return;
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 5);
+      c.classList.add('drawing-handle');
+      c.dataset.drawingId = dId;
+      svg.appendChild(c);
+      d.svgEls.push(c);
+    }
+
+    if (d.type === 'hline') {
+      const y = priceToY(d.p1.price);
+      const w = container.clientWidth;
+      addHandle(w * 0.2, y, id);
+      addHandle(w * 0.5, y, id);
+      addHandle(w * 0.8, y, id);
+    } else if (d.type === 'trendline') {
+      addHandle(timeToX(d.p1.time), priceToY(d.p1.price), id);
+      addHandle(timeToX(d.p2.time), priceToY(d.p2.price), id);
+    } else if (d.type === 'rect') {
+      const hi = Math.max(d.p1.price, d.p2.price);
+      const lo = Math.min(d.p1.price, d.p2.price);
+      const t1 = Math.min(d.p1.time, d.p2.time);
+      const t2 = Math.max(d.p1.time, d.p2.time);
+      addHandle(timeToX(t1), priceToY(hi), id);
+      addHandle(timeToX(t2), priceToY(lo), id);
+      addHandle(timeToX(t1), priceToY(lo), id);
+      addHandle(timeToX(t2), priceToY(hi), id);
+    } else if (d.type === 'fib') {
+      const hi = Math.max(d.p1.price, d.p2.price);
+      const lo = Math.min(d.p1.price, d.p2.price);
+      addHandle(timeToX(d.p1.time), priceToY(hi), id);
+      addHandle(timeToX(d.p2.time), priceToY(lo), id);
+    }
+  });
+}
+
+function clearSvgHighlights() {
+  if (!window._drawingLayerSvg) return;
+  window._drawingLayerSvg.querySelectorAll('.drawing-handle').forEach(el => el.remove());
+}
 
 // ══════════════════════════════════════════════════════════
 //  CHART INIT
@@ -934,88 +1054,293 @@ const overlays = {}; // name → series
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
-    layout: {
-      background: { color: '#0a0a0c' },
-      textColor:  '#8888a8',
-      fontFamily: "'DM Mono', monospace",
-      fontSize:   11,
-    },
-    grid: {
-      vertLines:  { color: '#18182a', style: 1 },
-      horzLines:  { color: '#18182a', style: 1 },
-    },
+    layout: { background:{ color:'#0a0a0c' }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11 },
+    grid:   { vertLines:{color:'#18182a',style:1}, horzLines:{color:'#18182a',style:1} },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: { color: '#c9a84c55', labelBackgroundColor: '#1e1e2a' },
-      horzLine: { color: '#c9a84c55', labelBackgroundColor: '#1e1e2a' },
+      vertLine: { color:'#c9a84c55', labelBackgroundColor:'#1e1e2a' },
+      horzLine: { color:'#c9a84c55', labelBackgroundColor:'#1e1e2a' },
     },
-    rightPriceScale: {
-      borderColor:   '#222230',
-      scaleMargins:  { top: 0.08, bottom: 0.18 },
-    },
-    timeScale: {
-      borderColor:         '#222230',
-      timeVisible:         true,
-      secondsVisible:      false,
-      rightOffset:         8,
-      barSpacing:          10,
-    },
-    watermark: {
-      visible:   true,
-      fontSize:  52,
-      horzAlign: 'center',
-      vertAlign: 'center',
-      color:     'rgba(201,168,76,0.03)',
-      text:      'ZENTINEL',
-    },
+    rightPriceScale: { borderColor:'#222230', scaleMargins:{top:0.08,bottom:0.18} },
+    timeScale: { borderColor:'#222230', timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
+    watermark: { visible:true, fontSize:52, horzAlign:'center', vertAlign:'center', color:'rgba(201,168,76,0.03)', text:'ZENTINEL' },
   });
 
   candleSeries = chart.addCandlestickSeries({
-    upColor:          '#26a69a',
-    downColor:        '#ef5350',
-    borderUpColor:    '#26a69a',
-    borderDownColor:  '#ef5350',
-    wickUpColor:      '#26a69a',
-    wickDownColor:    '#ef5350',
+    upColor:'#26a69a', downColor:'#ef5350',
+    borderUpColor:'#26a69a', borderDownColor:'#ef5350',
+    wickUpColor:'#26a69a', wickDownColor:'#ef5350',
   });
 
-  // Volume pane
   volumeSeries = chart.addHistogramSeries({
-    color:        '#c9a84c22',
-    priceFormat:  { type: 'volume' },
-    priceScaleId: 'vol',
+    color:'#c9a84c22', priceFormat:{type:'volume'}, priceScaleId:'vol',
   });
-  chart.priceScale('vol').applyOptions({
-    scaleMargins: { top: 0.82, bottom: 0 },
-  });
+  chart.priceScale('vol').applyOptions({ scaleMargins:{top:0.82,bottom:0} });
 
-  // Crosshair → OHLCV display
   chart.subscribeCrosshairMove(param => {
     const info = document.getElementById('crosshair-info');
-    if (!param.time || !param.seriesData) {
-      info.style.display = 'none'; return;
-    }
+    if (!param.time || !param.seriesData) { info.style.display='none'; return; }
     const d = param.seriesData.get(candleSeries);
-    if (!d) { info.style.display = 'none'; return; }
-    info.style.display = 'block';
-    info.innerHTML =
-      `O <span>${fmt(d.open)}</span>  H <span>${fmt(d.high)}</span>  ` +
-      `L <span>${fmt(d.low)}</span>  C <span>${fmt(d.close)}</span>`;
+    if (!d) { info.style.display='none'; return; }
+    info.style.display='block';
+    info.innerHTML = `O <span>${fmt(d.open)}</span>  H <span>${fmt(d.high)}</span>  L <span>${fmt(d.low)}</span>  C <span>${fmt(d.close)}</span>`;
     updateTopbarOHLCV(d);
   });
 
-  // Resize observer
   new ResizeObserver(() => {
-    chart.applyOptions({
-      width:  container.clientWidth,
-      height: container.clientHeight,
-    });
+    chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
+    clearSvgHighlights();
+    if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
   }).observe(container);
 }
 
 // ══════════════════════════════════════════════════════════
-//  DATA FETCH (Twelve Data)
+//  DRAWING LAYER (SVG overlay + mouse logic)
 // ══════════════════════════════════════════════════════════
+function initDrawingLayer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._drawingLayerSvg = svg;
+
+  let previewEl = null;
+  let drawStart = null;
+
+  function syncSvgSize() {
+    svg.setAttribute('width',  container.clientWidth);
+    svg.setAttribute('height', container.clientHeight);
+  }
+  new ResizeObserver(syncSvgSize).observe(container);
+  syncSvgSize();
+
+  function clearPreview() { if (previewEl) { previewEl.remove(); previewEl=null; } }
+
+  function getCoords(e) {
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const price = candleSeries.coordinateToPrice(y);
+    let time = chart.timeScale().coordinateToTime(x);
+    const candles = window._lastCandles || [];
+    if (time === null && candles.length) {
+      const firstX = chart.timeScale().timeToCoordinate(candles[0].time);
+      // Allow time beyond last bar using bar interval
+      const bi = candles.length>1 ? candles[candles.length-1].time - candles[candles.length-2].time : 3600;
+      const lastX = chart.timeScale().timeToCoordinate(candles[candles.length-1].time);
+      if (lastX !== null && x > lastX) {
+        const barsOut = Math.round((x - lastX) / (chart.timeScale().options().barSpacing || 10));
+        time = candles[candles.length-1].time + bi * Math.max(1, barsOut);
+      } else {
+        time = (x <= (firstX||0)) ? candles[0].time : candles[candles.length-1].time;
+      }
+    }
+    return { x, y, price, time };
+  }
+
+  function updateSvgCapture() {
+    const tool = STATE.activeTool;
+    const isDrawTool = !['cursor','cross'].includes(tool);
+    svg.style.pointerEvents = isDrawTool ? 'all' : 'none';
+    svg.style.cursor = isDrawTool ? (tool==='text'?'text':'crosshair') : '';
+  }
+
+  const _origSetTool = window.setTool;
+  window.setTool = function(btn, name) {
+    _origSetTool(btn, name);
+    updateSvgCapture();
+    // If switching to cursor tool, deselect
+    if (name === 'cursor' || name === 'cross') { /* keep selection */ }
+  };
+
+  // ── CLICK on chart (cursor mode) → select/deselect drawings
+  container.addEventListener('click', e => {
+    if (STATE.activeTool !== 'cursor') return;
+    // Check if click is near a drawing
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    let hit = null;
+    for (const d of drawings) {
+      if (d.locked) continue;
+      if (isClickOnDrawing(d, mx, my)) { hit = d.id; break; }
+    }
+    if (hit) { selectDrawing(hit); }
+    else { deselectDrawing(); }
+  });
+
+  function isClickOnDrawing(d, mx, my) {
+    const THRESH = 8;
+    function priceToY(p) { return candleSeries.priceToCoordinate(p); }
+    function timeToX(t)  { return chart.timeScale().timeToCoordinate(t); }
+    function distToSegment(x1,y1,x2,y2,px,py) {
+      const dx=x2-x1, dy=y2-y1;
+      const len2 = dx*dx+dy*dy;
+      if (len2===0) return Math.hypot(px-x1,py-y1);
+      let t = ((px-x1)*dx+(py-y1)*dy)/len2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
+    }
+
+    if (d.type === 'hline') {
+      const y = priceToY(d.p1.price);
+      if (y===null) return false;
+      return Math.abs(my-y) < THRESH;
+    }
+    if (d.type === 'trendline') {
+      const x1=timeToX(d.p1.time), y1=priceToY(d.p1.price);
+      const x2=timeToX(d.p2.time), y2=priceToY(d.p2.price);
+      if (x1===null||x2===null||y1===null||y2===null) return false;
+      return distToSegment(x1,y1,x2,y2,mx,my) < THRESH;
+    }
+    if (d.type === 'rect' || d.type === 'fib') {
+      const hi=Math.max(d.p1.price,d.p2.price), lo=Math.min(d.p1.price,d.p2.price);
+      const t1=Math.min(d.p1.time,d.p2.time),   t2=Math.max(d.p1.time,d.p2.time);
+      const x1=timeToX(t1), x2=timeToX(t2);
+      const y1=priceToY(hi), y2=priceToY(lo);
+      if (x1===null||x2===null||y1===null||y2===null) return false;
+      // near any edge
+      return (
+        distToSegment(x1,y1,x2,y1,mx,my)<THRESH||
+        distToSegment(x1,y2,x2,y2,mx,my)<THRESH||
+        distToSegment(x1,y1,x1,y2,mx,my)<THRESH||
+        distToSegment(x2,y1,x2,y2,mx,my)<THRESH
+      );
+    }
+    return false;
+  }
+
+  // ── MOUSEDOWN ──────────────────────────────────────────────
+  svg.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const tool = STATE.activeTool;
+    const { x, y, price, time } = getCoords(e);
+    if (price === null || time === null) return;
+    const candles = window._lastCandles || [];
+    if (!candles.length) return;
+
+    if (tool === 'text') {
+      const text = prompt('Label:');
+      if (!text) return;
+      const label = document.createElement('div');
+      label.textContent = text;
+      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolDefaults.color};font-family:var(--font-mono);font-size:${11+toolDefaults.width}px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;`;
+      container.appendChild(label);
+      const d = { id:genId(), type:'text', series:[], svgEls:[], label, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price,time}, p2:{price,time} };
+      drawings.push(d);
+      selectDrawing(d.id);
+      return;
+    }
+
+    drawStart = { x, y, price, time };
+  });
+
+  // ── MOUSEMOVE (preview) ────────────────────────────────────
+  svg.addEventListener('mousemove', e => {
+    if (!drawStart) return;
+    e.preventDefault();
+    const tool = STATE.activeTool;
+    const { x: x2, y: y2 } = getCoords(e);
+    clearPreview();
+
+    const GOLDA = toolDefaults.color + '88';
+
+    if (tool === 'hline') {
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', 0); line.setAttribute('y1', drawStart.y);
+      line.setAttribute('x2', container.clientWidth); line.setAttribute('y2', drawStart.y);
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
+    } else if (tool === 'trendline') {
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
+    } else if (tool === 'rect') {
+      const rx=Math.min(drawStart.x,x2), ry=Math.min(drawStart.y,y2);
+      const rw=Math.abs(x2-drawStart.x), rh=Math.abs(y2-drawStart.y);
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x',rx); rect.setAttribute('y',ry); rect.setAttribute('width',rw); rect.setAttribute('height',rh);
+      rect.setAttribute('stroke', GOLDA); rect.setAttribute('stroke-width', toolDefaults.width);
+      rect.setAttribute('stroke-dasharray','4,3'); rect.setAttribute('fill','rgba(201,168,76,0.06)');
+      svg.appendChild(rect); previewEl = rect;
+    } else if (tool === 'fib') {
+      const ry=Math.min(drawStart.y,y2), rh=Math.abs(y2-drawStart.y);
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+      const fibColors=['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
+      [0,0.236,0.382,0.5,0.618,0.786,1].forEach((lvl,i) => {
+        const ly = ry + rh * lvl;
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1',0); line.setAttribute('y1',ly); line.setAttribute('x2',container.clientWidth); line.setAttribute('y2',ly);
+        line.setAttribute('stroke',fibColors[i]+'bb'); line.setAttribute('stroke-width','1'); line.setAttribute('stroke-dasharray','3,3');
+        group.appendChild(line);
+      });
+      svg.appendChild(group); previewEl = group;
+    }
+  });
+
+  // ── MOUSEUP (commit) ───────────────────────────────────────
+  svg.addEventListener('mouseup', e => {
+    if (!drawStart) return;
+    e.preventDefault();
+    const tool = STATE.activeTool;
+    clearPreview();
+
+    const { price: price2, time: time2 } = getCoords(e);
+    if (price2===null||time2===null) { drawStart=null; return; }
+    const candles = window._lastCandles||[];
+    if (!candles.length) { drawStart=null; return; }
+
+    let d = null;
+
+    if (tool === 'hline') {
+      d = { id:genId(), type:'hline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:drawStart.time}, p2:{price:drawStart.price,time:drawStart.time} };
+    } else if (tool === 'trendline') {
+      const t1 = Math.min(drawStart.time, time2);
+      const t2 = Math.max(drawStart.time, time2);
+      if (t1 === t2) { drawStart=null; return; }
+      const p1 = drawStart.time <= time2 ? drawStart.price : price2;
+      const p2 = drawStart.time <= time2 ? price2 : drawStart.price;
+      d = { id:genId(), type:'trendline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:p1,time:t1}, p2:{price:p2,time:t2} };
+    } else if (tool === 'rect') {
+      const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
+      const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
+      if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
+      d = { id:genId(), type:'rect', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
+    } else if (tool === 'fib') {
+      const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
+      if (Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
+      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
+    }
+
+    if (d) {
+      drawings.push(d);
+      buildDrawingOnChart(d);
+      selectDrawing(d.id);
+    }
+
+    drawStart = null;
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (drawStart) { clearPreview(); drawStart=null; }
+  });
+
+  // Keyboard: Escape deselects, Delete removes selected
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { deselectDrawing(); }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
+      // Don't interfere with text inputs
+      if (document.activeElement.tagName === 'INPUT') return;
+      onDtbDelete();
+    }
+  });
+}
+
 // ══════════════════════════════════════════════════════════
 //  WATCHLIST
 // ══════════════════════════════════════════════════════════
@@ -1024,7 +1349,7 @@ function renderWatchlist() {
   el.innerHTML = '';
   STATE.watchlist.forEach(sym => {
     const row = document.createElement('div');
-    row.className = 'wl-item' + (sym === STATE.symbol ? ' active' : '');
+    row.className = 'wl-item' + (sym===STATE.symbol?' active':'');
     row.dataset.sym = sym;
     row.innerHTML = `
       <div class="wl-sym">${sym}</div>
@@ -1037,315 +1362,52 @@ function renderWatchlist() {
   saveState();
 }
 
-function selectSymbol(sym) {
-  STATE.symbol = sym;
-  document.getElementById('symbol-input').value = sym;
-  renderWatchlist();
-  loadChart(sym, STATE.timeframe);
-}
-
-function addSymbol() {
-  const inp = document.getElementById('add-sym-inp');
-  const sym = inp.value.trim().toUpperCase();
-  if (!sym || STATE.watchlist.includes(sym)) { inp.value=''; return; }
-  STATE.watchlist.push(sym);
-  inp.value = '';
-  document.getElementById('add-sym-form').classList.remove('open');
-  renderWatchlist();
-}
-
-function removeSymbol(sym, e) {
-  e.stopPropagation();
-  STATE.watchlist = STATE.watchlist.filter(s => s !== sym);
-  if (STATE.symbol === sym && STATE.watchlist.length) selectSymbol(STATE.watchlist[0]);
-  else renderWatchlist();
-}
-
-function toggleAddSym() {
-  const f = document.getElementById('add-sym-form');
-  f.classList.toggle('open');
-  if (f.classList.contains('open')) {
-    document.getElementById('add-sym-inp').focus();
-  }
-}
-
-function updateWLPrice(sym, price) {
-  const key = sym.replace(/[^a-z0-9]/gi,'_');
-  const el = document.getElementById('wlp-'+key);
-  if (el) el.textContent = fmt(price);
-}
-
-document.getElementById('add-sym-inp').addEventListener('keydown', e => {
-  if (e.key === 'Enter') addSymbol();
-  if (e.key === 'Escape') document.getElementById('add-sym-form').classList.remove('open');
-});
+function selectSymbol(sym) { STATE.symbol=sym; document.getElementById('symbol-input').value=sym; renderWatchlist(); loadChart(sym,STATE.timeframe); }
+function addSymbol() { const inp=document.getElementById('add-sym-inp'); const sym=inp.value.trim().toUpperCase(); if(!sym||STATE.watchlist.includes(sym)){inp.value='';return;} STATE.watchlist.push(sym); inp.value=''; document.getElementById('add-sym-form').classList.remove('open'); renderWatchlist(); }
+function removeSymbol(sym,e) { e.stopPropagation(); STATE.watchlist=STATE.watchlist.filter(s=>s!==sym); if(STATE.symbol===sym&&STATE.watchlist.length)selectSymbol(STATE.watchlist[0]); else renderWatchlist(); }
+function toggleAddSym() { const f=document.getElementById('add-sym-form'); f.classList.toggle('open'); if(f.classList.contains('open'))document.getElementById('add-sym-inp').focus(); }
+function updateWLPrice(sym,price) { const key=sym.replace(/[^a-z0-9]/gi,'_'); const el=document.getElementById('wlp-'+key); if(el)el.textContent=fmt(price); }
+document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==='Enter')addSymbol();if(e.key==='Escape')document.getElementById('add-sym-form').classList.remove('open');});
 
 // ══════════════════════════════════════════════════════════
 //  TIMEFRAME
 // ══════════════════════════════════════════════════════════
 document.querySelectorAll('.tf-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     STATE.timeframe = btn.dataset.tf;
     saveState();
-    loadChart(STATE.symbol, STATE.timeframe);
+    loadChart(STATE.symbol,STATE.timeframe);
   });
 });
-
-function setActiveTF(tf) {
-  document.querySelectorAll('.tf-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tf === tf);
-  });
-}
+function setActiveTF(tf) { document.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf)); }
 
 // ══════════════════════════════════════════════════════════
 //  TOOLS
 // ══════════════════════════════════════════════════════════
 let volumeVisible = true;
-function toggleVolume() {
-  volumeVisible = !volumeVisible;
-  volumeSeries.applyOptions({ visible: volumeVisible });
-  document.getElementById('btn-volume').classList.toggle('active', volumeVisible);
-}
+function toggleVolume() { volumeVisible=!volumeVisible; volumeSeries.applyOptions({visible:volumeVisible}); document.getElementById('btn-volume').classList.toggle('active',volumeVisible); }
 
 function setTool(btn, name) {
-  document.querySelectorAll('.tool-btn').forEach(b => {
-    if (b.id !== 'btn-volume') b.classList.remove('active');
-  });
+  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume')b.classList.remove('active'); });
   btn.classList.add('active');
   STATE.activeTool = name;
-}
-
-const drawings = [];
-
-function clearDrawings() {
-  drawings.forEach(d => d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} }));
-  drawings.length = 0;
-  document.querySelectorAll('.chart-label').forEach(el => el.remove());
-}
-
-function initDrawingLayer() {
-  const container = document.getElementById('chart-container');
-
-  // SVG overlay — sits on top of chart, captures all pointer events when a draw tool is active
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-
-  // Preview element inside SVG
-  let previewEl = null;
-  let drawStart = null; // { x, y, price, time }
-
-  function syncSvgSize() {
-    svg.setAttribute('width',  container.clientWidth);
-    svg.setAttribute('height', container.clientHeight);
-  }
-  new ResizeObserver(syncSvgSize).observe(container);
-  syncSvgSize();
-
-  function clearPreview() {
-    if (previewEl) { previewEl.remove(); previewEl = null; }
-  }
-
-  // Convert mouse event → pixel coords + chart coords
-  function getCoords(e) {
-    const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const price = candleSeries.coordinateToPrice(y);
-    // coordinateToTime can return null when outside data range — clamp to nearest edge
-    let time = chart.timeScale().coordinateToTime(x);
-    const candles = window._lastCandles || [];
-    if (time === null && candles.length) {
-      // Determine which edge is closer
-      const firstX = chart.timeScale().timeToCoordinate(candles[0].time);
-      time = (x <= (firstX || 0)) ? candles[0].time : candles[candles.length - 1].time;
-    }
-    return { x, y, price, time };
-  }
-
-  // Enable pointer events on svg only when a draw tool is active
-  function updateSvgCapture() {
-    const tool = STATE.activeTool;
-    svg.style.pointerEvents = (tool === 'cursor' || tool === 'cross') ? 'none' : 'all';
-    svg.style.cursor = (tool === 'cursor' || tool === 'cross') ? '' :
-      tool === 'text' ? 'text' : 'crosshair';
-  }
-
-  // Patch setTool to also update svg capture
-  const _origSetTool = window.setTool;
-  window.setTool = function(btn, name) {
-    _origSetTool(btn, name);
-    updateSvgCapture();
-  };
-
-  // ── MOUSEDOWN ──────────────────────────────────────────────
-  svg.addEventListener('mousedown', e => {
-    e.preventDefault();
-    const tool = STATE.activeTool;
-    const { x, y, price, time } = getCoords(e);
-    if (price === null || time === null) return;
-    const candles = window._lastCandles || [];
-    if (!candles.length) return;
-
-    if (tool === 'text') {
-      const text = prompt('Etiqueta:');
-      if (!text) return;
-      const label = document.createElement('div');
-      label.className = 'chart-label';
-      label.textContent = text;
-      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:var(--gold);font-family:var(--font-mono);font-size:11px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;`;
-      container.appendChild(label);
-      drawings.push({ type:'text', series:[], label });
-      return;
-    }
-
-    drawStart = { x, y, price, time };
-  });
-
-  // ── MOUSEMOVE ──────────────────────────────────────────────
-  svg.addEventListener('mousemove', e => {
-    if (!drawStart) return;
-    e.preventDefault();
-    const tool = STATE.activeTool;
-    const { x: x2, y: y2 } = getCoords(e);
-
-    clearPreview();
-
-    const GOLD = '#c9a84c';
-    const GOLDA = '#c9a84c88';
-
-    if (tool === 'hline') {
-      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1', 0); line.setAttribute('y1', drawStart.y);
-      line.setAttribute('x2', container.clientWidth); line.setAttribute('y2', drawStart.y);
-      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', '1');
-      line.setAttribute('stroke-dasharray', '4,3');
-      svg.appendChild(line); previewEl = line;
-
-    } else if (tool === 'trendline') {
-      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
-      line.setAttribute('x2', x2);          line.setAttribute('y2', y2);
-      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', '1');
-      line.setAttribute('stroke-dasharray', '4,3');
-      svg.appendChild(line); previewEl = line;
-
-    } else if (tool === 'rect') {
-      const rx = Math.min(drawStart.x, x2);
-      const ry = Math.min(drawStart.y, y2);
-      const rw = Math.abs(x2 - drawStart.x);
-      const rh = Math.abs(y2 - drawStart.y);
-      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-      rect.setAttribute('x', rx); rect.setAttribute('y', ry);
-      rect.setAttribute('width', rw); rect.setAttribute('height', rh);
-      rect.setAttribute('stroke', GOLDA); rect.setAttribute('stroke-width', '1');
-      rect.setAttribute('stroke-dasharray', '4,3');
-      rect.setAttribute('fill', 'rgba(201,168,76,0.06)');
-      svg.appendChild(rect); previewEl = rect;
-
-    } else if (tool === 'fib') {
-      const ry = Math.min(drawStart.y, y2);
-      const rh = Math.abs(y2 - drawStart.y);
-      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
-      const fibColors = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
-      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-      levels.forEach((lvl, i) => {
-        const ly = ry + rh * lvl;
-        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', 0); line.setAttribute('y1', ly);
-        line.setAttribute('x2', container.clientWidth); line.setAttribute('y2', ly);
-        line.setAttribute('stroke', fibColors[i]+'bb'); line.setAttribute('stroke-width', '1');
-        line.setAttribute('stroke-dasharray', '3,3');
-        group.appendChild(line);
-      });
-      svg.appendChild(group); previewEl = group;
-    }
-  });
-
-  // ── MOUSEUP ────────────────────────────────────────────────
-  svg.addEventListener('mouseup', e => {
-    if (!drawStart) return;
-    e.preventDefault();
-    const tool = STATE.activeTool;
-    clearPreview();
-
-    const { price: price2, time: time2 } = getCoords(e);
-    if (price2 === null || time2 === null) { drawStart = null; return; }
-    const candles = window._lastCandles || [];
-    if (!candles.length) { drawStart = null; return; }
-    const C = '#c9a84c';
-
-    if (tool === 'hline') {
-      const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
-      s.setData([{time:candles[0].time,value:drawStart.price},{time:candles[candles.length-1].time,value:drawStart.price}]);
-      drawings.push({ type:'hline', series:[s] });
-
-    } else if (tool === 'trendline') {
-      const t1 = Math.min(drawStart.time, time2);
-      const tend = Math.max(drawStart.time, time2);
-      if (t1 !== tend) {
-        const p1 = drawStart.time <= time2 ? drawStart.price : price2;
-        const p2 = drawStart.time <= time2 ? price2 : drawStart.price;
-        const s = chart.addLineSeries({ color:C, lineWidth:1, lineStyle:0, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
-        s.setData([{time:t1,value:p1},{time:tend,value:p2}]);
-        drawings.push({ type:'trendline', series:[s] });
-      }
-
-    } else if (tool === 'rect') {
-      const hi = Math.max(drawStart.price, price2);
-      const lo = Math.min(drawStart.price, price2);
-      const t1 = Math.min(drawStart.time, time2);
-      const tend = Math.max(drawStart.time, time2);
-      if (t1 !== tend && Math.abs(hi - lo) > 0) {
-        const mkLine = (pts) => {
-          const s = chart.addLineSeries({ color:C+'99', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
-          s.setData(pts); return s;
-        };
-        const top = mkLine([{time:t1,value:hi},{time:tend,value:hi}]);
-        const bot = mkLine([{time:t1,value:lo},{time:tend,value:lo}]);
-        const lft = mkLine([{time:t1,value:lo},{time:t1,value:hi}]);
-        const rgt = mkLine([{time:tend,value:lo},{time:tend,value:hi}]);
-        drawings.push({ type:'rect', series:[top,bot,lft,rgt] });
-      }
-
-    } else if (tool === 'fib') {
-      const hi = Math.max(drawStart.price, price2);
-      const lo = Math.min(drawStart.price, price2);
-      const t1 = candles[0].time;
-      const tend = candles[candles.length-1].time;
-      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-      const colors = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
-      const seriesList = levels.map((lvl, i) => {
-        const val = hi - (hi - lo) * lvl;
-        const s = chart.addLineSeries({ color:colors[i]+'bb', lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
-        s.setData([{time:t1,value:val},{time:tend,value:val}]);
-        return s;
-      });
-      drawings.push({ type:'fib', series:seriesList });
-    }
-
-    drawStart = null;
-  });
-
-  // Cancel drag if mouse leaves window
-  window.addEventListener('mouseup', () => {
-    if (drawStart) { clearPreview(); drawStart = null; }
-  });
+  // When switching away from cursor, hide toolbar
+  if (name !== 'cursor') deselectDrawing();
 }
 
 // ══════════════════════════════════════════════════════════
 //  INDICATORS
 // ══════════════════════════════════════════════════════════
 const INDICATOR_DEFS = [
-  { name:'EMA 9',   desc:'Exponential MA 9',     color:'#f0c060', calc: d => ema(d,9)  },
-  { name:'EMA 20',  desc:'Exponential MA 20',    color:'#60c0f0', calc: d => ema(d,20) },
-  { name:'EMA 50',  desc:'Exponential MA 50',    color:'#a060f0', calc: d => ema(d,50) },
-  { name:'EMA 200', desc:'Exponential MA 200',   color:'#f06060', calc: d => ema(d,200)},
-  { name:'SMA 20',  desc:'Simple MA 20',         color:'#60f0a0', calc: d => sma(d,20) },
-  { name:'SMA 50',  desc:'Simple MA 50',         color:'#f0a060', calc: d => sma(d,50) },
-  { name:'VWAP',    desc:'Volume Weighted Avg',  color:'#c9a84c', calc: d => vwap(d)   },
+  { name:'EMA 9',   desc:'Exponential MA 9',    color:'#f0c060', calc:d=>ema(d,9)   },
+  { name:'EMA 20',  desc:'Exponential MA 20',   color:'#60c0f0', calc:d=>ema(d,20)  },
+  { name:'EMA 50',  desc:'Exponential MA 50',   color:'#a060f0', calc:d=>ema(d,50)  },
+  { name:'EMA 200', desc:'Exponential MA 200',  color:'#f06060', calc:d=>ema(d,200) },
+  { name:'SMA 20',  desc:'Simple MA 20',        color:'#60f0a0', calc:d=>sma(d,20)  },
+  { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', calc:d=>sma(d,50)  },
+  { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
 ];
 
 function openIndicatorModal() {
@@ -1354,326 +1416,194 @@ function openIndicatorModal() {
   INDICATOR_DEFS.forEach(def => {
     const row = document.createElement('div');
     const sel = STATE.indicators.includes(def.name);
-    row.className = 'ind-pick-row' + (sel ? ' selected' : '');
-    row.innerHTML = `
-      <div class="ind-dot" style="background:${def.color}"></div>
-      <div class="ind-pick-name">${def.name}</div>
-      <div class="ind-pick-desc">${def.desc}</div>
-      <div class="ind-pick-check">${sel ? '✓' : ''}</div>`;
-    row.addEventListener('click', () => {
-      row.classList.toggle('selected');
-      const chk = row.querySelector('.ind-pick-check');
-      chk.textContent = row.classList.contains('selected') ? '✓' : '';
-    });
+    row.className = 'ind-pick-row'+(sel?' selected':'');
+    row.innerHTML = `<div class="ind-dot" style="background:${def.color}"></div><div class="ind-pick-name">${def.name}</div><div class="ind-pick-desc">${def.desc}</div><div class="ind-pick-check">${sel?'✓':''}</div>`;
+    row.addEventListener('click', ()=>{ row.classList.toggle('selected'); row.querySelector('.ind-pick-check').textContent=row.classList.contains('selected')?'✓':''; });
     picker.appendChild(row);
   });
   openModal('modal-indicators');
 }
 
 function applyIndicators() {
-  const selected = [...document.querySelectorAll('.ind-pick-row.selected')]
-    .map(r => r.querySelector('.ind-pick-name').textContent);
-
-  // remove deselected
-  STATE.indicators.forEach(name => {
-    if (!selected.includes(name) && overlays[name]) {
-      chart.removeSeries(overlays[name]);
-      delete overlays[name];
-    }
-  });
-
-  STATE.indicators = selected;
-  saveState();
-  selected.forEach(name => addIndicatorSeries(name));
-  renderIndList();
-  closeModal('modal-indicators');
+  const selected=[...document.querySelectorAll('.ind-pick-row.selected')].map(r=>r.querySelector('.ind-pick-name').textContent);
+  STATE.indicators.forEach(name=>{ if(!selected.includes(name)&&overlays[name]){chart.removeSeries(overlays[name]);delete overlays[name];} });
+  STATE.indicators=selected; saveState();
+  selected.forEach(name=>addIndicatorSeries(name));
+  renderIndList(); closeModal('modal-indicators');
 }
 
 function addIndicatorSeries(name) {
-  if (overlays[name]) return; // already added
-  const def = INDICATOR_DEFS.find(d => d.name === name);
-  if (!def) return;
-
-  // get current candle data
-  const rawData = candleSeries ? getSeriesData() : [];
-  if (!rawData.length) return;
-
-  const calcData = def.calc(rawData);
-  const series = chart.addLineSeries({
-    color:       def.color,
-    lineWidth:   1,
-    priceLineVisible: false,
-    lastValueVisible: true,
-  });
-  series.setData(calcData);
-  overlays[name] = series;
-}
-
-function getSeriesData() {
-  // Lightweight Charts doesn't expose data directly — we cache it
-  return window._lastCandles || [];
+  if(overlays[name])return;
+  const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
+  const rawData=window._lastCandles||[]; if(!rawData.length)return;
+  const calcData=def.calc(rawData);
+  const series=chart.addLineSeries({color:def.color,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+  series.setData(calcData); overlays[name]=series;
 }
 
 function renderIndList() {
-  const el = document.getElementById('ind-list');
-  el.innerHTML = '';
-  if (!STATE.indicators.length) {
-    el.innerHTML = '<div class="ind-item" style="color:var(--text-dim);font-size:10px">None active</div>';
-    return;
-  }
-  STATE.indicators.forEach(name => {
-    const def = INDICATOR_DEFS.find(d => d.name === name);
-    const item = document.createElement('div');
-    item.className = 'ind-item';
-    item.innerHTML = `
-      <div class="ind-dot" style="background:${def?.color||'#888'}"></div>
-      <span>${name}</span>
-      <button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
+  const el=document.getElementById('ind-list'); el.innerHTML='';
+  if(!STATE.indicators.length){el.innerHTML='<div class="ind-item" style="color:var(--text-dim);font-size:10px">None active</div>';return;}
+  STATE.indicators.forEach(name=>{
+    const def=INDICATOR_DEFS.find(d=>d.name===name);
+    const item=document.createElement('div'); item.className='ind-item';
+    item.innerHTML=`<div class="ind-dot" style="background:${def?.color||'#888'}"></div><span>${name}</span><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
     el.appendChild(item);
   });
 }
 
-function removeIndicator(name) {
-  if (overlays[name]) { chart.removeSeries(overlays[name]); delete overlays[name]; }
-  STATE.indicators = STATE.indicators.filter(n => n !== name);
-  saveState();
-  renderIndList();
-}
+function removeIndicator(name){if(overlays[name]){chart.removeSeries(overlays[name]);delete overlays[name];}STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();}
 
 // ══════════════════════════════════════════════════════════
 //  INDICATOR MATH
 // ══════════════════════════════════════════════════════════
-function ema(data, period) {
-  const k = 2 / (period + 1);
-  let prev = null;
-  return data.map(d => {
-    if (prev === null) { prev = d.close; return { time: d.time, value: d.close }; }
-    const val = d.close * k + prev * (1 - k);
-    prev = val;
-    return { time: d.time, value: val };
-  });
-}
-
-function sma(data, period) {
-  return data.map((d, i) => {
-    if (i < period - 1) return { time: d.time, value: null };
-    const sum = data.slice(i - period + 1, i + 1).reduce((a, v) => a + v.close, 0);
-    return { time: d.time, value: sum / period };
-  }).filter(d => d.value !== null);
-}
-
-function vwap(data) {
-  let cumPV = 0, cumV = 0;
-  return data.map(d => {
-    const tp = (d.high + d.low + d.close) / 3;
-    cumPV += tp * (d.volume || 1);
-    cumV  += (d.volume || 1);
-    return { time: d.time, value: cumPV / cumV };
-  });
-}
+function ema(data,period){const k=2/(period+1);let prev=null;return data.map(d=>{if(prev===null){prev=d.close;return{time:d.time,value:d.close};}const val=d.close*k+prev*(1-k);prev=val;return{time:d.time,value:val};});}
+function sma(data,period){return data.map((d,i)=>{if(i<period-1)return{time:d.time,value:null};const sum=data.slice(i-period+1,i+1).reduce((a,v)=>a+v.close,0);return{time:d.time,value:sum/period};}).filter(d=>d.value!==null);}
+function vwap(data){let cumPV=0,cumV=0;return data.map(d=>{const tp=(d.high+d.low+d.close)/3;cumPV+=tp*(d.volume||1);cumV+=(d.volume||1);return{time:d.time,value:cumPV/cumV};});}
 
 // ══════════════════════════════════════════════════════════
 //  MODALS
 // ══════════════════════════════════════════════════════════
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);});});
 
-document.querySelectorAll('.modal-overlay').forEach(el => {
-  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
-});
+function openApiModal(){document.getElementById('inp-apikey').value=STATE.apiKey;document.getElementById('inp-defsym').value=STATE.symbol;openModal('modal-api');}
 
-function openApiModal() {
-  document.getElementById('inp-apikey').value = STATE.apiKey;
-  document.getElementById('inp-defsym').value = STATE.symbol;
-  openModal('modal-api');
-}
-
-function saveSettings() {
-  const key = document.getElementById('inp-apikey').value.trim();
-  const sym = document.getElementById('inp-defsym').value.trim().toUpperCase() || 'QQQ';
-  STATE.apiKey = key;
-  localStorage.setItem('td_apikey', key);
-  const badge = document.getElementById('api-badge');
-  if (key) {
-    badge.textContent = 'API ✓';
-    badge.classList.add('connected');
-  } else {
-    badge.textContent = 'NO API KEY';
-    badge.classList.remove('connected');
-  }
+function saveSettings(){
+  const key=document.getElementById('inp-apikey').value.trim();
+  const sym=document.getElementById('inp-defsym').value.trim().toUpperCase()||'QQQ';
+  STATE.apiKey=key; localStorage.setItem('td_apikey',key);
+  const badge=document.getElementById('api-badge');
+  if(key){badge.textContent='API ✓';badge.classList.add('connected');}else{badge.textContent='NO API KEY';badge.classList.remove('connected');}
   closeModal('modal-api');
-  if (key) { STATE.symbol = sym; selectSymbol(sym); }
+  if(key){STATE.symbol=sym;selectSymbol(sym);}
 }
 
 // ══════════════════════════════════════════════════════════
 //  UI HELPERS
 // ══════════════════════════════════════════════════════════
-function fmt(n) {
-  if (n === undefined || n === null || isNaN(n)) return '—';
-  return n >= 1000 ? n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
-                   : n.toFixed(n < 10 ? 4 : 2);
+function fmt(n){if(n===undefined||n===null||isNaN(n))return'—';return n>=1000?n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):n.toFixed(n<10?4:2);}
+
+function updateTopbarPrice(last,prev){
+  document.getElementById('price-last').textContent=fmt(last.close);
+  const chg=last.close-(prev?.close??last.close);
+  const pct=prev?.close?(chg/prev.close*100):0;
+  const el=document.getElementById('price-change');
+  el.textContent=`${chg>=0?'+':''}${fmt(chg)}  (${pct.toFixed(2)}%)`;
+  el.className=chg>=0?'up':'dn';
 }
 
-function updateTopbarPrice(last, prev) {
-  document.getElementById('price-last').textContent = fmt(last.close);
-  const chg = last.close - (prev?.close ?? last.close);
-  const pct  = prev?.close ? (chg / prev.close * 100) : 0;
-  const el   = document.getElementById('price-change');
-  el.textContent = `${chg >= 0 ? '+' : ''}${fmt(chg)}  (${pct.toFixed(2)}%)`;
-  el.className   = chg >= 0 ? 'up' : 'dn';
+function updateTopbarOHLCV(d){
+  document.getElementById('ohlc-o').textContent=fmt(d.open);
+  document.getElementById('ohlc-h').textContent=fmt(d.high);
+  document.getElementById('ohlc-l').textContent=fmt(d.low);
+  document.getElementById('ohlc-c').textContent=fmt(d.close);
+  document.getElementById('ohlc-v').textContent=d.volume?(d.volume>=1e6?(d.volume/1e6).toFixed(1)+'M':Math.round(d.volume).toLocaleString()):'—';
 }
 
-function updateTopbarOHLCV(d) {
-  document.getElementById('ohlc-o').textContent = fmt(d.open);
-  document.getElementById('ohlc-h').textContent = fmt(d.high);
-  document.getElementById('ohlc-l').textContent = fmt(d.low);
-  document.getElementById('ohlc-c').textContent = fmt(d.close);
-  document.getElementById('ohlc-v').textContent =
-    d.volume ? (d.volume >= 1e6 ? (d.volume/1e6).toFixed(1)+'M' : Math.round(d.volume).toLocaleString()) : '—';
+function updateStatusBar(sym,tf,bars,first,last){
+  document.getElementById('sb-sym').textContent=sym;
+  document.getElementById('sb-tf').textContent=tf;
+  document.getElementById('sb-bars').textContent=bars;
+  const d1=new Date(first.time*1000).toLocaleDateString();
+  const d2=new Date(last.time*1000).toLocaleDateString();
+  document.getElementById('sb-range').textContent=`${d1} – ${d2}`;
 }
 
-function updateStatusBar(sym, tf, bars, first, last) {
-  document.getElementById('sb-sym').textContent   = sym;
-  document.getElementById('sb-tf').textContent    = tf;
-  document.getElementById('sb-bars').textContent  = bars;
-  const d1 = new Date(first.time*1000).toLocaleDateString();
-  const d2 = new Date(last.time*1000).toLocaleDateString();
-  document.getElementById('sb-range').textContent = `${d1} – ${d2}`;
-}
+function setStatus(cls,txt){const el=document.getElementById('status-conn');el.className=cls;el.textContent=txt;}
+function showOverlay(show){document.getElementById('loading-overlay').classList.toggle('hidden',!show);}
+function setLoaderMsg(msg){document.getElementById('loader-msg').textContent=msg;}
+function showLoader(msg){setLoaderMsg(msg);showOverlay(true);}
+function saveState(){localStorage.setItem('td_symbol',STATE.symbol);localStorage.setItem('td_tf',STATE.timeframe);localStorage.setItem('td_watchlist',JSON.stringify(STATE.watchlist));localStorage.setItem('td_indicators',JSON.stringify(STATE.indicators));}
 
-function setStatus(cls, txt) {
-  const el = document.getElementById('status-conn');
-  el.className = cls;
-  el.textContent = txt;
-}
-
-function showOverlay(show) {
-  document.getElementById('loading-overlay').classList.toggle('hidden', !show);
-}
-
-function setLoaderMsg(msg) {
-  document.getElementById('loader-msg').textContent = msg;
-}
-
-function showLoader(msg) {
-  setLoaderMsg(msg);
-  showOverlay(true);
-}
-
-function saveState() {
-  localStorage.setItem('td_symbol',     STATE.symbol);
-  localStorage.setItem('td_tf',         STATE.timeframe);
-  localStorage.setItem('td_watchlist',  JSON.stringify(STATE.watchlist));
-  localStorage.setItem('td_indicators', JSON.stringify(STATE.indicators));
-}
-
-// ══════════════════════════════════════════════════════════
-//  SYMBOL INPUT
-// ══════════════════════════════════════════════════════════
-document.getElementById('symbol-input').addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const sym = e.target.value.trim().toUpperCase();
-  if (!sym) return;
-  if (!STATE.watchlist.includes(sym)) STATE.watchlist.push(sym);
-  STATE.symbol = sym;
-  renderWatchlist();
-  loadChart(sym, STATE.timeframe);
+document.getElementById('symbol-input').addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  const sym=e.target.value.trim().toUpperCase();if(!sym)return;
+  if(!STATE.watchlist.includes(sym))STATE.watchlist.push(sym);
+  STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
 });
 
 // ══════════════════════════════════════════════════════════
-//  REAL loadChart (overrides placeholder above)
+//  loadChart
 // ══════════════════════════════════════════════════════════
 async function loadChart(symbol, timeframe) {
-  if (!STATE.apiKey) {
-    showLoader('No API key — open Settings ↑');
-    setStatus('err', '● no key');
-    return;
-  }
-  setLoaderMsg(`Loading ${symbol} ${timeframe}…`);
-  showOverlay(true);
-  setStatus('loading', '● loading…');
+  if(!STATE.apiKey){showLoader('No API key — open Settings ↑');setStatus('err','● no key');return;}
+  setLoaderMsg(`Loading ${symbol} ${timeframe}…`);showOverlay(true);setStatus('loading','● loading…');
 
-  const url =
-    `https://api.twelvedata.com/time_series?` +
-    `symbol=${encodeURIComponent(symbol)}` +
-    `&interval=${timeframe}` +
-    `&outputsize=500` +
-    `&order=ASC` +
-    `&apikey=${STATE.apiKey}`;
+  const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&outputsize=500&order=ASC&apikey=${STATE.apiKey}`;
 
   try {
-    const res  = await fetch(url);
-    const json = await res.json();
+    const res=await fetch(url);
+    const json=await res.json();
+    if(json.status==='error'||!json.values)throw new Error(json.message||'API error');
 
-    if (json.status === 'error' || !json.values) {
-      throw new Error(json.message || 'API error');
-    }
-
-    const candles = json.values.map(v => ({
-      time:   Math.floor(new Date(v.datetime).getTime() / 1000),
-      open:   parseFloat(v.open),
-      high:   parseFloat(v.high),
-      low:    parseFloat(v.low),
-      close:  parseFloat(v.close),
-      volume: parseFloat(v.volume || 0),
+    const candles=json.values.map(v=>({
+      time:  Math.floor(new Date(v.datetime).getTime()/1000),
+      open:  parseFloat(v.open),
+      high:  parseFloat(v.high),
+      low:   parseFloat(v.low),
+      close: parseFloat(v.close),
+      volume:parseFloat(v.volume||0),
     }));
 
-    window._lastCandles = candles; // cache for indicators
+    window._lastCandles=candles;
 
-    const vols = candles.map(c => ({
-      time:  c.time,
-      value: c.volume,
-      color: c.close >= c.open ? 'rgba(38,166,154,.25)' : 'rgba(239,83,80,.2)',
-    }));
-
+    const vols=candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'}));
     candleSeries.setData(candles);
     volumeSeries.setData(vols);
     chart.timeScale().fitContent();
 
-    // re-apply indicators with new data
-    Object.keys(overlays).forEach(name => {
-      chart.removeSeries(overlays[name]);
-      delete overlays[name];
+    // Ensure time scale shows future space (50 bars)
+    chart.timeScale().applyOptions({ rightOffset: 50 });
+
+    Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
+    STATE.indicators.forEach(name=>addIndicatorSeries(name));
+
+    // Rebuild existing drawings with new candle data
+    drawings.forEach(d => {
+      d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
+      d.series=[];
+      buildDrawingOnChart(d);
     });
-    STATE.indicators.forEach(name => addIndicatorSeries(name));
+    if(selectedDrawingId)highlightSelectedSvg(selectedDrawingId);
 
-    const last = candles[candles.length - 1];
-    const prev = candles[candles.length - 2];
-    updateTopbarPrice(last, prev);
+    const last=candles[candles.length-1];
+    const prev=candles[candles.length-2];
+    updateTopbarPrice(last,prev);
     updateTopbarOHLCV(last);
-    updateStatusBar(symbol, timeframe, candles.length, candles[0], last);
-    updateWLPrice(symbol, last.close);
+    updateStatusBar(symbol,timeframe,candles.length,candles[0],last);
+    updateWLPrice(symbol,last.close);
 
-    document.getElementById('symbol-input').value = symbol;
-    document.title = `${symbol} · Zentinel`;
-
-    setStatus('ok', '● live');
+    document.getElementById('symbol-input').value=symbol;
+    document.title=`${symbol} · Zentinel`;
+    setStatus('ok','● live');
     showOverlay(false);
 
-  } catch (err) {
-    setLoaderMsg('⚠ ' + err.message);
-    setStatus('err', '● error');
+  } catch(err) {
+    setLoaderMsg('⚠ '+err.message);
+    setStatus('err','● error');
   }
 }
 
 // ══════════════════════════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════════════════════════
-(function boot() {
+(function boot(){
   initChart();
   initDrawingLayer();
   renderWatchlist();
   renderIndList();
   setActiveTF(STATE.timeframe);
-  document.getElementById('symbol-input').value = STATE.symbol;
+  document.getElementById('symbol-input').value=STATE.symbol;
 
-  if (STATE.apiKey) {
-    document.getElementById('api-badge').textContent = 'API ✓';
+  if(STATE.apiKey){
+    document.getElementById('api-badge').textContent='API ✓';
     document.getElementById('api-badge').classList.add('connected');
-    loadChart(STATE.symbol, STATE.timeframe);
+    loadChart(STATE.symbol,STATE.timeframe);
   } else {
     showLoader('Enter your Twelve Data API key in Settings');
-    setStatus('err', '● no key');
+    setStatus('err','● no key');
   }
 })();
 </script>
