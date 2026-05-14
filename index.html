@@ -828,7 +828,7 @@
     <label>Twelve Data API Key</label>
     <input type="password" id="inp-apikey" placeholder="Enter your API key…">
     <label>Default Symbol</label>
-    <input type="text" id="inp-defsym" placeholder="NQ1!" value="NQ1!">
+    <input type="text" id="inp-defsym" placeholder="QQQ" value="QQQ">
     <div class="modal-btns">
       <button class="btn-ghost" onclick="closeModal('modal-api')">Cancel</button>
       <button class="btn-primary" onclick="saveSettings()">Save</button>
@@ -854,9 +854,9 @@
 // ══════════════════════════════════════════════════════════
 const STATE = {
   apiKey:     localStorage.getItem('td_apikey') || '',
-  symbol:     localStorage.getItem('td_symbol') || 'NQ1!',
+  symbol:     localStorage.getItem('td_symbol') || 'QQQ',
   timeframe:  localStorage.getItem('td_tf')     || '1h',
-  watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["NQ1!","MNQ1!","ES1!","YM1!","GC1!","CL1!"]'),
+  watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["QQQ","SPY","IWM","GLD","USO","AAPL"]'),
   indicators: JSON.parse(localStorage.getItem('td_indicators') || '[]'),
   activeTool: 'cursor',
 };
@@ -1276,7 +1276,7 @@ function openApiModal() {
 
 function saveSettings() {
   const key = document.getElementById('inp-apikey').value.trim();
-  const sym = document.getElementById('inp-defsym').value.trim().toUpperCase() || 'NQ1!';
+  const sym = document.getElementById('inp-defsym').value.trim().toUpperCase() || 'QQQ';
   STATE.apiKey = key;
   localStorage.setItem('td_apikey', key);
   const badge = document.getElementById('api-badge');
