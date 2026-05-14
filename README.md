@@ -1,2 +1,2 @@
 # ChartZentinel
-plataforma de trading analitico
+plataforma de trading analitic
