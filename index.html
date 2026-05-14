@@ -862,9 +862,9 @@
 // ══════════════════════════════════════════════════════════
 const STATE = {
   apiKey:     localStorage.getItem('td_apikey') || '',
-  symbol:     localStorage.getItem('td_symbol') || 'NQ1!',
+  symbol:     localStorage.getItem('td_symbol') || 'QQQ',
   timeframe:  localStorage.getItem('td_tf')     || '1h',
-  watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["NQ1!","MNQ1!","ES1!","YM1!","GC1!","CL1!"]'),
+  watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["QQQ","SPY","IWM","GLD","USO","AAPL"]'),
   indicators: JSON.parse(localStorage.getItem('td_indicators') || '[]'),
   activeTool: 'cursor',
 };
@@ -962,68 +962,6 @@ function initChart() {
 // ══════════════════════════════════════════════════════════
 //  DATA FETCH (Twelve Data)
 // ══════════════════════════════════════════════════════════
-async function loadChart(symbol, timeframe) {
-  if (!STATE.apiKey) { showLoader('No API key — open Settings'); return; }
-  setLoaderMsg(`Loading ${symbol} ${timeframe}…`);
-  showOverlay(true);
-  setStatus('loading', '● loading…');
-
-  const url =
-    `https://api.twelvedata.com/time_series?` +
-    `symbol=${encodeURIComponent(symbol)}` +
-    `&interval=${timeframe}` +
-    `&outputsize=500` +
-    `&order=ASC` +
-    `&apikey=${STATE.apiKey}`;
-
-  try {
-    const res  = await fetch(url);
-    const json = await res.json();
-
-    if (json.status === 'error' || !json.values) {
-      throw new Error(json.message || 'Unknown error');
-    }
-
-    const candles = json.values.map(v => ({
-      time:   Math.floor(new Date(v.datetime).getTime() / 1000),
-      open:   parseFloat(v.open),
-      high:   parseFloat(v.high),
-      low:    parseFloat(v.low),
-      close:  parseFloat(v.close),
-      volume: parseFloat(v.volume || 0),
-    }));
-
-    const vols = candles.map(c => ({
-      time:  c.time,
-      value: c.volume,
-      color: c.close >= c.open ? 'rgba(38,166,154,.25)' : 'rgba(239,83,80,.2)',
-    }));
-
-    candleSeries.setData(candles);
-    volumeSeries.setData(vols);
-    chart.timeScale().fitContent();
-
-    const last = candles[candles.length - 1];
-    const prev = candles[candles.length - 2];
-    updateTopbarPrice(last, prev);
-    updateTopbarOHLCV(last);
-    updateStatusBar(symbol, timeframe, candles.length, candles[0], last);
-    setStatus('ok', '● live');
-    showOverlay(false);
-
-    // reload active indicators
-    STATE.indicators.forEach(name => addIndicatorSeries(name));
-
-    // update watchlist item price
-    updateWLPrice(symbol, last.close);
-
-  } catch (err) {
-    setLoaderMsg('Error: ' + err.message);
-    setStatus('err', '● error');
-    console.error(err);
-  }
-}
-
 // ══════════════════════════════════════════════════════════
 //  WATCHLIST
 // ══════════════════════════════════════════════════════════
@@ -1351,12 +1289,6 @@ function getSeriesData() {
   return window._lastCandles || [];
 }
 
-// Patch loadChart to cache candles
-const _origLoad = loadChart;
-async function loadChart(symbol, timeframe) {
-  // overridden below — see bottom
-}
-
 function renderIndList() {
   const el = document.getElementById('ind-list');
   el.innerHTML = '';
@@ -1433,7 +1365,7 @@ function openApiModal() {
 
 function saveSettings() {
   const key = document.getElementById('inp-apikey').value.trim();
-  const sym = document.getElementById('inp-defsym').value.trim().toUpperCase() || 'NQ1!';
+  const sym = document.getElementById('inp-defsym').value.trim().toUpperCase() || 'QQQ';
   STATE.apiKey = key;
   localStorage.setItem('td_apikey', key);
   const badge = document.getElementById('api-badge');
