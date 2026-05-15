@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zentinel Charts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Orbitron:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
@@ -29,7 +29,7 @@
     --red-dim:      rgba(239,83,80,0.15);
     --font-ui:      'DM Sans', sans-serif;
     --font-mono:    'DM Mono', monospace;
-    --font-display: 'Cinzel Decorative', serif;
+    --font-display: 'Orbitron', sans-serif;
     --sidebar-w:    220px;
     --toolbar-h:    44px;
     --topbar-h:     52px;
@@ -63,17 +63,17 @@
 
   .logo {
     font-family: var(--font-display);
-    font-size: 17px;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--gold);
-    letter-spacing: 2px;
+    letter-spacing: 4px;
     text-transform: uppercase;
     white-space: nowrap;
     display: flex;
     align-items: center;
-    gap: 8px;
-    text-shadow: 0 0 20px rgba(201,168,76,0.4), 0 1px 0 rgba(201,168,76,0.2);
+    gap: 0;
+    text-shadow: 0 0 24px rgba(201,168,76,0.35), 0 1px 0 rgba(201,168,76,0.15);
   }
-  .logo svg { width: 20px; height: 20px; }
   .logo-sep { width: 1px; height: 24px; background: var(--border-light); margin: 0 4px; }
 
   #symbol-search-wrap { position: relative; display: flex; align-items: center; }
@@ -302,10 +302,11 @@
 
   .loader-logo {
     font-family: var(--font-display);
-    font-size: 22px;
-    letter-spacing: 2px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 5px;
     color: var(--gold);
-    text-shadow: 0 0 20px rgba(201,168,76,0.4), 0 1px 0 rgba(201,168,76,0.2);
+    text-shadow: 0 0 24px rgba(201,168,76,0.35), 0 1px 0 rgba(201,168,76,0.15);
   }
   .loader-bar { width: 120px; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .loader-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); border-radius: 2px; animation: loaderAnim 1.5s ease-in-out infinite; }
@@ -356,7 +357,7 @@
   }
   .modal-overlay.open .modal { transform: translateY(0); }
 
-  .modal h2 { font-family: var(--font-display); font-size: 13px; letter-spacing: 2px; color: var(--gold); margin-bottom: 16px; text-transform: uppercase; }
+  .modal h2 { font-family: var(--font-display); font-size: 11px; letter-spacing: 3px; color: var(--gold); margin-bottom: 16px; text-transform: uppercase; }
   .modal label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; letter-spacing: .5px; }
   .modal input[type=text], .modal input[type=password] {
     width: 100%; background: var(--bg-secondary); border: 1px solid var(--border-light);
@@ -476,14 +477,7 @@
 
 <!-- ══ TOP BAR ══════════════════════════════════════════ -->
 <div id="topbar">
-  <div class="logo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <polygon points="12,2 22,20 2,20" stroke-linejoin="round"/>
-      <line x1="12" y1="8" x2="12" y2="14"/>
-      <circle cx="12" cy="17" r=".8" fill="currentColor"/>
-    </svg>
-    ZENTINEL
-  </div>
+  <div class="logo">ZENTINEL</div>
   <div class="logo-sep"></div>
 
   <div id="symbol-search-wrap">
@@ -1538,4 +1532,3 @@ async function loadChart(symbol, timeframe) {
 </script>
 </body>
 </html>
-Listo
