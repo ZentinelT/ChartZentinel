@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zentinel Charts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
@@ -29,7 +29,7 @@
     --red-dim:      rgba(239,83,80,0.15);
     --font-ui:      'DM Sans', sans-serif;
     --font-mono:    'DM Mono', monospace;
-    --font-display: 'Cinzel', serif;
+    --font-display: 'Cinzel Decorative', serif;
     --sidebar-w:    220px;
     --toolbar-h:    44px;
     --topbar-h:     52px;
@@ -63,14 +63,15 @@
 
   .logo {
     font-family: var(--font-display);
-    font-size: 16px;
+    font-size: 17px;
     color: var(--gold);
-    letter-spacing: 3px;
+    letter-spacing: 2px;
     text-transform: uppercase;
     white-space: nowrap;
     display: flex;
     align-items: center;
     gap: 8px;
+    text-shadow: 0 0 20px rgba(201,168,76,0.4), 0 1px 0 rgba(201,168,76,0.2);
   }
   .logo svg { width: 20px; height: 20px; }
   .logo-sep { width: 1px; height: 24px; background: var(--border-light); margin: 0 4px; }
@@ -299,7 +300,13 @@
   }
   #loading-overlay.hidden { opacity: 0; pointer-events: none; }
 
-  .loader-logo { font-family: var(--font-display); font-size: 22px; letter-spacing: 4px; color: var(--gold); }
+  .loader-logo {
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(201,168,76,0.4), 0 1px 0 rgba(201,168,76,0.2);
+  }
   .loader-bar { width: 120px; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .loader-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); border-radius: 2px; animation: loaderAnim 1.5s ease-in-out infinite; }
   @keyframes loaderAnim { 0%{width:0%;margin-left:0} 50%{width:70%;margin-left:15%} 100%{width:0%;margin-left:100%} }
@@ -444,7 +451,6 @@
     opacity: 0; cursor: pointer;
   }
 
-  /* Width selector */
   .dtb-select {
     background: var(--bg-secondary); border: 1px solid var(--border-light);
     border-radius: 4px; color: var(--text-primary); font-family: var(--font-mono);
@@ -452,15 +458,9 @@
   }
   .dtb-select option { background: var(--bg-panel); }
 
-  /* Extend toggle button */
   .dtb-btn.active { background: var(--gold-glow); color: var(--gold); }
-
-  /* Lock button */
   .dtb-label { font-size: 10px; color: var(--text-dim); padding: 0 4px; }
 
-  /* ══════════════════════════════════════════════════════
-     DRAWING SELECTION highlight on SVG
-  ══════════════════════════════════════════════════════ */
   .drawing-handle {
     fill: var(--gold);
     stroke: var(--bg-panel);
@@ -469,8 +469,6 @@
     transition: r .1s;
   }
   .drawing-handle:hover { r: 7; }
-
-  /* Selected drawing glow */
   .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
 </style>
 </head>
@@ -641,7 +639,6 @@
 
 <!-- ══ FLOATING DRAWING TOOLBAR ══════════════════════════ -->
 <div id="draw-toolbar">
-  <!-- Color -->
   <div class="dtb-color-wrap">
     <span class="dtb-label">Color</span>
     <div class="dtb-color-swatch" id="dtb-color-swatch" style="background:#c9a84c">
@@ -649,7 +646,6 @@
     </div>
   </div>
   <div class="dtb-sep"></div>
-  <!-- Line width -->
   <span class="dtb-label">Width</span>
   <select class="dtb-select" id="dtb-width" onchange="onDtbWidthChange(this.value)">
     <option value="1">1px</option>
@@ -658,7 +654,6 @@
     <option value="4">4px</option>
   </select>
   <div class="dtb-sep"></div>
-  <!-- Line style -->
   <span class="dtb-label">Style</span>
   <select class="dtb-select" id="dtb-style" onchange="onDtbStyleChange(this.value)">
     <option value="0">─── Solid</option>
@@ -666,14 +661,12 @@
     <option value="2">··· Dotted</option>
   </select>
   <div class="dtb-sep"></div>
-  <!-- Extend left -->
   <button class="dtb-btn" id="dtb-ext-left" title="Extend Left" onclick="onDtbExtend('left')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <line x1="14" y1="8" x2="2" y2="8"/><polyline points="6,4 2,8 6,12"/>
     </svg>
     Left
   </button>
-  <!-- Extend right -->
   <button class="dtb-btn" id="dtb-ext-right" title="Extend Right" onclick="onDtbExtend('right')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <line x1="2" y1="8" x2="14" y2="8"/><polyline points="10,4 14,8 10,12"/>
@@ -681,7 +674,6 @@
     Right
   </button>
   <div class="dtb-sep"></div>
-  <!-- Lock -->
   <button class="dtb-btn" id="dtb-lock" title="Lock drawing" onclick="onDtbLock()">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="3" y="7" width="10" height="8" rx="1.5"/>
@@ -690,7 +682,6 @@
     Lock
   </button>
   <div class="dtb-sep"></div>
-  <!-- Clone -->
   <button class="dtb-btn" title="Duplicate" onclick="onDtbClone()">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="5" y="5" width="8" height="9" rx="1"/><rect x="3" y="2" width="8" height="9" rx="1"/>
@@ -698,7 +689,6 @@
     Clone
   </button>
   <div class="dtb-sep"></div>
-  <!-- Delete -->
   <button class="dtb-btn danger" title="Delete drawing" onclick="onDtbDelete()">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <polyline points="2 4 3.5 4 14 4"/>
@@ -756,33 +746,9 @@ const overlays = {};
 // ══════════════════════════════════════════════════════════
 //  DRAWING SYSTEM
 // ══════════════════════════════════════════════════════════
-
-/*
-  Each drawing object:
-  {
-    id: unique string,
-    type: 'hline'|'trendline'|'rect'|'fib'|'text',
-    series: [ LW series... ],
-    svgEls: [ svg elements ... ],
-    label: DOM element (for text),
-    locked: bool,
-    // style config
-    color: '#c9a84c',
-    width: 1,
-    style: 0,   // 0=solid 1=dashed 2=dotted
-    // geometry (price/time coordinates)
-    p1: { price, time },
-    p2: { price, time },
-    // extend flags
-    extLeft: false,
-    extRight: false,
-  }
-*/
-
 const drawings = [];
 let selectedDrawingId = null;
 
-// Default tool config (shared for new drawings)
 const toolDefaults = {
   color: '#c9a84c',
   width: 1,
@@ -793,17 +759,14 @@ const toolDefaults = {
 
 function genId() { return 'drw_' + Math.random().toString(36).slice(2,9); }
 
-// LW LineStyle enum: 0=Solid,1=Dashed,2=Dotted
 function lwStyle(s) {
   return s == 0 ? 0 : s == 1 ? 1 : 2;
 }
 
-// ── SELECTION ───────────────────────────────────────────
 function selectDrawing(id) {
   selectedDrawingId = id;
   const d = drawings.find(x => x.id === id);
   if (!d) { hideDrawToolbar(); return; }
-  // Update floating toolbar to reflect this drawing's current style
   document.getElementById('dtb-color').value = d.color;
   document.getElementById('dtb-color-swatch').style.background = d.color;
   document.getElementById('dtb-width').value = d.width;
@@ -821,14 +784,9 @@ function deselectDrawing() {
   clearSvgHighlights();
 }
 
-function showDrawToolbar() {
-  document.getElementById('draw-toolbar').classList.add('visible');
-}
-function hideDrawToolbar() {
-  document.getElementById('draw-toolbar').classList.remove('visible');
-}
+function showDrawToolbar() { document.getElementById('draw-toolbar').classList.add('visible'); }
+function hideDrawToolbar() { document.getElementById('draw-toolbar').classList.remove('visible'); }
 
-// ── DRAWING TOOLBAR HANDLERS ─────────────────────────────
 function onDtbColorChange(val) {
   document.getElementById('dtb-color-swatch').style.background = val;
   toolDefaults.color = val;
@@ -856,7 +814,6 @@ function onDtbLock() {
 function onDtbClone() {
   const d = getSelected(); if (!d) return;
   const clone = JSON.parse(JSON.stringify({ ...d, id: genId(), series:[], svgEls:[], label:null }));
-  // offset price slightly
   clone.p1.price += (d.p2?.price ?? d.p1.price) * 0.001;
   if (clone.p2) clone.p2.price += clone.p1.price * 0.001;
   drawings.push(clone);
@@ -871,27 +828,21 @@ function onDtbDelete() {
 
 function getSelected() { return drawings.find(x => x.id === selectedDrawingId) || null; }
 
-// Apply style update to currently selected drawing
 function applyStyleToSelected(patch) {
   const d = getSelected(); if (!d) return;
   Object.assign(d, patch);
   redrawDrawing(d);
 }
 
-// ── REDRAW (update series with new style) ─────────────────
 function redrawDrawing(d) {
-  // Remove old series
   d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
   d.series = [];
-  // Remove old svg elements
   d.svgEls.forEach(el => el.remove());
   d.svgEls = [];
-  // Rebuild
   buildDrawingOnChart(d);
   highlightSelectedSvg(d.id);
 }
 
-// ── REMOVE ───────────────────────────────────────────────
 function removeDrawingById(id) {
   const idx = drawings.findIndex(x => x.id === id);
   if (idx === -1) return;
@@ -907,7 +858,6 @@ function clearDrawings() {
   deselectDrawing();
 }
 
-// ── BUILD DRAWING ON CHART ────────────────────────────────
 function buildDrawingOnChart(d) {
   const candles = window._lastCandles || [];
   if (!candles.length) return;
@@ -916,8 +866,6 @@ function buildDrawingOnChart(d) {
   const lw = d.width;
   const ls = lwStyle(d.style);
 
-  // Future extension: add phantom bars beyond the last candle
-  // We compute an extended time using bar-interval estimation
   const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
   const FUTURE_BARS = 50;
 
@@ -941,7 +889,7 @@ function buildDrawingOnChart(d) {
   }
 
   if (d.type === 'hline') {
-    const t1 = d.extLeft  ? tPast  : (d.extRight ? tFirst : tFirst);
+    const t1 = d.extLeft  ? tPast  : tFirst;
     const t2 = d.extRight ? tFuture : tLast;
     mkLine([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}]);
 
@@ -988,15 +936,11 @@ function buildDrawingOnChart(d) {
     });
   }
 
-  // attach drawing id for hit-testing later
   d.series.forEach(s => { s._drawingId = d.id; });
 }
 
-// ── SVG HIGHLIGHT ──────────────────────────────────────────
 function highlightSelectedSvg(id) {
   clearSvgHighlights();
-  // We re-draw selection handles on the SVG overlay after the chart has rendered
-  // using the price→pixel coordinate system
   requestAnimationFrame(() => {
     const d = drawings.find(x => x.id === id);
     if (!d || !window._drawingLayerSvg) return;
@@ -1095,7 +1039,7 @@ function initChart() {
 }
 
 // ══════════════════════════════════════════════════════════
-//  DRAWING LAYER (SVG overlay + mouse logic)
+//  DRAWING LAYER
 // ══════════════════════════════════════════════════════════
 function initDrawingLayer() {
   const container = document.getElementById('chart-container');
@@ -1124,10 +1068,9 @@ function initDrawingLayer() {
     let time = chart.timeScale().coordinateToTime(x);
     const candles = window._lastCandles || [];
     if (time === null && candles.length) {
-      const firstX = chart.timeScale().timeToCoordinate(candles[0].time);
-      // Allow time beyond last bar using bar interval
       const bi = candles.length>1 ? candles[candles.length-1].time - candles[candles.length-2].time : 3600;
       const lastX = chart.timeScale().timeToCoordinate(candles[candles.length-1].time);
+      const firstX = chart.timeScale().timeToCoordinate(candles[0].time);
       if (lastX !== null && x > lastX) {
         const barsOut = Math.round((x - lastX) / (chart.timeScale().options().barSpacing || 10));
         time = candles[candles.length-1].time + bi * Math.max(1, barsOut);
@@ -1149,14 +1092,10 @@ function initDrawingLayer() {
   window.setTool = function(btn, name) {
     _origSetTool(btn, name);
     updateSvgCapture();
-    // If switching to cursor tool, deselect
-    if (name === 'cursor' || name === 'cross') { /* keep selection */ }
   };
 
-  // ── CLICK on chart (cursor mode) → select/deselect drawings
   container.addEventListener('click', e => {
     if (STATE.activeTool !== 'cursor') return;
-    // Check if click is near a drawing
     const rect = container.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -1200,7 +1139,6 @@ function initDrawingLayer() {
       const x1=timeToX(t1), x2=timeToX(t2);
       const y1=priceToY(hi), y2=priceToY(lo);
       if (x1===null||x2===null||y1===null||y2===null) return false;
-      // near any edge
       return (
         distToSegment(x1,y1,x2,y1,mx,my)<THRESH||
         distToSegment(x1,y2,x2,y2,mx,my)<THRESH||
@@ -1211,7 +1149,6 @@ function initDrawingLayer() {
     return false;
   }
 
-  // ── MOUSEDOWN ──────────────────────────────────────────────
   svg.addEventListener('mousedown', e => {
     e.preventDefault();
     const tool = STATE.activeTool;
@@ -1236,7 +1173,6 @@ function initDrawingLayer() {
     drawStart = { x, y, price, time };
   });
 
-  // ── MOUSEMOVE (preview) ────────────────────────────────────
   svg.addEventListener('mousemove', e => {
     if (!drawStart) return;
     e.preventDefault();
@@ -1283,7 +1219,6 @@ function initDrawingLayer() {
     }
   });
 
-  // ── MOUSEUP (commit) ───────────────────────────────────────
   svg.addEventListener('mouseup', e => {
     if (!drawStart) return;
     e.preventDefault();
@@ -1330,11 +1265,9 @@ function initDrawingLayer() {
     if (drawStart) { clearPreview(); drawStart=null; }
   });
 
-  // Keyboard: Escape deselects, Delete removes selected
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { deselectDrawing(); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
-      // Don't interfere with text inputs
       if (document.activeElement.tagName === 'INPUT') return;
       onDtbDelete();
     }
@@ -1393,7 +1326,6 @@ function setTool(btn, name) {
   document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume')b.classList.remove('active'); });
   btn.classList.add('active');
   STATE.activeTool = name;
-  // When switching away from cursor, hide toolbar
   if (name !== 'cursor') deselectDrawing();
 }
 
@@ -1553,14 +1485,11 @@ async function loadChart(symbol, timeframe) {
     candleSeries.setData(candles);
     volumeSeries.setData(vols);
     chart.timeScale().fitContent();
-
-    // Ensure time scale shows future space (50 bars)
     chart.timeScale().applyOptions({ rightOffset: 50 });
 
     Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
     STATE.indicators.forEach(name=>addIndicatorSeries(name));
 
-    // Rebuild existing drawings with new candle data
     drawings.forEach(d => {
       d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
       d.series=[];
@@ -1609,3 +1538,4 @@ async function loadChart(symbol, timeframe) {
 </script>
 </body>
 </html>
+Listo
