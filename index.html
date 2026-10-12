@@ -123,6 +123,86 @@
   #price-countdown-badge.dn { background: var(--red); }
   #price-countdown-badge.soon { background: var(--gold-bright); }
 
+  /* ─── WATCHTOWER — daily bias table (vertical, como en TV) ──── */
+  #watchtower-bias-badge {
+    position: absolute;
+    right: 8px;
+    bottom: 22px;
+    display: none;
+    flex-direction: column;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #cccccc;
+    z-index: 16;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #watchtower-bias-badge .wt-row {
+    padding: 3px 10px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  #watchtower-bias-badge .wt-row:last-child { border-bottom: none; font-weight: 600; }
+
+  /* ─── Chips de acceso directo a config de indicadores custom ──── */
+  /* Fijos arriba a la izquierda del chart, visibles siempre que el
+     indicador esté activo — no dependen de acertarle a un dibujo fino
+     ni de tener el sidebar abierto. */
+  #chart-indicator-chips {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 17;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none;
+  }
+  .ind-chip {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(20,20,28,0.88);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 3px 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ind-chip:hover { color: var(--gold); border-color: var(--gold); }
+  .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; }
+
+  /* ─── Indicator settings (gear) ──── */
+  .ind-settings-btn {
+    background:none; border:none; color:var(--text-dim); cursor:pointer;
+    padding:2px; display:flex; align-items:center; pointer-events:auto;
+  }
+  .ind-settings-btn:hover { color:var(--text); }
+  .ind-settings-btn svg { width:12px; height:12px; }
+  .wt-set-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:6px 0; font-size:12px; color:var(--text);
+    border-bottom:1px solid var(--border);
+  }
+  .wt-set-row:last-child { border-bottom:none; }
+  .wt-set-row input[type="time"], .wt-set-row input[type="number"] {
+    background: var(--bg-alt, #15151f); border:1px solid var(--border); border-radius:3px;
+    color: var(--text); font-family: var(--font-mono); font-size:11px; padding:2px 4px;
+    color-scheme: dark;
+  }
+  .wt-set-row input[type="color"] {
+    width:28px; height:20px; padding:0; border:1px solid var(--border); border-radius:3px;
+    background:none; cursor:pointer;
+  }
+
   .topbar-spacer { flex: 1; }
 
   .topbar-btn {
@@ -251,7 +331,26 @@
     flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
+    transition: width .15s ease;
   }
+  #sidebar.collapsed { width: 0; border-right: none; }
+
+  #btn-sidebar-toggle {
+    width: 13px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  #btn-sidebar-toggle:hover { color: var(--gold); }
+  #btn-sidebar-toggle svg { width: 10px; height: 10px; transition: transform .15s; }
+  #btn-sidebar-toggle.collapsed svg { transform: rotate(180deg); }
 
   .sidebar-header {
     padding: 10px 12px 6px;
@@ -637,6 +736,11 @@
     </button>
   </div>
 
+  <!-- ── SIDEBAR TOGGLE ─────────────────────────────────── -->
+  <button id="btn-sidebar-toggle" title="Mostrar/ocultar watchlist" onclick="toggleSidebar()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+
   <!-- ── SIDEBAR ───────────────────────────────────────── -->
   <div id="sidebar">
     <div class="sidebar-header">
@@ -661,6 +765,8 @@
   <div id="chart-wrap">
     <div id="chart-container">
       <div id="price-countdown-badge">—</div>
+      <div id="watchtower-bias-badge"></div>
+      <div id="chart-indicator-chips"></div>
       <div id="loading-overlay">
         <div class="loader-logo">ZENTINEL</div>
         <div class="loader-bar"><div class="loader-fill"></div></div>
@@ -789,10 +895,34 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-ind-settings">
+  <div class="modal">
+    <h2 id="ind-settings-title">Settings</h2>
+    <div id="ind-settings-body"></div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal('modal-ind-settings')">Close</button>
+      <button class="btn-primary" onclick="saveIndicatorSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════════
+const WT_KZ_DEFAULTS = {
+  asia:  { enabled:true, start:[19,0], end:[20,0] },
+  london:{ enabled:true, start:[2,0],  end:[5,0]  },
+  nyam:  { enabled:true, start:[9,0],  end:[10,0] },
+  nylu:  { enabled:true, start:[10,0], end:[11,0] },
+  nypm:  { enabled:true, start:[11,0], end:[12,0] },
+};
+const _wtSaved = JSON.parse(localStorage.getItem('td_watchtower') || '{}');
+const _wtKz = {};
+Object.keys(WT_KZ_DEFAULTS).forEach(k => {
+  _wtKz[k] = Object.assign({}, WT_KZ_DEFAULTS[k], (_wtSaved.kz && _wtSaved.kz[k]) || {});
+});
+
 const STATE = {
   apiKey:     localStorage.getItem('td_apikey') || '',
   symbol:     localStorage.getItem('td_symbol') || 'NAS100.fs',
@@ -800,7 +930,15 @@ const STATE = {
   watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
   indicators: JSON.parse(localStorage.getItem('td_indicators') || '[]'),
   activeTool: 'cursor',
+  watchtower: Object.assign({
+    enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
+    orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
+  }, _wtSaved, { kz: _wtKz }),
 };
+STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
+function saveWatchtowerState(){ localStorage.setItem('td_watchtower', JSON.stringify(STATE.watchtower)); }
+function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
+function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
 
 let chart, candleSeries, volumeSeries;
 const overlays = {};
@@ -1227,6 +1365,72 @@ function clearSvgHighlights() {
 // ══════════════════════════════════════════════════════════
 //  CHART INIT
 // ══════════════════════════════════════════════════════════
+function initWatchtowerLayer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:15;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._watchtowerSvg = svg;
+  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  new ResizeObserver(syncSize).observe(container);
+  syncSize();
+}
+
+// Doble click sobre CUALQUIER dibujo de un indicador custom abre su panel
+// de settings — vale para Watchtower hoy y para cualquier indicador que se
+// agregue después, sin tener que tocar ninguno de estos dos listeners.
+// Dos mecanismos en paralelo (el que responda primero gana, con
+// stopPropagation para no abrir el modal dos veces):
+//   1) data-indicator-name en el elemento DOM (vía tagIndicatorEl) — sirve
+//      para elementos HTML normales (ej. el badge de bias).
+//   2) hitTestIndicatorRegions (vía registerIndicatorHit) — coordenadas
+//      manuales contra #chart-container, el mismo patrón ya probado que
+//      usa el sistema de dibujo para arrastrar líneas/handles. No depende
+//      de pointer-events/stacking de SVG, que puede variar entre navegadores.
+// El evento nativo 'dblclick' puede no llegar nunca acá: el canvas del
+// chart (lightweight-charts) tiene su propio manejo de click/doble-click
+// (reset de escala, etc.) que puede frenar la propagación antes de que
+// burbujee hasta este listener — por eso "no reaccionaba" aunque el cursor
+// ya mostrara pointer. En vez de depender de eso, detectamos el doble click
+// a mano sobre 'mousedown' en fase CAPTURE — la misma técnica que ya usa el
+// sistema de dibujo (ver más abajo, "capture:true + stopPropagation") y que
+// sabemos que sí recibe el evento de forma confiable, porque arrastrar un
+// dibujo ya depende de eso.
+(function(){
+  const cc = document.getElementById('chart-container');
+  let lastHit = { time: 0, x: 0, y: 0, name: null };
+
+  cc.addEventListener('mousedown', (e) => {
+    const rect = cc.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const name = hitTestIndicatorRegions(mx, my);
+    if (!name) { lastHit = { time:0, x:0, y:0, name:null }; return; }
+
+    const now = Date.now();
+    const sameSpot = Math.hypot(mx - lastHit.x, my - lastHit.y) < 12;
+    if (name === lastHit.name && sameSpot && (now - lastHit.time) < 500) {
+      e.preventDefault();
+      e.stopPropagation();
+      openIndicatorSettings(name);
+      lastHit = { time:0, x:0, y:0, name:null };
+    } else {
+      lastHit = { time: now, x: mx, y: my, name };
+    }
+  }, { capture: true });
+
+  // Feedback visual: cursor "pointer" al pasar sobre cualquier dibujo de un
+  // indicador, para que se note dónde hay que hacer doble click.
+  // Solo SETEA el cursor cuando hay match — nunca lo limpia, así no pisa el
+  // cursor que ya maneja el sistema de dibujo (move/crosshair) en el mismo
+  // elemento.
+  cc.addEventListener('mousemove', (e) => {
+    if (window._dragSession) return;
+    const rect = cc.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    if (hitTestIndicatorRegions(mx, my)) cc.style.cursor = 'pointer';
+  });
+})();
+
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
@@ -1275,8 +1479,11 @@ function initChart() {
 
   // El badge y las etiquetas de texto se re-posicionan en cada frame (en vez
   // de perseguir cada gesto posible: zoom, pan, arrastre del eje de precio).
+  initWatchtowerLayer();
+
   (function badgeRafLoop(){
     if (window._lastCandles){ const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open); }
+    renderWatchtower();
     drawings.forEach(d=>{
       if (window._dragSession && window._dragSession.drawing===d) return;
       if (d.type==='text' && d.label) {
@@ -1717,6 +1924,19 @@ function setActiveTF(tf) { document.querySelectorAll('.tf-btn').forEach(b=>b.cla
 let volumeVisible = true;
 function toggleVolume() { volumeVisible=!volumeVisible; volumeSeries.applyOptions({visible:volumeVisible}); document.getElementById('btn-volume').classList.toggle('active',volumeVisible); }
 
+// ══════════════════════════════════════════════════════════
+//  SIDEBAR (watchlist) toggle
+// ══════════════════════════════════════════════════════════
+function toggleSidebar() {
+  const collapsed = document.getElementById('sidebar').classList.toggle('collapsed');
+  document.getElementById('btn-sidebar-toggle').classList.toggle('collapsed', collapsed);
+  localStorage.setItem('td_sidebar_collapsed', collapsed ? '1' : '0');
+}
+if (localStorage.getItem('td_sidebar_collapsed') === '1') {
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('btn-sidebar-toggle').classList.add('collapsed');
+}
+
 function setTool(btn, name) {
   document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume')b.classList.remove('active'); });
   btn.classList.add('active');
@@ -1743,6 +1963,7 @@ const INDICATOR_DEFS = [
   { name:'SMA 20',  desc:'Simple MA 20',        color:'#60f0a0', calc:d=>sma(d,20)  },
   { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', calc:d=>sma(d,50)  },
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
+  { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -1761,33 +1982,153 @@ function openIndicatorModal() {
 
 function applyIndicators() {
   const selected=[...document.querySelectorAll('.ind-pick-row.selected')].map(r=>r.querySelector('.ind-pick-name').textContent);
-  STATE.indicators.forEach(name=>{ if(!selected.includes(name)&&overlays[name]){chart.removeSeries(overlays[name]);delete overlays[name];} });
+  STATE.indicators.forEach(name=>{
+    if(selected.includes(name)) return;
+    const def=INDICATOR_DEFS.find(d=>d.name===name);
+    if(def && def.custom){ if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); } }
+    else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
+  });
   STATE.indicators=selected; saveState();
   selected.forEach(name=>addIndicatorSeries(name));
   renderIndList(); closeModal('modal-indicators');
 }
 
 function addIndicatorSeries(name) {
-  if(overlays[name])return;
   const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
+  if(def.custom){ if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); } return; }
+  if(overlays[name])return;
   const rawData=window._lastCandles||[]; if(!rawData.length)return;
   const calcData=def.calc(rawData);
   const series=chart.addLineSeries({color:def.color,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
   series.setData(calcData); overlays[name]=series;
 }
 
+const IND_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+// Chips fijos arriba-izq del chart: acceso directo a la config de cada
+// indicador "custom" (con settings propios, ej. Watchtower) activo —
+// siempre visibles, sin depender de acertarle a un dibujo fino en el chart
+// ni de tener el sidebar/watchlist abierto. Cualquier indicador futuro con
+// `custom:true` en INDICATOR_DEFS aparece acá solo.
+function renderIndicatorChips() {
+  const el = document.getElementById('chart-indicator-chips');
+  if (!el) return;
+  el.innerHTML = '';
+  STATE.indicators.forEach(name => {
+    const def = INDICATOR_DEFS.find(d => d.name === name);
+    if (!def || !def.custom) return;
+    const chip = document.createElement('div');
+    chip.className = 'ind-chip';
+    chip.title = name + ' settings';
+    chip.innerHTML = `${IND_GEAR_SVG}<span>${name}</span>`;
+    chip.addEventListener('click', () => openIndicatorSettings(name));
+    el.appendChild(chip);
+  });
+}
+
 function renderIndList() {
+  renderIndicatorChips();
   const el=document.getElementById('ind-list'); el.innerHTML='';
   if(!STATE.indicators.length){el.innerHTML='<div class="ind-item" style="color:var(--text-dim);font-size:10px">None active</div>';return;}
   STATE.indicators.forEach(name=>{
     const def=INDICATOR_DEFS.find(d=>d.name===name);
     const item=document.createElement('div'); item.className='ind-item';
-    item.innerHTML=`<div class="ind-dot" style="background:${def?.color||'#888'}"></div><span>${name}</span><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
+    item.innerHTML=`<div class="ind-dot" style="background:${def?.color||'#888'}"></div><span>${name}</span><button class="ind-settings-btn" title="Settings" onclick="openIndicatorSettings('${name}')">${IND_GEAR_SVG}</button><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
     el.appendChild(item);
   });
 }
 
-function removeIndicator(name){if(overlays[name]){chart.removeSeries(overlays[name]);delete overlays[name];}STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();}
+// ══════════════════════════════════════════════════════════
+//  INDICATOR SETTINGS (gear) — por ahora: Watchtower
+// ══════════════════════════════════════════════════════════
+const WT_TOGGLE_DEFS = [
+  { key:'killzones', label:'Killzones (Asia/London/NY)' },
+  { key:'pdLevels',  label:'PDH / PDL / PDM (día anterior)' },
+  { key:'pwLevels',  label:'PWH / PWL / PWM (semana anterior)' },
+  { key:'mno',       label:'MNO (Midnight Open)' },
+  { key:'org',       label:'ORG (Opening Range Gap)' },
+  { key:'bias',      label:'Tabla de bias diario' },
+];
+let _indSettingsTarget = null;
+
+function openIndicatorSettings(name) {
+  _indSettingsTarget = name;
+  document.getElementById('ind-settings-title').textContent = name + ' — Settings';
+  const body = document.getElementById('ind-settings-body');
+  if (name === 'Watchtower') {
+    const togglesHtml = WT_TOGGLE_DEFS.map(t => `
+      <label class="wt-set-row">
+        <span>${t.label}</span>
+        <input type="checkbox" data-wt-key="${t.key}" ${STATE.watchtower[t.key] ? 'checked' : ''}>
+      </label>
+    `).join('');
+    const kzHtml = KZ_SESSIONS.map(s => {
+      const cfg = STATE.watchtower.kz[s.key];
+      return `
+      <div class="wt-set-row" style="gap:8px">
+        <input type="checkbox" data-kz-enabled="${s.key}" ${cfg.enabled ? 'checked' : ''}>
+        <span style="flex:1;color:${s.color}">${s.label}</span>
+        <input type="time" data-kz-start="${s.key}" value="${wtTimeToStr(cfg.start)}" style="width:92px">
+        <span style="color:var(--text-dim)">–</span>
+        <input type="time" data-kz-end="${s.key}" value="${wtTimeToStr(cfg.end)}" style="width:92px">
+      </div>`;
+    }).join('');
+    body.innerHTML = togglesHtml
+      + `<div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Transparencia de cajas (todas)</span>
+        <input type="number" id="wt-box-opacity" min="0" max="100" step="1" value="${STATE.watchtower.boxOpacity}" style="width:56px">
+        <span style="color:var(--text-dim)">%</span>
+      </div>`
+      + `<div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Historial visual de Killzones (días hacia atrás)</span>
+        <input type="number" id="wt-hist-days" min="1" max="60" step="1" value="${STATE.watchtower.histDays}" style="width:56px">
+      </div>`
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Horarios de Killzones (hora NY)</div>`
+      + kzHtml
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">ORG (Opening Range Gap)</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="wt-org-color" value="${STATE.watchtower.orgColor}">
+      </div>`;
+  } else {
+    body.innerHTML = `<div class="wt-set-row" style="color:var(--text-dim)">Sin configuración disponible para este indicador.</div>`;
+  }
+  openModal('modal-ind-settings');
+}
+
+function saveIndicatorSettings() {
+  if (_indSettingsTarget === 'Watchtower') {
+    document.querySelectorAll('#ind-settings-body [data-wt-key]').forEach(inp => {
+      STATE.watchtower[inp.dataset.wtKey] = inp.checked;
+    });
+    KZ_SESSIONS.forEach(s => {
+      const enEl = document.querySelector(`[data-kz-enabled="${s.key}"]`);
+      const stEl = document.querySelector(`[data-kz-start="${s.key}"]`);
+      const enEl2 = document.querySelector(`[data-kz-end="${s.key}"]`);
+      if (!enEl || !stEl || !enEl2) return;
+      STATE.watchtower.kz[s.key] = {
+        enabled: enEl.checked,
+        start: wtStrToTime(stEl.value),
+        end: wtStrToTime(enEl2.value),
+      };
+    });
+    const colorEl=document.getElementById('wt-org-color');
+    const boxOpacityEl=document.getElementById('wt-box-opacity');
+    const histDaysEl=document.getElementById('wt-hist-days');
+    if (colorEl) STATE.watchtower.orgColor = colorEl.value;
+    if (boxOpacityEl) STATE.watchtower.boxOpacity = Math.max(0, Math.min(100, Number(boxOpacityEl.value) || 0));
+    if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
+    saveWatchtowerState();
+  }
+  closeModal('modal-ind-settings');
+}
+
+function removeIndicator(name){
+  const def=INDICATOR_DEFS.find(d=>d.name===name);
+  if(def && def.custom){ if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); } }
+  else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
+  STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
+}
 
 // ══════════════════════════════════════════════════════════
 //  INDICATOR MATH
@@ -1795,6 +2136,310 @@ function removeIndicator(name){if(overlays[name]){chart.removeSeries(overlays[na
 function ema(data,period){const k=2/(period+1);let prev=null;return data.map(d=>{if(prev===null){prev=d.close;return{time:d.time,value:d.close};}const val=d.close*k+prev*(1-k);prev=val;return{time:d.time,value:val};});}
 function sma(data,period){return data.map((d,i)=>{if(i<period-1)return{time:d.time,value:null};const sum=data.slice(i-period+1,i+1).reduce((a,v)=>a+v.close,0);return{time:d.time,value:sum/period};}).filter(d=>d.value!==null);}
 function vwap(data){let cumPV=0,cumV=0;return data.map(d=>{const tp=(d.high+d.low+d.close)/3;cumPV+=tp*(d.volume||1);cumV+=(d.volume||1);return{time:d.time,value:cumPV/cumV};});}
+
+// ══════════════════════════════════════════════════════════
+//  WATCHTOWER — puerto de "ICT Zentinel Watchtower" (Pine)
+//  Killzones, PDH/PDL/PWH/PWL, MNO, ORG (opening range gap) y bias diario.
+//  Los tiempos en window._lastCandles ya vienen en hora NY "disfrazada" de
+//  UTC (el bridge MT5 resta 7h), así que usamos getUTC*() directo, igual
+//  que el resto del chart (ver TF_SECONDS / nextCloseTime más abajo).
+// ══════════════════════════════════════════════════════════
+const KZ_SESSIONS = [
+  { key:'asia',  label:'ASIA',     color:'#f7525f' },
+  { key:'london',label:'LONDON',   color:'#5b9cf6' },
+  { key:'nyam',  label:'NY AM',    color:'#e0e0e0' },
+  { key:'nylu',  label:'NY LUNCH', color:'#ffa726' },
+  { key:'nypm',  label:'NY PM',    color:'#e0e0e0' },
+];
+const ORG_SESSION = { start:[9,30], end:[16,15] };
+const WT_SVG_NS = 'http://www.w3.org/2000/svg';
+
+function wtNyParts(t){
+  const d=new Date(t*1000);
+  return { h:d.getUTCHours(), mi:d.getUTCMinutes(), dow:d.getUTCDay(),
+    dateKey: d.getUTCFullYear()*10000 + (d.getUTCMonth()+1)*100 + d.getUTCDate() };
+}
+function wtInWindow(t, start, end){
+  const p=wtNyParts(t), m=p.h*60+p.mi;
+  const s=start[0]*60+start[1], e=end[0]*60+end[1];
+  return s<=e ? (m>=s && m<e) : (m>=s || m<e);
+}
+// La vela diaria del broker (MT5 D1) abre a las 18:00 NY, no a medianoche.
+// wtDayKey devuelve el epoch de ese límite de 18:00 que arranca el "día"
+// que contiene t — así PDH/PDL/PDM/ORG/bias usan el mismo día que ve MT5,
+// en vez de nacer a las 00:00 (que es un concepto aparte: MNO).
+function wtDayKey(t){
+  const d=new Date(t*1000);
+  let base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),18,0,0));
+  if(t*1000 < base.getTime()) base.setUTCDate(base.getUTCDate()-1);
+  return Math.floor(base.getTime()/1000);
+}
+function wtTimestampSameCalDay(refTime, hh, mm){
+  const d=new Date(refTime*1000);
+  return Math.floor(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),hh,mm,0)/1000);
+}
+function wtWeekKey(t){
+  const d=new Date(t*1000);
+  let base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),18,0,0));
+  base.setUTCDate(base.getUTCDate()-d.getUTCDay());
+  if(t*1000 < base.getTime()) base.setUTCDate(base.getUTCDate()-7);
+  return Math.floor(base.getTime()/1000);
+}
+
+// ══════════════════════════════════════════════════════════
+//  Convención general: doble click sobre cualquier dibujo de un
+//  indicador custom (no serie de línea, como Watchtower) abre su
+//  panel de config. Cualquier indicador futuro que dibuje su propio
+//  SVG solo necesita llamar tagIndicatorEl(el, 'Nombre del indicador
+//  tal como figura en INDICATOR_DEFS') antes de insertarlo — el
+//  listener global ya está armado una sola vez, más abajo.
+// ══════════════════════════════════════════════════════════
+function tagIndicatorEl(el, name){
+  el.dataset.indicatorName = name;
+  const tag = el.tagName.toLowerCase();
+  el.style.pointerEvents = tag==='line' ? 'stroke' : (tag==='rect' ? 'fill' : 'visiblePainted');
+  el.style.cursor = 'pointer';
+}
+
+// Segunda vía, más robusta que depender de pointer-events/stacking de SVG
+// (que puede fallar según navegador/zoom/escala): guardamos manualmente la
+// región clickeable en coordenadas de #chart-container, igual que ya se usa
+// para arrastrar los dibujos (isClickOnDrawing/hitTestHandle). Cualquier
+// indicador futuro puede llamar registerIndicatorHit(nombre, region) con
+// {kind:'line', x1,x2,y, tol} o {kind:'rect', x1,y1,x2,y2, tol} y el doble
+// click ya lo va a enrutar solo, sin tocar el listener de abajo.
+function registerIndicatorHit(name, region){
+  if(!window._indicatorHitRegions) window._indicatorHitRegions=[];
+  window._indicatorHitRegions.push(Object.assign({name}, region));
+}
+function hitTestIndicatorRegions(mx,my){
+  const regions = window._indicatorHitRegions || [];
+  for (let i=regions.length-1; i>=0; i--){
+    const r=regions[i];
+    if (r.kind==='line'){
+      const tol=r.tol||8;
+      const xmin=Math.min(r.x1,r.x2)-tol, xmax=Math.max(r.x1,r.x2)+tol;
+      if (mx>=xmin && mx<=xmax && Math.abs(my-r.y)<=tol) return r.name;
+    } else if (r.kind==='rect'){
+      const tol=r.tol||3;
+      if (mx>=Math.min(r.x1,r.x2)-tol && mx<=Math.max(r.x1,r.x2)+tol && my>=Math.min(r.y1,r.y2)-tol && my<=Math.max(r.y1,r.y2)+tol) return r.name;
+    }
+  }
+  return null;
+}
+
+function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke){
+  const x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
+  const y1=candleSeries.priceToCoordinate(top), y2=candleSeries.priceToCoordinate(bottom);
+  if(x1===null||x2===null||y1===null||y2===null) return;
+  const el=document.createElementNS(WT_SVG_NS,'rect');
+  el.setAttribute('x',Math.min(x1,x2)); el.setAttribute('y',Math.min(y1,y2));
+  el.setAttribute('width',Math.max(1,Math.abs(x2-x1))); el.setAttribute('height',Math.max(1,Math.abs(y2-y1)));
+  el.setAttribute('fill',fill); el.setAttribute('fill-opacity',opacity);
+  if(stroke==='none'){ el.setAttribute('stroke','none'); }
+  else { el.setAttribute('stroke',stroke||fill); el.setAttribute('stroke-opacity','0.5'); el.setAttribute('stroke-width','1'); }
+  tagIndicatorEl(el,'Watchtower');
+  svg.appendChild(el);
+  registerIndicatorHit('Watchtower', {kind:'rect', x1:Math.min(x1,x2), y1:Math.min(y1,y2), x2:Math.max(x1,x2), y2:Math.max(y1,y2), tol:3});
+}
+function wtLine(svg,t1,t2,y,color,width,dash){
+  const x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
+  const yy=candleSeries.priceToCoordinate(y);
+  if(x1===null||x2===null||yy===null) return;
+  const el=document.createElementNS(WT_SVG_NS,'line');
+  el.setAttribute('x1',x1); el.setAttribute('x2',x2); el.setAttribute('y1',yy); el.setAttribute('y2',yy);
+  el.setAttribute('stroke',color); el.setAttribute('stroke-width',width||1);
+  if(dash) el.setAttribute('stroke-dasharray',dash);
+  tagIndicatorEl(el,'Watchtower');
+  svg.appendChild(el);
+  // Trazo invisible mucho más ancho superpuesto: una línea de 1-2px es
+  // casi imposible de acertar con el mouse real — esto amplía el área de
+  // click/doble-click sin cambiar lo que se ve.
+  const hit=document.createElementNS(WT_SVG_NS,'line');
+  hit.setAttribute('x1',x1); hit.setAttribute('x2',x2); hit.setAttribute('y1',yy); hit.setAttribute('y2',yy);
+  hit.setAttribute('stroke','transparent'); hit.setAttribute('stroke-width','12');
+  tagIndicatorEl(hit,'Watchtower');
+  svg.appendChild(hit);
+  registerIndicatorHit('Watchtower', {kind:'line', x1, x2, y:yy, tol:8});
+}
+function wtLabel(svg,t,y,text,color){
+  const x=chart.timeScale().timeToCoordinate(t), yy=candleSeries.priceToCoordinate(y);
+  if(x===null||yy===null) return;
+  // Caja invisible detrás del texto: amplía el área de click más allá del
+  // trazo fino de las letras.
+  const hit=document.createElementNS(WT_SVG_NS,'rect');
+  hit.setAttribute('x',x); hit.setAttribute('y',yy-13);
+  hit.setAttribute('width',Math.max(40,text.length*6)); hit.setAttribute('height','18');
+  hit.setAttribute('fill','transparent');
+  tagIndicatorEl(hit,'Watchtower');
+  svg.appendChild(hit);
+  const el=document.createElementNS(WT_SVG_NS,'text');
+  el.setAttribute('x',x+4); el.setAttribute('y',yy-3);
+  el.setAttribute('fill',color); el.setAttribute('font-size','10'); el.setAttribute('font-family',"'DM Mono',monospace");
+  el.textContent=text;
+  tagIndicatorEl(el,'Watchtower');
+  svg.appendChild(el);
+  registerIndicatorHit('Watchtower', {kind:'rect', x1:x, y1:yy-13, x2:x+Math.max(40,text.length*6), y2:yy+5, tol:0});
+}
+
+function wtGroupByDay(candles){
+  const byDate=new Map();
+  candles.forEach(c=>{ const dk=wtDayKey(c.time); if(!byDate.has(dk))byDate.set(dk,[]); byDate.get(dk).push(c); });
+  return byDate;
+}
+
+function renderWtKillzones(svg, byDate, dateKeys, barStep){
+  const histDays=Math.max(1, STATE.watchtower.histDays||3);
+  dateKeys.slice(-histDays).forEach(dk=>{
+    const dayCandles=byDate.get(dk);
+    KZ_SESSIONS.forEach(sess=>{
+      const cfg=STATE.watchtower.kz[sess.key];
+      if(!cfg || !cfg.enabled) return;
+      const inSess=dayCandles.filter(c=>wtInWindow(c.time,cfg.start,cfg.end));
+      if(!inSess.length) return;
+      let top=-Infinity,bottom=Infinity,tHigh=inSess[0].time,tLow=inSess[0].time;
+      inSess.forEach(c=>{ if(c.high>top){top=c.high;tHigh=c.time;} if(c.low<bottom){bottom=c.low;tLow=c.time;} });
+      const boxRight=inSess[inSess.length-1].time+barStep;
+      wtRect(svg, inSess[0].time, boxRight, top, bottom, sess.color, (STATE.watchtower.boxOpacity??10)/100, 'none');
+
+      const lastIdx=dayCandles.indexOf(inSess[inSess.length-1]);
+      const after=dayCandles.slice(lastIdx+1);
+      let hActive=true, lActive=true, hEnd=boxRight, lEnd=boxRight;
+      for(const c of after){
+        if(hActive){ hEnd=c.time; if(c.high>=top) hActive=false; }
+        if(lActive){ lEnd=c.time; if(c.low<=bottom) lActive=false; }
+        if(!hActive && !lActive) break;
+      }
+      wtLine(svg, tHigh, Math.max(hEnd,boxRight), top, sess.color, 1);
+      wtLine(svg, tLow, Math.max(lEnd,boxRight), bottom, sess.color, 1);
+    });
+  });
+}
+
+function renderWtPrevDay(svg, byDate, dateKeys, lastTime){
+  const todayKey=wtDayKey(lastTime);
+  const idx=dateKeys.indexOf(todayKey);
+  if(idx<=0) return;
+  const prevCandles=byDate.get(dateKeys[idx-1]);
+  const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
+  const x1=byDate.get(todayKey)[0].time;
+  wtLine(svg, x1, lastTime, high, '#ffffff', 1);
+  wtLine(svg, x1, lastTime, low,  '#ffffff', 1);
+  wtLine(svg, x1, lastTime, mid,  '#ffffff', 1, '4,3');
+  wtLabel(svg, lastTime, high, 'PDH', '#ffffff');
+  wtLabel(svg, lastTime, low,  'PDL', '#ffffff');
+  wtLabel(svg, lastTime, mid,  'PDM', '#ffffff');
+}
+
+function renderWtPrevWeek(svg, candles, lastTime){
+  const byWeek=new Map();
+  candles.forEach(c=>{ const wk=wtWeekKey(c.time); if(!byWeek.has(wk))byWeek.set(wk,[]); byWeek.get(wk).push(c); });
+  const weekKeys=[...byWeek.keys()].sort((a,b)=>a-b);
+  const curWeek=wtWeekKey(lastTime);
+  const idx=weekKeys.indexOf(curWeek);
+  if(idx<=0) return;
+  const prevCandles=byWeek.get(weekKeys[idx-1]);
+  const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
+  const x1=byWeek.get(curWeek)[0].time;
+  wtLine(svg, x1, lastTime, high, '#c99cd0', 1);
+  wtLine(svg, x1, lastTime, low,  '#c99cd0', 1);
+  wtLine(svg, x1, lastTime, mid,  '#c99cd0', 1, '4,3');
+  wtLabel(svg, lastTime, high, 'PWH', '#c99cd0');
+  wtLabel(svg, lastTime, low,  'PWL', '#c99cd0');
+  wtLabel(svg, lastTime, mid,  'PWM', '#c99cd0');
+}
+
+function renderWtMNO(svg, byDate, lastTime){
+  const todayKey=wtDayKey(lastTime);
+  const dayCandles=byDate.get(todayKey);
+  if(!dayCandles || !dayCandles.length) return;
+  // El día-broker (18:00->18:00) contiene la medianoche NY 6h después de su
+  // apertura; buscamos la primera vela a partir de ese punto exacto.
+  const midnightTs=todayKey+6*3600;
+  const mnoCandle=dayCandles.find(c=>c.time>=midnightTs);
+  if(!mnoCandle) return;
+  wtLine(svg, mnoCandle.time, lastTime, mnoCandle.open, '#80deea', 1, '2,2');
+  wtLabel(svg, lastTime, mnoCandle.open, 'MNO', '#80deea');
+}
+
+function renderWtORG(svg, byDate, dateKeys, lastTime){
+  const todayKey=wtDayKey(lastTime);
+  const idx=dateKeys.indexOf(todayKey);
+  if(idx<=0) return;
+  const prevRth=(byDate.get(dateKeys[idx-1])||[]).filter(c=>wtInWindow(c.time,ORG_SESSION.start,ORG_SESSION.end));
+  const todayRth=(byDate.get(todayKey)||[]).filter(c=>wtInWindow(c.time,ORG_SESSION.start,ORG_SESSION.end));
+  if(!prevRth.length || !todayRth.length) return;
+  const prevClose=prevRth[prevRth.length-1].close, todayOpen=todayRth[0].open;
+  const top=Math.max(prevClose,todayOpen), bottom=Math.min(prevClose,todayOpen), ce=(prevClose+todayOpen)/2;
+  const gap=todayOpen-prevClose;
+  // Proyectar hasta el cierre de la sesión (16:15) se cae del rango de
+  // coordenadas mientras esa hora sigue en el futuro (el chart solo tiene
+  // "whitespace" acotado para el eje). Mientras la sesión sigue abierta, la
+  // caja crece hasta "ahora"; al cerrar, se fija en el horario real.
+  const sessionEnd=wtTimestampSameCalDay(todayRth[0].time, ORG_SESSION.end[0], ORG_SESSION.end[1]);
+  const endTime=Math.min(sessionEnd, lastTime);
+  const col=STATE.watchtower.orgColor||'#ffeb3b';
+  const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
+  // Como en Pine: solo 2 líneas horizontales (H/L, sin bordes verticales) +
+  // relleno entre ellas (linefill, intensidad = transparencia global de cajas)
+  // + línea CE punteada al 50%.
+  if(fillOpacity>0) wtRect(svg, todayRth[0].time, endTime, top, bottom, col, fillOpacity, 'none');
+  wtLine(svg, todayRth[0].time, endTime, top, col, 1);
+  wtLine(svg, todayRth[0].time, endTime, bottom, col, 1);
+  wtLine(svg, todayRth[0].time, endTime, ce, '#ffb74d', 1, '4,3');
+  wtLabel(svg, endTime, top, 'ORG H', col);
+  wtLabel(svg, endTime, bottom, 'ORG L', col);
+  wtLabel(svg, endTime, ce, `ORG CE  ${gap>=0?'+':''}${gap.toFixed(1)} pts`, '#ffb74d');
+}
+
+function renderWtBias(byDate, dateKeys, lastTime){
+  const el=document.getElementById('watchtower-bias-badge');
+  if(!el) return;
+  if(dateKeys.length<2){ el.style.display='none'; return; }
+  const closesByDay=dateKeys.map(dk=>{ const arr=byDate.get(dk); return arr[arr.length-1].close; });
+  const todayClose=closesByDay[closesByDay.length-1];
+  const avgPrev=closesByDay[closesByDay.length-2];
+  const diff=(todayClose-avgPrev)/avgPrev;
+  const thr=0.003;
+  const bias=diff>thr?'Bullish':diff<-thr?'Bearish':'Neutral';
+  const color=bias==='Bullish'?'#26a69a':bias==='Bearish'?'#ef5350':'#cccccc';
+  const d=new Date(lastTime*1000);
+  const dateStr=`${String(d.getUTCDate()).padStart(2,'0')}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${d.getUTCFullYear()}`;
+  el.innerHTML = `<div class="wt-row">${dateStr}</div><div class="wt-row">${STATE.symbol}, ${STATE.timeframe}</div><div class="wt-row" style="color:${color}">${bias}</div>`;
+  el.style.display='flex';
+  el.style.pointerEvents='auto';
+  el.style.cursor='pointer';
+  el.dataset.indicatorName='Watchtower';
+  // Despegarlo de la escala de precio (derecha) y el eje de tiempo (abajo)
+  // para que no los tape — ambos cambian de ancho/alto según el chart.
+  const priceScaleW = chart.priceScale('right').width() || 0;
+  const timeScaleH = chart.timeScale().height() || 0;
+  el.style.right = (priceScaleW + 8) + 'px';
+  el.style.bottom = (timeScaleH + 8) + 'px';
+}
+
+function renderWatchtower(){
+  if(!window._watchtowerSvg) return;
+  const svg=window._watchtowerSvg;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Watchtower');
+  document.getElementById('watchtower-bias-badge').style.display='none';
+  if(!STATE.watchtower.enabled) return;
+  const candles=window._lastCandles||[];
+  if(candles.length<2) return;
+  const wt=STATE.watchtower;
+  const barStep=candles[1].time-candles[0].time;
+  const lastTime=candles[candles.length-1].time;
+  const byDate=wtGroupByDay(candles);
+  const dateKeys=[...byDate.keys()].sort((a,b)=>a-b);
+
+  if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
+  if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime);
+  if(wt.pwLevels)  renderWtPrevWeek(svg, candles, lastTime);
+  if(wt.mno)       renderWtMNO(svg, byDate, lastTime);
+  if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime);
+  if(wt.bias)      renderWtBias(byDate, dateKeys, lastTime);
+}
 
 // ══════════════════════════════════════════════════════════
 //  MODALS
