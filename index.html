@@ -103,6 +103,26 @@
   #ohlcv-bar { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
   #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
 
+  /* ─── COUNTDOWN BADGE (pegado al precio actual, como TV) ──── */
+  #price-countdown-badge {
+    position: absolute;
+    right: 0;
+    transform: translateY(2px);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: #0a0a0c;
+    padding: 2px 6px;
+    border-radius: 0 0 3px 3px;
+    white-space: nowrap;
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+  }
+  #price-countdown-badge.up { background: var(--green); }
+  #price-countdown-badge.dn { background: var(--red); }
+  #price-countdown-badge.soon { background: var(--gold-bright); }
+
   .topbar-spacer { flex: 1; }
 
   .topbar-btn {
@@ -120,6 +140,8 @@
   .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-light); }
   .topbar-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
   .topbar-btn svg { width: 14px; height: 14px; }
+  @keyframes zentinel-spin { to { transform: rotate(360deg); } }
+  #btn-refresh.spinning svg { animation: zentinel-spin .6s linear infinite; }
 
   #api-badge {
     font-family: var(--font-mono);
@@ -145,6 +167,8 @@
     padding: 0 8px 0 268px;
     gap: 2px;
     flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
   }
 
   .tf-btn {
@@ -470,6 +494,7 @@
     transition: r .1s;
   }
   .drawing-handle:hover { r: 7; }
+  [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
   .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
 </style>
 </head>
@@ -481,7 +506,7 @@
   <div class="logo-sep"></div>
 
   <div id="symbol-search-wrap">
-    <input id="symbol-input" type="text" value="NQ1!" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
+    <input id="symbol-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
   </div>
 
   <div id="price-display">
@@ -498,6 +523,10 @@
   </div>
 
   <div class="topbar-spacer"></div>
+
+  <button class="topbar-btn" id="btn-refresh" title="Refresh chart" onclick="refreshChart()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+  </button>
 
   <button class="topbar-btn" id="btn-indicators" onclick="openIndicatorModal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -518,14 +547,24 @@
 <!-- ══ TIMEFRAME BAR ═════════════════════════════════════ -->
 <div id="tf-bar">
   <button class="tf-btn" data-tf="1min">1m</button>
+  <button class="tf-btn" data-tf="2min">2m</button>
   <button class="tf-btn" data-tf="3min">3m</button>
+  <button class="tf-btn" data-tf="4min">4m</button>
   <button class="tf-btn" data-tf="5min">5m</button>
+  <button class="tf-btn" data-tf="6min">6m</button>
+  <button class="tf-btn" data-tf="10min">10m</button>
+  <button class="tf-btn" data-tf="12min">12m</button>
   <button class="tf-btn" data-tf="15min">15m</button>
+  <button class="tf-btn" data-tf="20min">20m</button>
   <button class="tf-btn" data-tf="30min">30m</button>
   <div class="tf-sep"></div>
   <button class="tf-btn" data-tf="1h">1H</button>
   <button class="tf-btn" data-tf="2h">2H</button>
+  <button class="tf-btn" data-tf="3h">3H</button>
   <button class="tf-btn" data-tf="4h">4H</button>
+  <button class="tf-btn" data-tf="6h">6H</button>
+  <button class="tf-btn" data-tf="8h">8H</button>
+  <button class="tf-btn" data-tf="12h">12H</button>
   <div class="tf-sep"></div>
   <button class="tf-btn" data-tf="1day">D</button>
   <button class="tf-btn" data-tf="1week">W</button>
@@ -557,12 +596,21 @@
         <line x1="2" y1="12" x2="22" y2="12"/><circle cx="2" cy="12" r="2" fill="currentColor"/>
       </svg>
     </button>
+    <button class="tool-btn" data-tip="Vertical Line" onclick="setTool(this,'vline')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="12" y1="2" x2="12" y2="22"/><circle cx="12" cy="2" r="2" fill="currentColor"/>
+      </svg>
+    </button>
     <button class="tool-btn" data-tip="Rectangle" onclick="setTool(this,'rect')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg>
     </button>
     <button class="tool-btn" data-tip="Fibonacci" onclick="setTool(this,'fib')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <text x="3" y="16" font-size="11" fill="currentColor" stroke="none" font-family="serif">φ</text>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <line x1="2" y1="3.5" x2="22" y2="3.5"/>
+        <line x1="2" y1="8.3" x2="15" y2="8.3"/>
+        <line x1="2" y1="13" x2="20" y2="13"/>
+        <line x1="2" y1="17.7" x2="11" y2="17.7"/>
+        <line x1="2" y1="22.5" x2="22" y2="22.5"/>
       </svg>
     </button>
     <div class="tool-sep"></div>
@@ -612,6 +660,7 @@
   <!-- ── CHART ─────────────────────────────────────────── -->
   <div id="chart-wrap">
     <div id="chart-container">
+      <div id="price-countdown-badge">—</div>
       <div id="loading-overlay">
         <div class="loader-logo">ZENTINEL</div>
         <div class="loader-bar"><div class="loader-fill"></div></div>
@@ -654,6 +703,13 @@
     <option value="1">- - - Dashed</option>
     <option value="2">··· Dotted</option>
   </select>
+  <div class="dtb-sep"></div>
+  <button class="dtb-btn" id="dtb-levels" title="Fibonacci Levels" onclick="openFibLevelsModal()" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="2" y1="3" x2="14" y2="3"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="2" y1="11" x2="14" y2="11"/><line x1="2" y1="13.5" x2="14" y2="13.5"/>
+    </svg>
+    Levels
+  </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" id="dtb-ext-left" title="Extend Left" onclick="onDtbExtend('left')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -701,7 +757,7 @@
     <label>Twelve Data API Key</label>
     <input type="password" id="inp-apikey" placeholder="Enter your API key…">
     <label>Default Symbol</label>
-    <input type="text" id="inp-defsym" placeholder="NQ1!" value="NQ1!">
+    <input type="text" id="inp-defsym" placeholder="NAS100.fs" value="NAS100.fs">
     <div class="modal-btns">
       <button class="btn-ghost" onclick="closeModal('modal-api')">Cancel</button>
       <button class="btn-primary" onclick="saveSettings()">Save</button>
@@ -710,6 +766,18 @@
 </div>
 
 <!-- ══ MODAL: INDICATORS ════════════════════════════════ -->
+<div class="modal-overlay" id="modal-fib-levels">
+  <div class="modal">
+    <h2>Fibonacci Levels</h2>
+    <div id="fib-levels-list" style="max-height:320px;overflow-y:auto;scrollbar-width:thin;margin-bottom:10px;"></div>
+    <button class="btn-ghost" style="width:100%;margin-bottom:14px;" onclick="addFibLevel()">+ Add Level</button>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="resetFibLevels()">Reset to default</button>
+      <button class="btn-primary" onclick="closeModal('modal-fib-levels')">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-indicators">
   <div class="modal">
     <h2>Indicators</h2>
@@ -727,9 +795,9 @@
 // ══════════════════════════════════════════════════════════
 const STATE = {
   apiKey:     localStorage.getItem('td_apikey') || '',
-  symbol:     localStorage.getItem('td_symbol') || 'QQQ',
+  symbol:     localStorage.getItem('td_symbol') || 'NAS100.fs',
   timeframe:  localStorage.getItem('td_tf')     || '1h',
-  watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["QQQ","SPY","IWM","GLD","USO","AAPL"]'),
+  watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
   indicators: JSON.parse(localStorage.getItem('td_indicators') || '[]'),
   activeTool: 'cursor',
 };
@@ -753,6 +821,19 @@ const toolDefaults = {
 
 function genId() { return 'drw_' + Math.random().toString(36).slice(2,9); }
 
+// Niveles de Fibonacci por defecto para cada retroceso nuevo — editables
+// por dibujo (se pueden agregar, sacar o cambiar) desde el botón "Levels".
+const DEFAULT_FIB_LEVELS = [
+  { value:0,     color:'#ef5350', on:true },
+  { value:0.236, color:'#f0c060', on:true },
+  { value:0.382, color:'#26a69a', on:true },
+  { value:0.5,   color:'#60c0f0', on:true },
+  { value:0.618, color:'#a060f0', on:true },
+  { value:0.786, color:'#f06060', on:true },
+  { value:1,     color:'#60f0a0', on:true },
+];
+function cloneFibLevels() { return JSON.parse(JSON.stringify(DEFAULT_FIB_LEVELS)); }
+
 function lwStyle(s) {
   return s == 0 ? 0 : s == 1 ? 1 : 2;
 }
@@ -765,6 +846,10 @@ function selectDrawing(id) {
   document.getElementById('dtb-color-swatch').style.background = d.color;
   document.getElementById('dtb-width').value = d.width;
   document.getElementById('dtb-style').value = d.style;
+  document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
+  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect');
+  document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect') ? '' : 'none';
+  document.getElementById('dtb-ext-right').style.display = extendApplies ? '' : 'none';
   document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
   document.getElementById('dtb-ext-right').classList.toggle('active', !!d.extRight);
   document.getElementById('dtb-lock').classList.toggle('active', !!d.locked);
@@ -784,6 +869,16 @@ function hideDrawToolbar() { document.getElementById('draw-toolbar').classList.r
 function onDtbColorChange(val) {
   document.getElementById('dtb-color-swatch').style.background = val;
   toolDefaults.color = val;
+  const d = getSelected();
+  if (d && d.type === 'fib') {
+    // El fibo no tiene "un" color — son los colores por nivel. Este control
+    // pinta todos los niveles del mismo color de una (hay que destildar/
+    // editar los que se quieran distintos desde "Levels").
+    d.levels.forEach(lv => { lv.color = val; });
+    redrawDrawing(d);
+    if (document.getElementById('modal-fib-levels').classList.contains('open')) renderFibLevelsRows();
+    return;
+  }
   applyStyleToSelected({ color: val });
 }
 function onDtbWidthChange(val) {
@@ -805,6 +900,57 @@ function onDtbLock() {
   d.locked = !d.locked;
   document.getElementById('dtb-lock').classList.toggle('active', d.locked);
 }
+// ══════════════════════════════════════════════════════════
+//  NIVELES DE FIBONACCI (editable por dibujo: agregar/sacar/editar)
+// ══════════════════════════════════════════════════════════
+function renderFibLevelsRows() {
+  const d = getSelected(); if (!d || d.type!=='fib') return;
+  if (!d.levels) d.levels = cloneFibLevels();
+  const list = document.getElementById('fib-levels-list');
+  list.innerHTML = '';
+  d.levels.forEach((lv, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--border);';
+    row.innerHTML = `
+      <input type="checkbox" ${lv.on?'checked':''} onchange="updateFibLevel(${i},'on',this.checked)">
+      <input type="color" value="${lv.color}" style="width:28px;height:24px;border:none;background:none;padding:0;cursor:pointer;" onchange="updateFibLevel(${i},'color',this.value)">
+      <input type="number" step="0.001" value="${lv.value}" style="flex:1;background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:4px;color:var(--text-primary);padding:4px 6px;font-family:var(--font-mono);font-size:12px;" onchange="updateFibLevel(${i},'value',parseFloat(this.value))">
+      <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;width:48px;text-align:right;">${(lv.value*100).toFixed(1)}%</span>
+      <button onclick="removeFibLevel(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;" title="Remove">×</button>
+    `;
+    list.appendChild(row);
+  });
+}
+function openFibLevelsModal() {
+  const d = getSelected(); if (!d || d.type!=='fib') return;
+  renderFibLevelsRows();
+  openModal('modal-fib-levels');
+}
+function updateFibLevel(i, field, val) {
+  const d = getSelected(); if (!d || !d.levels[i]) return;
+  d.levels[i][field] = val;
+  renderFibLevelsRows();
+  redrawDrawing(d);
+}
+function addFibLevel() {
+  const d = getSelected(); if (!d) return;
+  d.levels.push({ value:0.5, color:'#c9a84c', on:true });
+  renderFibLevelsRows();
+  redrawDrawing(d);
+}
+function removeFibLevel(i) {
+  const d = getSelected(); if (!d) return;
+  d.levels.splice(i,1);
+  renderFibLevelsRows();
+  redrawDrawing(d);
+}
+function resetFibLevels() {
+  const d = getSelected(); if (!d) return;
+  d.levels = cloneFibLevels();
+  renderFibLevelsRows();
+  redrawDrawing(d);
+}
+
 function onDtbClone() {
   const d = getSelected(); if (!d) return;
   const clone = JSON.parse(JSON.stringify({ ...d, id: genId(), series:[], svgEls:[], label:null }));
@@ -844,7 +990,35 @@ function removeDrawingById(id) {
   d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
   d.svgEls.forEach(el => el.remove());
   if (d.label) d.label.remove();
+  if (d.vLineEl instanceof Element) d.vLineEl.remove();
+  if (d.fillEl instanceof Element) d.fillEl.remove();
   drawings.splice(idx,1);
+}
+
+// Vuelve a ubicar la línea vertical de un dibujo (se llama cada frame y
+// después de crearla/arrastrarla, porque no sigue el pan/zoom sola).
+function syncVLine(d) {
+  if (!(d.vLineEl instanceof Element)) return;
+  const x = chart.timeScale().timeToCoordinate(d.p1.time);
+  // Parar antes de la franja de horas de abajo, para no taparla.
+  const h = document.getElementById('chart-container').clientHeight - chart.timeScale().height();
+  if (x === null) { d.vLineEl.style.display = 'none'; return; }
+  d.vLineEl.style.display = '';
+  d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
+  d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', h);
+}
+
+function syncRectFill(d) {
+  if (!(d.fillEl instanceof Element)) return;
+  const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+  const t1 = Math.min(d.p1.time, d.p2.time);
+  const t2 = d.extRight ? chart.timeScale().getVisibleRange()?.to ?? d.p2.time : Math.max(d.p1.time, d.p2.time);
+  const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+  const y1 = candleSeries.priceToCoordinate(hi), y2 = candleSeries.priceToCoordinate(lo);
+  if (x1===null||x2===null||y1===null||y2===null) { d.fillEl.style.display='none'; return; }
+  d.fillEl.style.display='';
+  d.fillEl.setAttribute('x', Math.min(x1,x2)); d.fillEl.setAttribute('y', y1);
+  d.fillEl.setAttribute('width', Math.abs(x2-x1)); d.fillEl.setAttribute('height', Math.max(0,y2-y1));
 }
 
 function clearDrawings() {
@@ -883,9 +1057,9 @@ function buildDrawingOnChart(d) {
   }
 
   if (d.type === 'hline') {
-    const t1 = d.extLeft  ? tPast  : tFirst;
-    const t2 = d.extRight ? tFuture : tLast;
-    mkLine([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}]);
+    // Rayo horizontal como en TV: nace en el punto donde se dibujó y crece
+    // infinito solo hacia la derecha — no hacia atrás, no las dos puntas.
+    mkLine([{time:d.p1.time, value:d.p1.price},{time:tFuture, value:d.p1.price}]);
 
   } else if (d.type === 'trendline') {
     const rawT1  = d.p1.time;
@@ -917,17 +1091,44 @@ function buildDrawingOnChart(d) {
     mkR([{time:t1,value:lo},{time:t1,value:hi}]);
     mkR([{time:t2,value:lo},{time:t2,value:hi}]);
 
+    // Relleno (como TV): un <rect> en la capa SVG, no es parte del chart,
+    // así que hay que reposicionarlo cada frame igual que la línea vertical.
+    if (!(d.fillEl instanceof Element)) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
+      d.fillEl = r;
+    }
+    d.fillEl.setAttribute('fill', C);
+    d.fillEl.setAttribute('fill-opacity', '0.12');
+    syncRectFill(d);
+
   } else if (d.type === 'fib') {
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
-    const levels  = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-    const colors  = ['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
-    const t1 = d.extLeft  ? tPast   : tFirst;
-    const t2 = d.extRight ? tFuture : tLast;
-    levels.forEach((lvl, i) => {
-      const val = hi - (hi - lo) * lvl;
-      mkLine([{time:t1,value:val},{time:t2,value:val}], { color: colors[i]+'cc', style: 1, lastValue: true });
+    if (!d.levels) d.levels = cloneFibLevels();
+    const rawT1 = Math.min(d.p1.time, d.p2.time), rawT2 = Math.max(d.p1.time, d.p2.time);
+    const t1 = d.extLeft  ? tPast   : rawT1;
+    const t2 = d.extRight ? tFuture : rawT2;
+    d.levels.filter(lv => lv.on).forEach(lv => {
+      const val = hi - (hi - lo) * lv.value;
+      const s = mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: true });
+      s.applyOptions({ title: `${(lv.value*100).toFixed(1)}%` });
     });
+
+  } else if (d.type === 'vline') {
+    // No es una serie del chart (una línea vertical no se puede expresar como
+    // "tiempo -> valor" único) — se dibuja directo en la capa SVG y se
+    // reposiciona en cada frame, igual que las etiquetas de texto.
+    if (!(d.vLineEl instanceof Element)) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      window._drawingLayerSvg.appendChild(line);
+      d.vLineEl = line;
+    }
+    const dash = ls===1?'6,4':ls===2?'2,3':'none';
+    d.vLineEl.setAttribute('stroke', C);
+    d.vLineEl.setAttribute('stroke-width', lw);
+    d.vLineEl.setAttribute('stroke-dasharray', dash);
+    syncVLine(d);
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
@@ -944,12 +1145,13 @@ function highlightSelectedSvg(id) {
     function priceToY(price) { return candleSeries.priceToCoordinate(price); }
     function timeToX(time)  { return chart.timeScale().timeToCoordinate(time); }
 
-    function addHandle(x, y, dId) {
+    function addHandle(x, y, dId, role) {
       if (x === null || y === null) return;
       const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
       c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 5);
       c.classList.add('drawing-handle');
       c.dataset.drawingId = dId;
+      c.dataset.role = role;
       svg.appendChild(c);
       d.svgEls.push(c);
     }
@@ -957,28 +1159,64 @@ function highlightSelectedSvg(id) {
     if (d.type === 'hline') {
       const y = priceToY(d.p1.price);
       const w = container.clientWidth;
-      addHandle(w * 0.2, y, id);
-      addHandle(w * 0.5, y, id);
-      addHandle(w * 0.8, y, id);
-    } else if (d.type === 'trendline') {
-      addHandle(timeToX(d.p1.time), priceToY(d.p1.price), id);
-      addHandle(timeToX(d.p2.time), priceToY(d.p2.price), id);
+      addHandle(w * 0.2, y, id, 'price');
+      addHandle(w * 0.5, y, id, 'price');
+      addHandle(w * 0.8, y, id, 'price');
+    } else if (d.type === 'trendline' || d.type === 'fib') {
+      addHandle(timeToX(d.p1.time), priceToY(d.p1.price), id, 'p1');
+      addHandle(timeToX(d.p2.time), priceToY(d.p2.price), id, 'p2');
     } else if (d.type === 'rect') {
       const hi = Math.max(d.p1.price, d.p2.price);
       const lo = Math.min(d.p1.price, d.p2.price);
       const t1 = Math.min(d.p1.time, d.p2.time);
       const t2 = Math.max(d.p1.time, d.p2.time);
-      addHandle(timeToX(t1), priceToY(hi), id);
-      addHandle(timeToX(t2), priceToY(lo), id);
-      addHandle(timeToX(t1), priceToY(lo), id);
-      addHandle(timeToX(t2), priceToY(hi), id);
-    } else if (d.type === 'fib') {
-      const hi = Math.max(d.p1.price, d.p2.price);
-      const lo = Math.min(d.p1.price, d.p2.price);
-      addHandle(timeToX(d.p1.time), priceToY(hi), id);
-      addHandle(timeToX(d.p2.time), priceToY(lo), id);
+      addHandle(timeToX(t1), priceToY(hi), id, 't1hi');
+      addHandle(timeToX(t2), priceToY(lo), id, 't2lo');
+      addHandle(timeToX(t1), priceToY(lo), id, 't1lo');
+      addHandle(timeToX(t2), priceToY(hi), id, 't2hi');
+      // Como en TV: también una manija en el medio de cada lado, para
+      // estirar un solo borde sin mover el opuesto.
+      const xMid = (timeToX(t1)+timeToX(t2))/2, yMid = (priceToY(hi)+priceToY(lo))/2;
+      addHandle(xMid, priceToY(hi), id, 'top');
+      addHandle(xMid, priceToY(lo), id, 'bottom');
+      addHandle(timeToX(t1), yMid, id, 'left');
+      addHandle(timeToX(t2), yMid, id, 'right');
+    } else if (d.type === 'vline') {
+      addHandle(timeToX(d.p1.time), container.clientHeight * 0.5, id, 'vtime');
     }
   });
+}
+
+// Aplica el arrastre de una "manija" (handle) según su rol — normaliza
+// rect/fib a {t1,t2,hi,lo} en vez de arrastrar p1/p2 crudos, porque cuál
+// punto es "p1" vs "p2" es ambiguo una vez que el usuario invirtió la forma.
+function applyHandleDrag(d, role, price, time) {
+  if (d.type === 'hline') {
+    d.p1.price = price; d.p2.price = price;
+  } else if (d.type === 'trendline') {
+    if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
+    else { d.p2.price = price; d.p2.time = time; }
+  } else if (d.type === 'fib') {
+    if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
+    else { d.p2.price = price; d.p2.time = time; }
+    const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+    d.p1.price = hi; d.p2.price = lo;
+  } else if (d.type === 'rect') {
+    let hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+    let t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
+    if (role === 't1hi') { t1 = time; hi = price; }
+    if (role === 't2lo') { t2 = time; lo = price; }
+    if (role === 't1lo') { t1 = time; lo = price; }
+    if (role === 't2hi') { t2 = time; hi = price; }
+    if (role === 'top')    hi = price;
+    if (role === 'bottom') lo = price;
+    if (role === 'left')   t1 = time;
+    if (role === 'right')  t2 = time;
+    d.p1 = { time: Math.min(t1,t2), price: Math.max(hi,lo) };
+    d.p2 = { time: Math.max(t1,t2), price: Math.min(hi,lo) };
+  } else if (d.type === 'vline') {
+    d.p1.time = time; d.p2.time = time;
+  }
 }
 
 function clearSvgHighlights() {
@@ -992,7 +1230,7 @@ function clearSvgHighlights() {
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
-    layout: { background:{ color:'#0a0a0c' }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11 },
+    layout: { background:{ color:'#0a0a0c' }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
     grid:   { vertLines:{color:'#18182a',style:1}, horzLines:{color:'#18182a',style:1} },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
@@ -1030,6 +1268,29 @@ function initChart() {
     clearSvgHighlights();
     if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
   }).observe(container);
+
+  chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    if (range && range.from < 50) loadMoreHistory();
+  });
+
+  // El badge y las etiquetas de texto se re-posicionan en cada frame (en vez
+  // de perseguir cada gesto posible: zoom, pan, arrastre del eje de precio).
+  (function badgeRafLoop(){
+    if (window._lastCandles){ const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open); }
+    drawings.forEach(d=>{
+      if (window._dragSession && window._dragSession.drawing===d) return;
+      if (d.type==='text' && d.label) {
+        const x=chart.timeScale().timeToCoordinate(d.p1.time), y=candleSeries.priceToCoordinate(d.p1.price);
+        d.label.style.display = (x===null||y===null) ? 'none' : 'block';
+        if (x!==null&&y!==null){ d.label.style.left=(x+6)+'px'; d.label.style.top=(y-10)+'px'; }
+      } else if (d.type==='vline') {
+        syncVLine(d);
+      } else if (d.type==='rect') {
+        syncRectFill(d);
+      }
+    });
+    requestAnimationFrame(badgeRafLoop);
+  })();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1075,6 +1336,19 @@ function initDrawingLayer() {
     return { x, y, price, time };
   }
 
+  // Shift mientras se dibuja una trend line: la fuerza a quedar perfectamente
+  // horizontal o vertical (como en TV), según hacia qué lado se movió más.
+  function shiftSnap(e, start, cur) {
+    if (!e.shiftKey) return cur;
+    const dx = Math.abs(cur.x - start.x), dy = Math.abs(cur.y - start.y);
+    const snapHorizontal = dx > dy;
+    const x = snapHorizontal ? cur.x : start.x;
+    const y = snapHorizontal ? start.y : cur.y;
+    let time = snapHorizontal ? cur.time : start.time;
+    const price = snapHorizontal ? start.price : cur.price;
+    return { x, y, price, time };
+  }
+
   function updateSvgCapture() {
     const tool = STATE.activeTool;
     const isDrawTool = !['cursor','cross'].includes(tool);
@@ -1088,34 +1362,19 @@ function initDrawingLayer() {
     updateSvgCapture();
   };
 
-  container.addEventListener('click', e => {
-    if (STATE.activeTool !== 'cursor') return;
-    const rect = container.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-
-    let hit = null;
-    for (const d of drawings) {
-      if (d.locked) continue;
-      if (isClickOnDrawing(d, mx, my)) { hit = d.id; break; }
-    }
-    if (hit) { selectDrawing(hit); }
-    else { deselectDrawing(); }
-  });
+  function priceToY(p) { return candleSeries.priceToCoordinate(p); }
+  function timeToX(t)  { return chart.timeScale().timeToCoordinate(t); }
+  function distToSegment(x1,y1,x2,y2,px,py) {
+    const dx=x2-x1, dy=y2-y1;
+    const len2 = dx*dx+dy*dy;
+    if (len2===0) return Math.hypot(px-x1,py-y1);
+    let t = ((px-x1)*dx+(py-y1)*dy)/len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
+  }
 
   function isClickOnDrawing(d, mx, my) {
     const THRESH = 8;
-    function priceToY(p) { return candleSeries.priceToCoordinate(p); }
-    function timeToX(t)  { return chart.timeScale().timeToCoordinate(t); }
-    function distToSegment(x1,y1,x2,y2,px,py) {
-      const dx=x2-x1, dy=y2-y1;
-      const len2 = dx*dx+dy*dy;
-      if (len2===0) return Math.hypot(px-x1,py-y1);
-      let t = ((px-x1)*dx+(py-y1)*dy)/len2;
-      t = Math.max(0, Math.min(1, t));
-      return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
-    }
-
     if (d.type === 'hline') {
       const y = priceToY(d.p1.price);
       if (y===null) return false;
@@ -1133,15 +1392,130 @@ function initDrawingLayer() {
       const x1=timeToX(t1), x2=timeToX(t2);
       const y1=priceToY(hi), y2=priceToY(lo);
       if (x1===null||x2===null||y1===null||y2===null) return false;
-      return (
+      if (d.type === 'rect') return (
         distToSegment(x1,y1,x2,y1,mx,my)<THRESH||
         distToSegment(x1,y2,x2,y2,mx,my)<THRESH||
         distToSegment(x1,y1,x1,y2,mx,my)<THRESH||
         distToSegment(x2,y1,x2,y2,mx,my)<THRESH
       );
+      // fib: cualquiera de las líneas de nivel (las que están activas) cuenta como "cuerpo"
+      return (d.levels||cloneFibLevels()).filter(lv=>lv.on).some(lv=>{
+        const y = priceToY(hi-(hi-lo)*lv.value);
+        return y!==null && Math.abs(my-y)<THRESH && mx>=Math.min(x1,x2)-2 && mx<=Math.max(x1,x2)+2;
+      });
+    }
+    if (d.type === 'text' && d.label) {
+      const r = d.label.getBoundingClientRect();
+      const cr = container.getBoundingClientRect();
+      return mx>=r.left-cr.left-4 && mx<=r.right-cr.left+4 && my>=r.top-cr.top-4 && my<=r.bottom-cr.top+4;
+    }
+    if (d.type === 'vline') {
+      const x = timeToX(d.p1.time);
+      return x!==null && Math.abs(mx-x) < THRESH;
     }
     return false;
   }
+
+  // Manija bajo el mouse del dibujo seleccionado (si hay uno), o null.
+  function hitTestHandle(mx, my) {
+    const d = getSelected();
+    if (!d || !d.svgEls) return null;
+    for (const el of d.svgEls) {
+      if (!el.dataset || !el.dataset.role) continue;
+      const x = parseFloat(el.getAttribute('cx')), y = parseFloat(el.getAttribute('cy'));
+      if (Math.hypot(mx-x, my-y) < 9) return { drawing: d, role: el.dataset.role };
+    }
+    return null;
+  }
+
+  // ── Selección + arrastre (mover cuerpo entero / estirar una punta) ──
+  window._dragSession = null; // { kind:'handle'|'body', drawing, role, startPrice, startTime, origP1, origP2 }
+
+  // capture:true + stopPropagation: si no, el canvas del chart (debajo de
+  // esta capa) también recibe el mismo mousedown/mousemove y arranca su
+  // propio pan/zoom al mismo tiempo que arrastramos el dibujo — por eso
+  // "el gráfico se movía solo" al mover una línea.
+  container.addEventListener('mousedown', e => {
+    if (STATE.activeTool !== 'cursor') return;
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    const handleHit = hitTestHandle(mx, my);
+    if (handleHit) {
+      e.preventDefault(); e.stopPropagation();
+      window._dragSession = { kind:'handle', drawing:handleHit.drawing, role:handleHit.role };
+      return;
+    }
+
+    let hit = null;
+    for (const d of drawings) {
+      if (d.locked) continue;
+      if (isClickOnDrawing(d, mx, my)) { hit = d; break; }
+    }
+    if (hit) {
+      e.preventDefault(); e.stopPropagation();
+      selectDrawing(hit.id);
+      const { price, time } = getCoords(e);
+      window._dragSession = {
+        kind:'body', drawing:hit, startPrice:price, startTime:time,
+        origP1:{...hit.p1}, origP2: hit.p2?{...hit.p2}:null,
+        labelLeft: hit.label?parseFloat(hit.label.style.left):0,
+        labelTop:  hit.label?parseFloat(hit.label.style.top):0,
+      };
+    } else {
+      deselectDrawing();
+    }
+  }, { capture:true });
+
+  container.addEventListener('mousemove', e => {
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (window._dragSession) {
+      e.preventDefault(); e.stopPropagation();
+      const d = window._dragSession.drawing;
+      if (d.locked) return;
+      const { price, time } = getCoords(e);
+
+      if (window._dragSession.kind === 'handle') {
+        applyHandleDrag(d, window._dragSession.role, price, time);
+        redrawDrawing(d);
+      } else if (d.type === 'text') {
+        d.label.style.left = (mx - 6) + 'px';
+        d.label.style.top  = (my - 10) + 'px';
+      } else if (price!==null && time!==null) {
+        const dPrice = price - window._dragSession.startPrice;
+        const dTime  = time  - window._dragSession.startTime;
+        d.p1.price = window._dragSession.origP1.price + dPrice;
+        d.p1.time  = window._dragSession.origP1.time  + dTime;
+        if (window._dragSession.origP2) {
+          d.p2.price = window._dragSession.origP2.price + dPrice;
+          d.p2.time  = window._dragSession.origP2.time  + dTime;
+        }
+        redrawDrawing(d);
+      }
+      return;
+    }
+
+    // Sin arrastre activo: feedback de cursor al pasar por encima
+    if (STATE.activeTool === 'cursor') {
+      if (hitTestHandle(mx, my)) { container.style.cursor = 'crosshair'; return; }
+      const over = drawings.some(d => !d.locked && isClickOnDrawing(d, mx, my));
+      container.style.cursor = over ? 'move' : '';
+    }
+  }, { capture:true });
+
+  window.addEventListener('mouseup', e => {
+    if (window._dragSession) { e.preventDefault(); e.stopPropagation(); }
+    if (window._dragSession && window._dragSession.kind === 'body' && window._dragSession.drawing.type === 'text') {
+      const d = window._dragSession.drawing;
+      const x = parseFloat(d.label.style.left)-6, y = parseFloat(d.label.style.top)+10;
+      d.p1.price = candleSeries.coordinateToPrice(y) ?? d.p1.price;
+      d.p1.time  = chart.timeScale().coordinateToTime(x) ?? d.p1.time;
+    }
+    if (window._dragSession) highlightSelectedSvg(selectedDrawingId);
+    window._dragSession = null;
+  }, { capture:true });
 
   svg.addEventListener('mousedown', e => {
     e.preventDefault();
@@ -1152,15 +1526,28 @@ function initDrawingLayer() {
     if (!candles.length) return;
 
     if (tool === 'text') {
-      const text = prompt('Label:');
-      if (!text) return;
+      // Como en TV: se escribe directo sobre el chart, no un prompt() nativo.
       const label = document.createElement('div');
-      label.textContent = text;
-      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolDefaults.color};font-family:var(--font-mono);font-size:${11+toolDefaults.width}px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;`;
+      label.contentEditable = 'true';
+      label.dataset.placeholder = 'Añadir texto';
+      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolDefaults.color};font-family:var(--font-mono);font-size:${11+toolDefaults.width}px;pointer-events:auto;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;outline:1px solid ${toolDefaults.color}88;min-width:10px;cursor:text;`;
       container.appendChild(label);
+
       const d = { id:genId(), type:'text', series:[], svgEls:[], label, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price,time}, p2:{price,time} };
       drawings.push(d);
       selectDrawing(d.id);
+      backToCursor();
+
+      label.focus();
+      const commitText = () => {
+        label.contentEditable = 'false';
+        label.style.pointerEvents = 'none';
+        label.style.outline = 'none';
+        label.style.cursor = '';
+        if (!label.textContent.trim()) { removeDrawingById(d.id); deselectDrawing(); }
+      };
+      label.addEventListener('blur', commitText, { once:true });
+      label.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); label.blur(); } });
       return;
     }
 
@@ -1184,9 +1571,10 @@ function initDrawingLayer() {
       line.setAttribute('stroke-dasharray', '4,3');
       svg.appendChild(line); previewEl = line;
     } else if (tool === 'trendline') {
+      const snapped = shiftSnap(e, drawStart, { x:x2, y:y2 });
       const line = document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
-      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('x2', snapped.x); line.setAttribute('y2', snapped.y);
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
       svg.appendChild(line); previewEl = line;
@@ -1210,6 +1598,13 @@ function initDrawingLayer() {
         group.appendChild(line);
       });
       svg.appendChild(group); previewEl = group;
+    } else if (tool === 'vline') {
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', drawStart.x); line.setAttribute('y1', 0);
+      line.setAttribute('x2', drawStart.x); line.setAttribute('y2', container.clientHeight - chart.timeScale().height());
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
     }
   });
 
@@ -1219,7 +1614,8 @@ function initDrawingLayer() {
     const tool = STATE.activeTool;
     clearPreview();
 
-    const { price: price2, time: time2 } = getCoords(e);
+    const coordsNow = getCoords(e);
+    let { price: price2, time: time2 } = coordsNow;
     if (price2===null||time2===null) { drawStart=null; return; }
     const candles = window._lastCandles||[];
     if (!candles.length) { drawStart=null; return; }
@@ -1229,9 +1625,11 @@ function initDrawingLayer() {
     if (tool === 'hline') {
       d = { id:genId(), type:'hline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:drawStart.time}, p2:{price:drawStart.price,time:drawStart.time} };
     } else if (tool === 'trendline') {
+      const snapped = shiftSnap(e, drawStart, coordsNow);
+      price2 = snapped.price; time2 = snapped.time;
       const t1 = Math.min(drawStart.time, time2);
       const t2 = Math.max(drawStart.time, time2);
-      if (t1 === t2) { drawStart=null; return; }
+      if (t1 === t2 && price2 === drawStart.price) { drawStart=null; return; } // clic sin arrastre real
       const p1 = drawStart.time <= time2 ? drawStart.price : price2;
       const p2 = drawStart.time <= time2 ? price2 : drawStart.price;
       d = { id:genId(), type:'trendline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:p1,time:t1}, p2:{price:p2,time:t2} };
@@ -1243,13 +1641,16 @@ function initDrawingLayer() {
     } else if (tool === 'fib') {
       const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
       if (Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
-      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
+      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels:cloneFibLevels(), p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
+    } else if (tool === 'vline') {
+      d = { id:genId(), type:'vline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:null,time:drawStart.time}, p2:{price:null,time:drawStart.time} };
     }
 
     if (d) {
       drawings.push(d);
       buildDrawingOnChart(d);
       selectDrawing(d.id);
+      backToCursor();
     }
 
     drawStart = null;
@@ -1290,7 +1691,7 @@ function renderWatchlist() {
 }
 
 function selectSymbol(sym) { STATE.symbol=sym; document.getElementById('symbol-input').value=sym; renderWatchlist(); loadChart(sym,STATE.timeframe); }
-function addSymbol() { const inp=document.getElementById('add-sym-inp'); const sym=inp.value.trim().toUpperCase(); if(!sym||STATE.watchlist.includes(sym)){inp.value='';return;} STATE.watchlist.push(sym); inp.value=''; document.getElementById('add-sym-form').classList.remove('open'); renderWatchlist(); }
+function addSymbol() { const inp=document.getElementById('add-sym-inp'); const sym=inp.value.trim(); if(!sym||STATE.watchlist.includes(sym)){inp.value='';return;} STATE.watchlist.push(sym); inp.value=''; document.getElementById('add-sym-form').classList.remove('open'); renderWatchlist(); }
 function removeSymbol(sym,e) { e.stopPropagation(); STATE.watchlist=STATE.watchlist.filter(s=>s!==sym); if(STATE.symbol===sym&&STATE.watchlist.length)selectSymbol(STATE.watchlist[0]); else renderWatchlist(); }
 function toggleAddSym() { const f=document.getElementById('add-sym-form'); f.classList.toggle('open'); if(f.classList.contains('open'))document.getElementById('add-sym-inp').focus(); }
 function updateWLPrice(sym,price) { const key=sym.replace(/[^a-z0-9]/gi,'_'); const el=document.getElementById('wlp-'+key); if(el)el.textContent=fmt(price); }
@@ -1321,6 +1722,14 @@ function setTool(btn, name) {
   btn.classList.add('active');
   STATE.activeTool = name;
   if (name !== 'cursor') deselectDrawing();
+}
+
+// Como en TV: después de terminar un dibujo, la herramienta vuelve sola al
+// cursor — si no, el próximo arrastre sobre el dibujo recién hecho se
+// interpreta como "dibujar uno nuevo" en vez de moverlo/estirarlo.
+function backToCursor() {
+  const btn = document.querySelector('.tool-btn[data-tip="Cursor"]');
+  if (btn) setTool(btn, 'cursor');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1398,7 +1807,7 @@ function openApiModal(){document.getElementById('inp-apikey').value=STATE.apiKey
 
 function saveSettings(){
   const key=document.getElementById('inp-apikey').value.trim();
-  const sym=document.getElementById('inp-defsym').value.trim().toUpperCase()||'QQQ';
+  const sym=document.getElementById('inp-defsym').value.trim()||'NAS100.fs';
   STATE.apiKey=key; localStorage.setItem('td_apikey',key);
   const badge=document.getElementById('api-badge');
   if(key){badge.textContent='API ✓';badge.classList.add('connected');}else{badge.textContent='NO API KEY';badge.classList.remove('connected');}
@@ -1445,41 +1854,116 @@ function saveState(){localStorage.setItem('td_symbol',STATE.symbol);localStorage
 
 document.getElementById('symbol-input').addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;
-  const sym=e.target.value.trim().toUpperCase();if(!sym)return;
+  const sym=e.target.value.trim();if(!sym)return;
   if(!STATE.watchlist.includes(sym))STATE.watchlist.push(sym);
   STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
 });
 
 // ══════════════════════════════════════════════════════════
-//  loadChart
+//  loadChart  (vía mt5_bridge/bridge_server.py -> MT5/Axi)
 // ══════════════════════════════════════════════════════════
+const BRIDGE_URL = 'http://localhost:8787';
+
+// Redibuja toda la serie (velas reales + puntos fantasma a futuro para el
+// eje de horas). series.update() no sirve acá: exige que cada actualización
+// vaya hacia adelante en el tiempo, y los fantasmas quedan después de la
+// vela en formación, así que "actualizar in place" la vela actual rompía
+// silenciosamente. setData() no tiene ese problema y no mueve el zoom.
+function renderSeries(timeframe){
+  const candles=window._lastCandles;
+  const last=candles[candles.length-1];
+  candleSeries.setData(candles.concat(futureWhitespace(last.time, timeframe, 15)));
+  volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
+}
+
+// Scroll infinito hacia atrás: cuando te acercás al borde izquierdo de lo
+// ya cargado, pide más velas viejas al puente (que a su vez le pide a MT5
+// el tramo anterior) y las pega adelante sin mover la vista de un salto.
+let _loadingMoreHistory = false;
+async function loadMoreHistory(){
+  if (_loadingMoreHistory) return;
+  const candles = window._lastCandles;
+  if (!candles || !candles.length || candles.length > 8000) return;
+  _loadingMoreHistory = true;
+  try {
+    const oldest = candles[0].time;
+    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=300&before=${oldest}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error || !Array.isArray(json.bars) || json.bars.length===0) return;
+    const older = json.bars.filter(b => b.time < oldest);
+    if (older.length===0) return;
+
+    const addedCount = older.length;
+    window._lastCandles = older.concat(candles);
+    renderSeries(STATE.timeframe);
+
+    // mismo bar en la misma posición de pantalla, aunque el array creció a la izquierda
+    const range = chart.timeScale().getVisibleLogicalRange();
+    if (range) chart.timeScale().setVisibleLogicalRange({ from: range.from+addedCount, to: range.to+addedCount });
+  } catch(e) {
+    // sin red/MT5 un instante: se reintenta solo la próxima vez que se scrollee
+  } finally {
+    _loadingMoreHistory = false;
+  }
+}
+
+// Cierre de vela: pega solo la(s) vela(s) nueva(s) sin recargar todo el chart
+// (sin overlay, sin refit de zoom — eso es lo que se "notaba").
+async function appendNewBar(symbol, timeframe){
+  try{
+    const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=3`;
+    const res=await fetch(url);
+    const json=await res.json();
+    if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'sin datos');
+
+    const prevLastTime=window._lastCandles[window._lastCandles.length-1].time;
+    json.bars.forEach(bar=>{
+      if(bar.time<prevLastTime)return; // vela vieja, ya la tenemos
+      if(bar.time===window._lastCandles[window._lastCandles.length-1].time){
+        window._lastCandles[window._lastCandles.length-1]=bar;
+      } else {
+        window._lastCandles.push(bar);
+      }
+    });
+    renderSeries(timeframe);
+
+    const last=window._lastCandles[window._lastCandles.length-1];
+    const prev=window._lastCandles[window._lastCandles.length-2];
+    updateTopbarPrice(last,prev);
+    updateTopbarOHLCV(last);
+    updateStatusBar(symbol,timeframe,window._lastCandles.length,window._lastCandles[0],last);
+    updateWLPrice(symbol,last.close);
+
+    startCountdown(timeframe, last.time, json.serverTime);
+  } catch(err){
+    // si falla, reintentamos en el próximo tick del countdown (recarga completa como respaldo)
+    loadChart(symbol, timeframe);
+  }
+}
+
+function refreshChart(){
+  const btn = document.getElementById('btn-refresh');
+  btn.classList.add('spinning');
+  loadChart(STATE.symbol, STATE.timeframe).finally(()=>btn.classList.remove('spinning'));
+}
+
 async function loadChart(symbol, timeframe) {
-  if(!STATE.apiKey){showLoader('No API key — open Settings ↑');setStatus('err','● no key');return;}
   setLoaderMsg(`Loading ${symbol} ${timeframe}…`);showOverlay(true);setStatus('loading','● loading…');
 
-  const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&outputsize=500&order=ASC&apikey=${STATE.apiKey}`;
+  const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=500`;
 
   try {
     const res=await fetch(url);
     const json=await res.json();
-    if(json.status==='error'||!json.values)throw new Error(json.message||'API error');
-
-    const candles=json.values.map(v=>({
-      time:  Math.floor(new Date(v.datetime).getTime()/1000),
-      open:  parseFloat(v.open),
-      high:  parseFloat(v.high),
-      low:   parseFloat(v.low),
-      close: parseFloat(v.close),
-      volume:parseFloat(v.volume||0),
-    }));
+    if(json.error)throw new Error(json.error);
+    const candles=json.bars;
+    if(!Array.isArray(candles)||candles.length===0)throw new Error('sin datos para '+symbol);
 
     window._lastCandles=candles;
-
-    const vols=candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'}));
-    candleSeries.setData(candles);
-    volumeSeries.setData(vols);
-    chart.timeScale().fitContent();
-    chart.timeScale().applyOptions({ rightOffset: 50 });
+    renderSeries(timeframe);
+    chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
+    chart.timeScale().scrollToRealTime();
 
     Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
     STATE.indicators.forEach(name=>addIndicatorSeries(name));
@@ -1503,10 +1987,115 @@ async function loadChart(symbol, timeframe) {
     setStatus('ok','● live');
     showOverlay(false);
 
+    startCountdown(timeframe, last.time, json.serverTime);
+
   } catch(err) {
     setLoaderMsg('⚠ '+err.message);
     setStatus('err','● error');
   }
+}
+
+// ══════════════════════════════════════════════════════════
+//  COUNTDOWN — tiempo restante hasta el cierre de la vela actual
+//  (usa json.serverTime, el reloj de MT5/broker, no el del navegador)
+// ══════════════════════════════════════════════════════════
+const TF_SECONDS = {
+  '1min':60,'2min':120,'3min':180,'4min':240,'5min':300,'6min':360,'10min':600,'12min':720,'15min':900,'20min':1200,'30min':1800,
+  '1h':3600,'2h':7200,'3h':10800,'4h':14400,'6h':21600,'8h':28800,'12h':43200,
+};
+let _countdownTimer=null;
+
+// Puntos "fantasma" (sin OHLC) después de la última vela, solo para que el
+// eje de tiempo sepa qué hora va en el margen vacío de la derecha y la dibuje.
+function futureWhitespace(lastTime, timeframe, count){
+  const pts=[]; let t=lastTime;
+  for(let i=0;i<count;i++){
+    const nt=nextCloseTime(timeframe, t);
+    if(nt===null)break;
+    pts.push({time:nt});
+    t=nt;
+  }
+  return pts;
+}
+
+function nextCloseTime(timeframe, lastBarTime){
+  if(TF_SECONDS[timeframe]) return lastBarTime + TF_SECONDS[timeframe];
+  const d=new Date(lastBarTime*1000);
+  if(timeframe==='1day'){ d.setUTCHours(24,0,0,0); return Math.floor(d.getTime()/1000); }
+  if(timeframe==='1week'){
+    d.setUTCHours(0,0,0,0);
+    const addDays=((8-d.getUTCDay())%7)||7;
+    d.setUTCDate(d.getUTCDate()+addDays);
+    return Math.floor(d.getTime()/1000);
+  }
+  if(timeframe==='1month'){
+    const nd=new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+1, 1, 0,0,0));
+    return Math.floor(nd.getTime()/1000);
+  }
+  return null;
+}
+
+function positionCountdownBadge(lastClose, lastOpen){
+  const badge=document.getElementById('price-countdown-badge');
+  if(!candleSeries||lastClose==null){ badge.style.display='none'; return; }
+  const y=candleSeries.priceToCoordinate(lastClose);
+  if(y==null){ badge.style.display='none'; return; }
+  badge.style.display='block';
+  badge.style.top=(y+9)+'px';
+  badge.classList.toggle('up', lastClose>=lastOpen);
+  badge.classList.toggle('dn', lastClose<lastOpen);
+}
+
+let _formingFetchInFlight=false;
+async function refreshFormingCandle(symbol, timeframe){
+  if(_formingFetchInFlight || !window._lastCandles) return;
+  _formingFetchInFlight=true;
+  try{
+    const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=1`;
+    const res=await fetch(url);
+    const json=await res.json();
+    if(json.error||!Array.isArray(json.bars)||json.bars.length===0)return;
+    const bar=json.bars[0];
+    const last=window._lastCandles[window._lastCandles.length-1];
+    if(bar.time!==last.time)return; // ya cerró — eso lo maneja appendNewBar
+
+    window._lastCandles[window._lastCandles.length-1]=bar;
+    renderSeries(timeframe);
+
+    const prev=window._lastCandles[window._lastCandles.length-2];
+    updateTopbarPrice(bar,prev);
+    updateTopbarOHLCV(bar);
+    updateWLPrice(symbol,bar.close);
+    positionCountdownBadge(bar.close,bar.open);
+  } catch(e){
+    // red caída un segundo: el próximo tick reintenta solo
+  } finally {
+    _formingFetchInFlight=false;
+  }
+}
+
+function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
+  clearInterval(_countdownTimer);
+  const badge=document.getElementById('price-countdown-badge');
+  const close=nextCloseTime(timeframe, lastBarTime);
+  const loadedAtMs=performance.now();
+
+  function tick(){
+    const elapsed=(performance.now()-loadedAtMs)/1000;
+    const nowServer=serverTimeAtLoad+elapsed;
+    if(close!==null){
+      let remain=Math.max(0, Math.round(close-nowServer));
+      if(remain<=0){ clearInterval(_countdownTimer); appendNewBar(STATE.symbol, STATE.timeframe); return; }
+      const h=Math.floor(remain/3600), m=Math.floor((remain%3600)/60), s=remain%60;
+      badge.textContent = h>0
+        ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+        : `${m}:${String(s).padStart(2,'0')}`;
+      badge.classList.toggle('soon', remain<=10);
+    }
+    refreshFormingCandle(STATE.symbol, timeframe);
+  }
+  tick();
+  _countdownTimer=setInterval(tick,1000);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1520,14 +2109,15 @@ async function loadChart(symbol, timeframe) {
   setActiveTF(STATE.timeframe);
   document.getElementById('symbol-input').value=STATE.symbol;
 
-  if(STATE.apiKey){
-    document.getElementById('api-badge').textContent='API ✓';
-    document.getElementById('api-badge').classList.add('connected');
+  const badge=document.getElementById('api-badge');
+  fetch(`${BRIDGE_URL}/health`).then(r=>r.ok?r.json():Promise.reject()).then(()=>{
+    badge.textContent='MT5 BRIDGE ✓';badge.classList.add('connected');
     loadChart(STATE.symbol,STATE.timeframe);
-  } else {
-    showLoader('Enter your Twelve Data API key in Settings');
-    setStatus('err','● no key');
-  }
+  }).catch(()=>{
+    badge.textContent='BRIDGE OFF';badge.classList.remove('connected');
+    showLoader('No conecta con el puente MT5 — corré bridge_server.py y abrí MT5 con el Service ZentinelBridge');
+    setStatus('err','● sin puente');
+  });
 })();
 </script>
 </body>
