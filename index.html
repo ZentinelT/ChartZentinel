@@ -1083,6 +1083,9 @@ function renderLayoutGrid(n){
     <span style="width:1px;height:18px;background:#26263a;"></span>
     <select id="gc-preset" style="background:#0a0a0c;border:1px solid #26263a;border-radius:4px;color:#e8e8f0;padding:5px 8px;font-family:monospace;font-size:11px;outline:none;"></select>
     <button id="gc-preset-apply" style="${btnStyle}">Aplicar preset</button>
+    <span style="flex:1;"></span>
+    <button id="gc-refresh" title="Refrescar" style="${btnStyle}">⟳ Refresh</button>
+    <button id="gc-settings" title="Configuración del panel activo" style="${btnStyle}">⚙ Settings</button>
   `;
   document.body.appendChild(bar);
   document.body.appendChild(gbar);
@@ -1134,6 +1137,16 @@ function renderLayoutGrid(n){
     const name = presetSel.value;
     if (!name) return;
     broadcast({ type:'zentinel:applyPreset', name });
+  });
+
+  gbar.querySelector('#gc-refresh').addEventListener('click', ()=>{
+    broadcast({ type:'zentinel:refresh' });
+  });
+  // Settings abre un modal — no tiene sentido "a todos" (solo se puede
+  // mirar uno a la vez), así que siempre apunta al panel activo sin
+  // importar lo que diga el selector de alcance.
+  gbar.querySelector('#gc-settings').addEventListener('click', ()=>{
+    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
   });
 
   // ─── Grilla de paneles ─────────────────────────────────────
@@ -1751,6 +1764,19 @@ function initChart() {
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
     if (range && range.from < 50) loadMoreHistory();
     renderWatchtower();
+  });
+
+  // El zoom vertical (arrastrar el eje de precio) cambia el rango de
+  // precios visible, no el de tiempo — subscribeVisibleLogicalRangeChange
+  // no se entera, así que Watchtower se quedaba "congelado" hasta el
+  // próximo evento que sí dispare un redibujo. Mientras el mouse esté
+  // apretado en cualquier parte del chart (arrastrando precio, tiempo, o
+  // lo que sea) lo seguimos en vivo; se corta apenas se suelta el click.
+  let _wtDragRaf = null;
+  function _wtDragLoop(){ renderWatchtower(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  container.addEventListener('mousedown', () => { if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); });
+  window.addEventListener('mouseup', () => {
+    if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); }
   });
 
   initWatchtowerLayer();
@@ -3280,6 +3306,10 @@ window.addEventListener('message', (e) => {
     loadChart(STATE.symbol, STATE.timeframe);
   } else if (msg.type === 'zentinel:applyPreset' && msg.name) {
     applyPreset(msg.name);
+  } else if (msg.type === 'zentinel:refresh') {
+    refreshChart();
+  } else if (msg.type === 'zentinel:openSettings') {
+    openChartSettingsModal();
   }
 });
 
