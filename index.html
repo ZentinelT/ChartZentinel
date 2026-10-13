@@ -2327,10 +2327,25 @@ if (lsGet(lsKey('td_sidebar_collapsed')) === '1') {
 // ══════════════════════════════════════════════════════════
 //  LAYOUT PICKER (1 / 2 / 4 gráficos)
 // ══════════════════════════════════════════════════════════
+// El modo de 1 solo gráfico guarda su estado sin sufijo de pane (td_symbol,
+// td_indicators, etc). Los paneles de la grilla usan claves con sufijo
+// (_p1, _p2...) para no pisarse entre sí — pero eso significa que, visto
+// desde cero, el panel 1 de una grilla nueva no tiene ninguna relación con
+// lo que se estaba mirando en el modo de 1 gráfico. Al pasar de 1 a 2/4,
+// clonamos el estado actual (sin sufijo) hacia las claves del panel 1,
+// así ese panel arranca siendo una continuación de lo que ya tenías.
+const PANE_CLONE_KEYS = ['td_symbol','td_tf','td_watchlist','td_indicators','td_watchtower','td_sniper','td_chart_settings','td_ind_styles','td_sidebar_collapsed'];
+function clonePaneState(fromSuffix, toSuffix){
+  PANE_CLONE_KEYS.forEach(k=>{
+    const v = lsGet(k+fromSuffix);
+    if (v!=null) lsSet(k+toSuffix, v);
+  });
+}
 document.querySelectorAll('.layout-btn').forEach(btn=>{
   btn.classList.toggle('active', Number(btn.dataset.layout)===LAYOUT_N);
   btn.addEventListener('click', ()=>{
     const v = btn.dataset.layout;
+    if (v!=='1' && !EMBED_MODE && LAYOUT_N===1) clonePaneState('', '_p1');
     location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
   });
 });
