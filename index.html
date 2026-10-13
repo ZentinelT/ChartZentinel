@@ -1782,12 +1782,28 @@ function initChart() {
   // próximo evento que sí dispare un redibujo. Mientras el mouse esté
   // apretado en cualquier parte del chart (arrastrando precio, tiempo, o
   // lo que sea) lo seguimos en vivo; se corta apenas se suelta el click.
+  //
+  // La rueda del mouse/trackpad tiene el mismo problema pero al revés: no
+  // hay mousedown, y encima dispara MUCHOS eventos 'wheel' seguidos (sobre
+  // todo con scroll por inercia), cada uno disparando un redibujo completo
+  // — eso hacía que las cajas se "amontonaran" y recién se acomodaran un
+  // rato después de parar de scrollear. Por eso el loop también se prende
+  // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
   function _wtDragLoop(){ renderWatchtower(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  container.addEventListener('mousedown', () => { if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); });
-  window.addEventListener('mouseup', () => {
-    if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); }
-  });
+  function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); } }
+
+  let _wtMouseDown = false;
+  container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
+  window.addEventListener('mouseup', () => { _wtMouseDown = false; if (!_wtWheelTimer) _wtStopLoop(); });
+
+  let _wtWheelTimer = null;
+  container.addEventListener('wheel', () => {
+    _wtStartLoop();
+    clearTimeout(_wtWheelTimer);
+    _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
+  }, { passive:true });
 
   initWatchtowerLayer();
 
