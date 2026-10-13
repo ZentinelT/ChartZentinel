@@ -20,6 +20,18 @@ import urllib.parse
 
 PORT = 8787
 
+# Carpeta de la app (la de este script es mt5_bridge/, la app está un nivel arriba).
+APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_MIME_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+}
+
 ZENTINEL_DIR = os.path.expanduser(
     "~/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/"
     "users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/zentinel"
@@ -121,7 +133,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send_json(502, json.dumps({"error": str(e)}))
             return
 
-        self._send_json(404, json.dumps({"error": "not found"}))
+        # Sirve la propia app (index.html y lo que haya al lado) como
+        # http://localhost:PORT/ — necesario para el modo multi-chart
+        # (layout=2/4): Chrome bloquea iframes file://→file://, pero no
+        # http://localhost→http://localhost. Abrir http://localhost:8787/
+        # en vez de doble-clickear index.html soluciona eso.
+        self._send_static(parsed.path)
+
+    def _send_static(self, url_path):
+        rel_path = (url_path or "/").lstrip("/")
+        if rel_path == "":
+            rel_path = "index.html"
+        full_path = os.path.normpath(os.path.join(APP_DIR, rel_path))
+        if not full_path.startswith(APP_DIR) or not os.path.isfile(full_path):
+            self._send_json(404, json.dumps({"error": "not found"}))
+            return
+        ext = os.path.splitext(full_path)[1]
+        content_type = STATIC_MIME_TYPES.get(ext, "application/octet-stream")
+        with open(full_path, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_message(self, fmt, *args):
         print(f"[bridge] {self.address_string()} - {fmt % args}")
