@@ -2842,7 +2842,11 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   // adentro del día de trading correcto, sin depender de qué vela haya.
   const prevEndTime=wtTimestampSameCalDay(dateKeys[idx-1]+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
   const todayStartTime=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.start[0], ORG_SESSION.start[1]);
-  if (todayStartTime > lastTime) return; // la sesión de hoy todavía no abrió
+  // En TF grandes (8H, 12H...) la última vela puede abrir ANTES de las
+  // 9:30 pero seguir cubriendo ese horario (p.ej. una vela de 8H que
+  // arranca a las 9:00 llega hasta las 17:00) — comparar solo contra el
+  // horario de apertura de esa vela decía "todavía no abrió" por error.
+  if (todayStartTime > lastTime + barStep) return; // la sesión de hoy todavía no abrió
 
   const cacheKey = `${STATE.symbol}|${todayKey}`;
   let cached = _wtOrgCache[cacheKey];
