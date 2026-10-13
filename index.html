@@ -1215,6 +1215,38 @@ const CHART_SETTINGS_DEFAULTS = {
   crosshairColor:'#c9a84c', crosshairStyle:2,
   visibleTFs: ALL_TIMEFRAMES.map(t=>t.tf),
 };
+// Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
+// CISD. Los nombres de los inputs son los mismos que en el Pine original
+// (grupos "HTF Sweep" / "CISD" / filtros sueltos) para los que SÍ se portan
+// en este paso; el resto (Trading Boxes, SD Projections, FVG, intra-HTF)
+// queda afuera hasta los pasos siguientes.
+// Colores como rgba() listos para usar directo en el SVG (consistente con
+// cómo wtLine ya recibe el color). El 4to parámetro de color.rgb() en Pine
+// es TRANSPARENCIA 0-100 (0=opaco), no alpha — color_cisd_bear=rgb(242,54,
+// 69,0) es rojo totalmente OPACO, no invisible.
+const SNIPER_DEFAULTS = {
+  enabled:false,
+  mostrarAlcista:true, mostrarBajista:true,
+  colorSweepLow:'rgba(255,255,255,0.79)',  // blanco, 21% transparencia
+  colorSweepHigh:'rgba(255,255,255,0.90)', // blanco, 10% transparencia
+  anchoLineaSweep:1, margenReclamo:4.0,
+  showCisdLine:true,
+  colorCisdBull:'rgba(0,0,255,1)',   // color.blue, 0% transparencia
+  colorCisdBear:'rgba(242,54,69,1)', // 0% transparencia
+  anchoCisd:2, largoCisd:14,
+  maxSetupAge:20, maxHtfVisibles:1,
+  // Paso 2: FVG en M15 y H4 únicamente (el Pine original tiene 7 TF, acá
+  // se portan solo los dos que el filtro de confluencia va a usar).
+  hideFilledBull:true, hideFilledBear:true,
+  showM15Bull:true, showM15Bear:true, m15Count:4,
+  m15BullColor:'rgba(76,175,80,0.15)', m15BearColor:'rgba(120,123,134,0.15)',
+  showH4Bull:true, showH4Bear:true, h4Count:2,
+  h4BullColor:'rgba(128,222,234,0.12)', h4BearColor:'rgba(156,156,156,0.12)',
+  // Paso 3: filtro de confluencia — el CISD solo confirma si el OB toca un
+  // FVG activo de M15/H4 con penetración suficiente.
+  requireHtfFvg:true, reqFvgM15:true, reqFvgH4:true,
+  fvgMinPenetration:'deep_or_more', // 'any' | 'deep_or_more' | 'through_only'
+};
 const STATE = {
   symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
@@ -1225,6 +1257,7 @@ const STATE = {
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
   }, _wtSaved, { kz: _wtKz }),
+  sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
   // Los presets NO llevan el sufijo de pane (lsKey): un preset guardado en
@@ -1232,7 +1265,9 @@ const STATE = {
   presets: JSON.parse(lsGet('td_presets') || '{}'),
 };
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
+STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
+function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
 function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
 function saveChartSettingsState(){ lsSet(lsKey('td_chart_settings'), JSON.stringify(STATE.chartSettings)); }
@@ -1769,11 +1804,13 @@ function initChart() {
     clearSvgHighlights();
     if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
     renderWatchtower();
+    renderSniper();
   }).observe(container);
 
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
     if (range && range.from < 50) loadMoreHistory();
     renderWatchtower();
+    renderSniper();
   });
 
   // El zoom vertical (arrastrar el eje de precio) cambia el rango de
@@ -1790,9 +1827,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -1806,6 +1843,7 @@ function initChart() {
   }, { passive:true });
 
   initWatchtowerLayer();
+  initSniperLayer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan en cada frame
   // (en vez de perseguir cada gesto posible: zoom, pan, arrastre del eje de
@@ -2324,6 +2362,7 @@ const INDICATOR_DEFS = [
   { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', calc:d=>sma(d,50)  },
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
+  { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -2345,7 +2384,10 @@ function applyIndicators() {
   STATE.indicators.forEach(name=>{
     if(selected.includes(name)) return;
     const def=INDICATOR_DEFS.find(d=>d.name===name);
-    if(def && def.custom){ if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); } }
+    if(def && def.custom){
+      if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
+      else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
+    }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   });
   STATE.indicators=selected; saveState();
@@ -2355,7 +2397,11 @@ function applyIndicators() {
 
 function addIndicatorSeries(name) {
   const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
-  if(def.custom){ if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); } return; }
+  if(def.custom){
+    if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); }
+    else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
+    return;
+  }
   if(overlays[name])return;
   const rawData=window._lastCandles||[]; if(!rawData.length)return;
   const calcData=def.calc(rawData);
@@ -2451,6 +2497,88 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Color</span>
         <input type="color" id="wt-org-color" value="${STATE.watchtower.orgColor}">
       </div>`;
+  } else if (name === 'Sniper') {
+    const sn = STATE.sniper;
+    const sweepLow = snParseRgba(sn.colorSweepLow), sweepHigh = snParseRgba(sn.colorSweepHigh);
+    const cisdBull = snParseRgba(sn.colorCisdBull), cisdBear = snParseRgba(sn.colorCisdBear);
+    body.innerHTML = `
+      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">HTF Sweep</div>
+      <label class="wt-set-row"><span>Detect bullish reversal (low sweep)</span><input type="checkbox" id="sn-mostrar-alcista" ${sn.mostrarAlcista?'checked':''}></label>
+      <label class="wt-set-row"><span>Detect bearish reversal (high sweep)</span><input type="checkbox" id="sn-mostrar-bajista" ${sn.mostrarBajista?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Low sweep color</span>
+        <input type="color" id="sn-color-sweep-low" value="${sweepLow.hex}">
+        <input type="number" id="sn-color-sweep-low-tr" min="0" max="100" step="1" value="${sweepLow.transparency}" style="width:48px" title="Transparencia %">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">High sweep color</span>
+        <input type="color" id="sn-color-sweep-high" value="${sweepHigh.hex}">
+        <input type="number" id="sn-color-sweep-high-tr" min="0" max="100" step="1" value="${sweepHigh.transparency}" style="width:48px" title="Transparencia %">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Sweep line width</span>
+        <input type="number" id="sn-ancho-sweep" min="1" max="5" step="1" value="${sn.anchoLineaSweep}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Reclaim close tolerance margin (points)</span>
+        <input type="number" id="sn-margen-reclamo" min="0" step="0.5" value="${sn.margenReclamo}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">CISD</div>
+      <label class="wt-set-row"><span>Show CISD line</span><input type="checkbox" id="sn-show-cisd" ${sn.showCisdLine?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bullish CISD color</span>
+        <input type="color" id="sn-color-cisd-bull" value="${cisdBull.hex}">
+        <input type="number" id="sn-color-cisd-bull-tr" min="0" max="100" step="1" value="${cisdBull.transparency}" style="width:48px" title="Transparencia %">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bearish CISD color</span>
+        <input type="color" id="sn-color-cisd-bear" value="${cisdBear.hex}">
+        <input type="number" id="sn-color-cisd-bear-tr" min="0" max="100" step="1" value="${cisdBear.transparency}" style="width:48px" title="Transparencia %">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">CISD line width</span>
+        <input type="number" id="sn-ancho-cisd" min="1" max="5" step="1" value="${sn.anchoCisd}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">CISD line length (bars)</span>
+        <input type="number" id="sn-largo-cisd" min="1" max="200" step="1" value="${sn.largoCisd}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">General</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Max bars before pending setup expires</span>
+        <input type="number" id="sn-max-setup-age" min="10" max="1000" step="1" value="${sn.maxSetupAge}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Confirmed HTF-cross setups to keep visible</span>
+        <input type="number" id="sn-max-htf-visibles" min="1" max="200" step="1" value="${sn.maxHtfVisibles}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🎯 Detection Filters</div>
+      <label class="wt-set-row"><span>Require entry level inside active HTF FVG</span><input type="checkbox" id="sn-require-fvg" ${sn.requireHtfFvg?'checked':''}></label>
+      <label class="wt-set-row"><span>&nbsp;&nbsp;· use M15 FVG</span><input type="checkbox" id="sn-req-fvg-m15" ${sn.reqFvgM15?'checked':''}></label>
+      <label class="wt-set-row"><span>&nbsp;&nbsp;· use H4 FVG</span><input type="checkbox" id="sn-req-fvg-h4" ${sn.reqFvgH4?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Min penetration bucket</span>
+        <select id="sn-fvg-min-pen" class="dtb-select" style="flex:1;">
+          <option value="any" ${sn.fvgMinPenetration==='any'?'selected':''}>any</option>
+          <option value="deep_or_more" ${sn.fvgMinPenetration==='deep_or_more'?'selected':''}>deep_or_more</option>
+          <option value="through_only" ${sn.fvgMinPenetration==='through_only'?'selected':''}>through_only</option>
+        </select>
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · Display</div>
+      <label class="wt-set-row"><span>Hide filled 🟢 (bull)</span><input type="checkbox" id="sn-hide-filled-bull" ${sn.hideFilledBull?'checked':''}></label>
+      <label class="wt-set-row"><span>Hide filled 🔘 (bear)</span><input type="checkbox" id="sn-hide-filled-bear" ${sn.hideFilledBear?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · M15</div>
+      <label class="wt-set-row"><span>Show M15 🟢</span><input type="checkbox" id="sn-show-m15-bull" ${sn.showM15Bull?'checked':''}></label>
+      <label class="wt-set-row"><span>Show M15 🔘</span><input type="checkbox" id="sn-show-m15-bear" ${sn.showM15Bear?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (cuántos mostrar)</span><input type="number" id="sn-m15-count" min="1" max="20" step="1" value="${sn.m15Count}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-m15-bull-color" value="${snParseRgba(sn.m15BullColor).hex}"><input type="number" id="sn-m15-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BullColor).transparency}" style="width:48px" title="Transparencia %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-m15-bear-color" value="${snParseRgba(sn.m15BearColor).hex}"><input type="number" id="sn-m15-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BearColor).transparency}" style="width:48px" title="Transparencia %"></div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · H4</div>
+      <label class="wt-set-row"><span>Show H4 🟢</span><input type="checkbox" id="sn-show-h4-bull" ${sn.showH4Bull?'checked':''}></label>
+      <label class="wt-set-row"><span>Show H4 🔘</span><input type="checkbox" id="sn-show-h4-bear" ${sn.showH4Bear?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (cuántos mostrar)</span><input type="number" id="sn-h4-count" min="1" max="20" step="1" value="${sn.h4Count}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-h4-bull-color" value="${snParseRgba(sn.h4BullColor).hex}"><input type="number" id="sn-h4-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BullColor).transparency}" style="width:48px" title="Transparencia %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-h4-bear-color" value="${snParseRgba(sn.h4BearColor).hex}"><input type="number" id="sn-h4-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BearColor).transparency}" style="width:48px" title="Transparencia %"></div>`;
   } else {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     const style = getIndicatorStyle(name, def);
@@ -2491,6 +2619,39 @@ function saveIndicatorSettings() {
     if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
     saveWatchtowerState();
     renderWatchtower();
+  } else if (_indSettingsTarget === 'Sniper') {
+    const g = id => document.getElementById(id);
+    STATE.sniper.mostrarAlcista = g('sn-mostrar-alcista').checked;
+    STATE.sniper.mostrarBajista = g('sn-mostrar-bajista').checked;
+    STATE.sniper.colorSweepLow  = snRgba(g('sn-color-sweep-low').value, Number(g('sn-color-sweep-low-tr').value)||0);
+    STATE.sniper.colorSweepHigh = snRgba(g('sn-color-sweep-high').value, Number(g('sn-color-sweep-high-tr').value)||0);
+    STATE.sniper.anchoLineaSweep = Math.max(1, Math.min(5, Number(g('sn-ancho-sweep').value)||1));
+    STATE.sniper.margenReclamo  = Math.max(0, Number(g('sn-margen-reclamo').value)||0);
+    STATE.sniper.showCisdLine   = g('sn-show-cisd').checked;
+    STATE.sniper.colorCisdBull  = snRgba(g('sn-color-cisd-bull').value, Number(g('sn-color-cisd-bull-tr').value)||0);
+    STATE.sniper.colorCisdBear  = snRgba(g('sn-color-cisd-bear').value, Number(g('sn-color-cisd-bear-tr').value)||0);
+    STATE.sniper.anchoCisd      = Math.max(1, Math.min(5, Number(g('sn-ancho-cisd').value)||1));
+    STATE.sniper.largoCisd      = Math.max(1, Math.min(200, Number(g('sn-largo-cisd').value)||14));
+    STATE.sniper.maxSetupAge    = Math.max(10, Math.min(1000, Number(g('sn-max-setup-age').value)||20));
+    STATE.sniper.maxHtfVisibles = Math.max(1, Math.min(200, Number(g('sn-max-htf-visibles').value)||1));
+    STATE.sniper.requireHtfFvg = g('sn-require-fvg').checked;
+    STATE.sniper.reqFvgM15 = g('sn-req-fvg-m15').checked;
+    STATE.sniper.reqFvgH4 = g('sn-req-fvg-h4').checked;
+    STATE.sniper.fvgMinPenetration = g('sn-fvg-min-pen').value;
+    STATE.sniper.hideFilledBull = g('sn-hide-filled-bull').checked;
+    STATE.sniper.hideFilledBear = g('sn-hide-filled-bear').checked;
+    STATE.sniper.showM15Bull = g('sn-show-m15-bull').checked;
+    STATE.sniper.showM15Bear = g('sn-show-m15-bear').checked;
+    STATE.sniper.m15Count = Math.max(1, Math.min(20, Number(g('sn-m15-count').value)||4));
+    STATE.sniper.m15BullColor = snRgba(g('sn-m15-bull-color').value, Number(g('sn-m15-bull-color-tr').value)||0);
+    STATE.sniper.m15BearColor = snRgba(g('sn-m15-bear-color').value, Number(g('sn-m15-bear-color-tr').value)||0);
+    STATE.sniper.showH4Bull = g('sn-show-h4-bull').checked;
+    STATE.sniper.showH4Bear = g('sn-show-h4-bear').checked;
+    STATE.sniper.h4Count = Math.max(1, Math.min(20, Number(g('sn-h4-count').value)||2));
+    STATE.sniper.h4BullColor = snRgba(g('sn-h4-bull-color').value, Number(g('sn-h4-bull-color-tr').value)||0);
+    STATE.sniper.h4BearColor = snRgba(g('sn-h4-bear-color').value, Number(g('sn-h4-bear-color-tr').value)||0);
+    saveSniperState();
+    renderSniper();
   } else {
     const colorEl=document.getElementById('ind-style-color');
     const widthEl=document.getElementById('ind-style-width');
@@ -2513,7 +2674,10 @@ function saveIndicatorSettings() {
 
 function removeIndicator(name){
   const def=INDICATOR_DEFS.find(d=>d.name===name);
-  if(def && def.custom){ if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); } }
+  if(def && def.custom){
+    if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); }
+    else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
+  }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
 }
@@ -2628,7 +2792,8 @@ function hitTestIndicatorRegions(mx,my){
   return null;
 }
 
-function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke){
+function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke,indName){
+  indName = indName || 'Watchtower';
   const x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
   const y1=candleSeries.priceToCoordinate(top), y2=candleSeries.priceToCoordinate(bottom);
   if(x1===null||x2===null||y1===null||y2===null) return;
@@ -2638,11 +2803,12 @@ function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke){
   el.setAttribute('fill',fill); el.setAttribute('fill-opacity',opacity);
   if(stroke==='none'){ el.setAttribute('stroke','none'); }
   else { el.setAttribute('stroke',stroke||fill); el.setAttribute('stroke-opacity','0.5'); el.setAttribute('stroke-width','1'); }
-  tagIndicatorEl(el,'Watchtower');
+  tagIndicatorEl(el,indName);
   svg.appendChild(el);
-  registerIndicatorHit('Watchtower', {kind:'rect', x1:Math.min(x1,x2), y1:Math.min(y1,y2), x2:Math.max(x1,x2), y2:Math.max(y1,y2), tol:3});
+  registerIndicatorHit(indName, {kind:'rect', x1:Math.min(x1,x2), y1:Math.min(y1,y2), x2:Math.max(x1,x2), y2:Math.max(y1,y2), tol:3});
 }
-function wtLine(svg,t1,t2,y,color,width,dash){
+function wtLine(svg,t1,t2,y,color,width,dash,indName){
+  indName = indName || 'Watchtower';
   const x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
   const yy=candleSeries.priceToCoordinate(y);
   if(x1===null||x2===null||yy===null) return;
@@ -2650,7 +2816,7 @@ function wtLine(svg,t1,t2,y,color,width,dash){
   el.setAttribute('x1',x1); el.setAttribute('x2',x2); el.setAttribute('y1',yy); el.setAttribute('y2',yy);
   el.setAttribute('stroke',color); el.setAttribute('stroke-width',width||1);
   if(dash) el.setAttribute('stroke-dasharray',dash);
-  tagIndicatorEl(el,'Watchtower');
+  tagIndicatorEl(el,indName);
   svg.appendChild(el);
   // Trazo invisible mucho más ancho superpuesto: una línea de 1-2px es
   // casi imposible de acertar con el mouse real — esto amplía el área de
@@ -2658,11 +2824,12 @@ function wtLine(svg,t1,t2,y,color,width,dash){
   const hit=document.createElementNS(WT_SVG_NS,'line');
   hit.setAttribute('x1',x1); hit.setAttribute('x2',x2); hit.setAttribute('y1',yy); hit.setAttribute('y2',yy);
   hit.setAttribute('stroke','transparent'); hit.setAttribute('stroke-width','12');
-  tagIndicatorEl(hit,'Watchtower');
+  tagIndicatorEl(hit,indName);
   svg.appendChild(hit);
-  registerIndicatorHit('Watchtower', {kind:'line', x1, x2, y:yy, tol:8});
+  registerIndicatorHit(indName, {kind:'line', x1, x2, y:yy, tol:8});
 }
-function wtLabel(svg,t,y,text,color){
+function wtLabel(svg,t,y,text,color,indName){
+  indName = indName || 'Watchtower';
   const x=chart.timeScale().timeToCoordinate(t), yy=candleSeries.priceToCoordinate(y);
   if(x===null||yy===null) return;
   // Caja invisible detrás del texto: amplía el área de click más allá del
@@ -2671,15 +2838,15 @@ function wtLabel(svg,t,y,text,color){
   hit.setAttribute('x',x); hit.setAttribute('y',yy-13);
   hit.setAttribute('width',Math.max(40,text.length*6)); hit.setAttribute('height','18');
   hit.setAttribute('fill','transparent');
-  tagIndicatorEl(hit,'Watchtower');
+  tagIndicatorEl(hit,indName);
   svg.appendChild(hit);
   const el=document.createElementNS(WT_SVG_NS,'text');
   el.setAttribute('x',x+4); el.setAttribute('y',yy-3);
   el.setAttribute('fill',color); el.setAttribute('font-size','10'); el.setAttribute('font-family',"'DM Mono',monospace");
   el.textContent=text;
-  tagIndicatorEl(el,'Watchtower');
+  tagIndicatorEl(el,indName);
   svg.appendChild(el);
-  registerIndicatorHit('Watchtower', {kind:'rect', x1:x, y1:yy-13, x2:x+Math.max(40,text.length*6), y2:yy+5, tol:0});
+  registerIndicatorHit(indName, {kind:'rect', x1:x, y1:yy-13, x2:x+Math.max(40,text.length*6), y2:yy+5, tol:0});
 }
 
 function wtGroupByDay(candles){
@@ -2935,6 +3102,526 @@ function renderWatchtower(){
 }
 
 // ══════════════════════════════════════════════════════════
+//  SNIPER — port de "ICT Zentinel Sniper 2.0 SD FIX" (Pine v6)
+//  Paso 1: Sweep HTF + CISD únicamente. Sin FVG, sin cajas de trading,
+//  sin proyecciones SD, sin sweeps intra-HTF — eso son pasos siguientes.
+//
+//  Pine corre bar-a-bar en streaming con estado `var` persistente;acá no
+//  tenemos ese motor, así que en cada render se hace un "replay" completo
+//  determinístico de TODO el historial cargado (vela por vela, en el mismo
+//  orden exacto en que aparecen los bloques en el Pine: disparo bull,
+//  disparo bear, validación HTF, expiración, re-anclaje+confirmación,
+//  fakeout, pruning). El resultado final es el mismo que el streaming de
+//  TradingView, solo cambia CÓMO se llega a él.
+// ══════════════════════════════════════════════════════════
+function initSniperLayer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:16;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._sniperSvg = svg;
+  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  new ResizeObserver(syncSize).observe(container);
+  syncSize();
+}
+
+// Pine expone "color + transparencia" como un solo picker (input.color);
+// en HTML no existe ese control, así que lo separamos en dos inputs (hex +
+// % transparencia) y los componemos a un rgba() para pasarle a wtLine/wtRect.
+function snRgba(hex, transparencyPct){
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  const alpha = Math.max(0, Math.min(100, 100-transparencyPct))/100;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function snParseRgba(rgba){
+  const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/.exec(rgba||'');
+  if (!m) return { hex:'#ffffff', transparency:0 };
+  const toHex = n => Number(n).toString(16).padStart(2,'0');
+  const alpha = m[4]===undefined ? 1 : Number(m[4]);
+  return { hex:`#${toHex(m[1])}${toHex(m[2])}${toHex(m[3])}`, transparency: Math.round((1-alpha)*100) };
+}
+
+// Tabla EXACTA del switch del Pine (tf_actual -> tf_htf). Los timeframes de
+// ChartZentinel que no están en esta tabla (6m,10m,12m,20m,2H,3H,6H,8H,12H,
+// D,W,M) no tienen HTF asociado en el indicador original — en esos TF el
+// Pine simplemente no corre su lógica de HTF, así que acá tampoco.
+const SNIPER_HTF_MAP = {
+  '1min':  { kind:'fixed', sec:15*60   }, // "1" -> "15"
+  '2min':  { kind:'fixed', sec:16*60   }, // "2" -> "16" (TF no estándar; puede no haber datos de 16min)
+  '3min':  { kind:'fixed', sec:30*60   }, // "3" -> "30"
+  '4min':  { kind:'fixed', sec:30*60   }, // "4" -> "30"
+  '5min':  { kind:'fixed', sec:3600    }, // "5" -> "60"
+  '15min': { kind:'fixed', sec:4*3600  }, // "15" -> "240"
+  '30min': { kind:'day'   },              // "30" -> "D"
+  '1h':    { kind:'day'   },              // "60" -> "D"
+  '4h':    { kind:'week'  },              // "240" -> "W"
+};
+
+// Misma convención que ya usa Watchtower para "D"/"W": el día del bróker
+// arranca 18:00 NY, no medianoche — reutilizamos wtDayKey/wtWeekKey en vez
+// de inventar una alineación nueva.
+function snHtfBucketKey(t, cfg){
+  if (cfg.kind==='fixed') return Math.floor(t/cfg.sec)*cfg.sec;
+  if (cfg.kind==='day') return wtDayKey(t);
+  return wtWeekKey(t);
+}
+
+// Agrupa las velas cargadas en períodos HTF y devuelve, para cada vela i,
+// el estado que tendría el Pine en ese momento: el high/low/open "corridos"
+// del período HTF que se está formando, y los del período HTF anterior YA
+// cerrado (equivalente a htf_high_run/htf_high_prev, etc, y new_htf_bar).
+function snBuildHtfRunning(candles, cfg){
+  const n = candles.length;
+  const curHigh=new Array(n), curLow=new Array(n), curOpen=new Array(n), curKey=new Array(n);
+  const prevHigh=new Array(n), prevLow=new Array(n), prevOpen=new Array(n), prevClose=new Array(n), prevKey=new Array(n);
+  const newHtfBar=new Array(n);
+  let curH=null,curL=null,curO=null,curK=null;
+  let pH=null,pL=null,pO=null,pC=null,pK=null;
+  for (let i=0;i<n;i++){
+    const c=candles[i];
+    const key=snHtfBucketKey(c.time, cfg);
+    if (curK===null || key!==curK){
+      newHtfBar[i]=true;
+      if (curK!==null){ pH=curH; pL=curL; pO=curO; pC=candles[i-1].close; pK=curK; }
+      curH=c.high; curL=c.low; curO=c.open; curK=key;
+    } else {
+      newHtfBar[i]=false;
+      curH=Math.max(curH,c.high); curL=Math.min(curL,c.low);
+    }
+    curHigh[i]=curH; curLow[i]=curL; curOpen[i]=curO; curKey[i]=curK;
+    prevHigh[i]=pH; prevLow[i]=pL; prevOpen[i]=pO; prevClose[i]=pC; prevKey[i]=pK;
+    newHtfBar[i]=newHtfBar[i];
+  }
+  return {curHigh,curLow,curOpen,curKey,prevHigh,prevLow,prevOpen,prevClose,prevKey,newHtfBar};
+}
+
+// f_run del Pine: busca la racha de velas de color contrario (hasta 20
+// velas) empezando `fromK` velas atrás de la vela i. Devuelve el offset de
+// la vela más vieja de la racha (cnt), el de la más nueva (foundK) y el
+// low/high extremo de toda la racha.
+function snRun(candles, i, wantBearishRun, fromK){
+  let foundK=-1;
+  for (let k=fromK; k<=fromK+20; k++){
+    const idx=i-k;
+    if (idx<0) break;
+    const c=candles[idx];
+    const isC = wantBearishRun ? (c.close<c.open) : (c.close>c.open);
+    if (isC){ foundK=k; break; }
+  }
+  let cnt=foundK, extreme=null;
+  if (foundK>=0){
+    extreme = wantBearishRun ? candles[i-foundK].low : candles[i-foundK].high;
+    for (let k=foundK+1; k<=foundK+20; k++){
+      const idx=i-k;
+      if (idx<0) break;
+      const c=candles[idx];
+      const isC2 = wantBearishRun ? (c.close<c.open) : (c.close>c.open);
+      if (isC2){
+        cnt=k;
+        extreme = wantBearishRun ? Math.min(extreme,c.low) : Math.max(extreme,c.high);
+      } else break;
+    }
+  }
+  return {cnt, foundK, extreme};
+}
+
+// Recorre el order block (de foundK a cnt) y devuelve: el extremo contrario
+// del run (obhigh para bull / oblow para bear) y el body (min u max de
+// open/close) de la vela con el wick más profundo — usados por el filtro
+// FVG en el paso siguiente, no se dibujan en el Paso 1.
+function snComputeOB(candles, i, foundK, cnt, isBull){
+  let obExtreme = isBull ? candles[i-foundK].high : candles[i-foundK].low;
+  let deepExtreme = isBull ? candles[i-foundK].low : candles[i-foundK].high;
+  let bodyext = isBull ? Math.min(candles[i-foundK].open,candles[i-foundK].close) : Math.max(candles[i-foundK].open,candles[i-foundK].close);
+  for (let k=foundK; k<=cnt; k++){
+    const idx=i-k;
+    const c=candles[idx];
+    if (isBull){
+      obExtreme = Math.max(obExtreme, c.high);
+      if (c.low < deepExtreme){ deepExtreme=c.low; bodyext=Math.min(c.open,c.close); }
+    } else {
+      obExtreme = Math.min(obExtreme, c.low);
+      if (c.high > deepExtreme){ deepExtreme=c.high; bodyext=Math.max(c.open,c.close); }
+    }
+  }
+  return {obExtreme, bodyext};
+}
+
+// Replay completo: reproduce, en el mismo orden que el Pine ejecuta sus
+// bloques en cada vela, toda la máquina de estados de sweep+CISD.
+function snReplay(candles, cfg, p){
+  const n = candles.length;
+  const barStep = n>1 ? (candles[1].time-candles[0].time) : 60;
+  const htfSeconds = cfg.kind==='fixed' ? cfg.sec : (cfg.kind==='day'?86400:604800);
+  const velasPorHtf = Math.max(1, Math.round(htfSeconds/barStep));
+  const R = snBuildHtfRunning(candles, cfg);
+
+  const sweepUpNow=new Array(n), sweepDownNow=new Array(n);
+  for (let i=0;i<n;i++){
+    const c=candles[i];
+    sweepUpNow[i]   = R.prevHigh[i]!=null && R.curHigh[i]>R.prevHigh[i] && c.close<R.prevHigh[i]+p.margenReclamo && R.curOpen[i]<R.prevHigh[i];
+    sweepDownNow[i]  = R.prevLow[i]!=null  && R.curLow[i]<R.prevLow[i]   && c.close>R.prevLow[i]-p.margenReclamo  && R.curOpen[i]>R.prevLow[i];
+  }
+
+  const bullSetups=[], bearSetups=[];
+  function removeBySameLevel(arr, nivel){ for (let j=arr.length-1;j>=0;j--) if (arr[j].setNivel===nivel) arr.splice(j,1); }
+
+  // Paso 3: ¿el rango del order block toca un FVG de M15/H4 que ya existía
+  // (y seguía activo) en el momento `atTime` de la propia historia que se
+  // está reproduciendo? — no "está activo ahora", sino "estaba activo en
+  // esa barra pasada", porque estamos reconstruyendo todo el historial.
+  function fvgOkAt(extreme, obExtreme2, bodyExt, isBull, atTime){
+    if (!p.requireHtfFvg) return true;
+    const sources = [];
+    if (p.reqFvgM15 && p.m15Fvgs && p.fvgM15?.length){
+      sources.push(snActiveFvgsAtTime(isBull?p.m15Fvgs.bull:p.m15Fvgs.bear, p.fvgM15, atTime));
+    }
+    if (p.reqFvgH4 && p.h4Fvgs && p.fvgH4?.length){
+      sources.push(snActiveFvgsAtTime(isBull?p.h4Fvgs.bull:p.h4Fvgs.bear, p.fvgH4, atTime));
+    }
+    if (!sources.length) return false; // pidió filtro pero no hay ningún TF habilitado/con datos -> no confirma, igual que el Pine sin FVGs activos
+    const lo = isBull ? extreme : obExtreme2;
+    const hi = isBull ? obExtreme2 : extreme;
+    return snRangeTouchesHtfFvg(lo, hi, bodyExt, isBull, sources, p.fvgMinPenetration);
+  }
+
+  function findSweepLine(i, nivel, isBull){
+    const pk=R.prevKey[i], ck=R.curKey[i];
+    if (pk!=null) for (let k=0;k<=500;k++){
+      const idx=i-k;
+      if (idx<0) break;
+      const c=candles[idx];
+      if (c.time<pk) break;
+      if (c.time>=pk && c.time<ck){
+        const touched = isBull ? (c.low<=nivel) : (c.high>=nivel);
+        if (touched) return { start:idx, end:idx+velasPorHtf };
+      }
+    }
+    return { start:i, end:i+velasPorHtf };
+  }
+
+  function pruneConfirmed(){
+    for (let guard=0; guard<200; guard++){
+      const all = bullSetups.map(s=>({s,arr:bullSetups})).concat(bearSetups.map(s=>({s,arr:bearSetups})))
+        .filter(x=>x.s.cisdLevel!=null);
+      if (all.length <= p.maxHtfVisibles) break;
+      all.sort((a,b)=>a.s.confirmBar-b.s.confirmBar);
+      const oldest = all[0];
+      const idx = oldest.arr.indexOf(oldest.s);
+      if (idx<0) break;
+      oldest.arr.splice(idx,1);
+    }
+  }
+
+  for (let i=0;i<n;i++){
+    const c=candles[i];
+
+    // DISPARO BULL
+    if (p.mostrarAlcista && sweepDownNow[i] && !(i>0 && sweepDownNow[i-1]) && !R.newHtfBar[i]){
+      const nivel = R.prevLow[i];
+      removeBySameLevel(bullSetups, nivel);
+      const r = snRun(candles, i, true, 1);
+      if (r.cnt>=0 && (i-r.cnt)>=0){
+        const ob = snComputeOB(candles, i, r.foundK, r.cnt, true);
+        const sweepLn = findSweepLine(i, nivel, true);
+        bullSetups.push({
+          trig:i, sweepStart:sweepLn.start, sweepEnd:sweepLn.end, setNivel:nivel,
+          level:candles[i-r.cnt].open, extreme:r.extreme, anchor:i-r.cnt,
+          obClose:candles[i-r.foundK].close, obWidth:r.cnt-r.foundK+1,
+          obExtreme2:ob.obExtreme, bodyExt:ob.bodyext,
+          pendingHtf:true, confirmBar:-1, cisdLevel:null,
+        });
+      }
+    }
+    // DISPARO BEAR
+    if (p.mostrarBajista && sweepUpNow[i] && !(i>0 && sweepUpNow[i-1]) && !R.newHtfBar[i]){
+      const nivel2 = R.prevHigh[i];
+      removeBySameLevel(bearSetups, nivel2);
+      const r = snRun(candles, i, false, 1);
+      if (r.cnt>=0 && (i-r.cnt)>=0){
+        const ob = snComputeOB(candles, i, r.foundK, r.cnt, false);
+        const sweepLn = findSweepLine(i, nivel2, false);
+        bearSetups.push({
+          trig:i, sweepStart:sweepLn.start, sweepEnd:sweepLn.end, setNivel:nivel2,
+          level:candles[i-r.cnt].open, extreme:r.extreme, anchor:i-r.cnt,
+          obClose:candles[i-r.foundK].close, obWidth:r.cnt-r.foundK+1,
+          obExtreme2:ob.obExtreme, bodyExt:ob.bodyext,
+          pendingHtf:true, confirmBar:-1, cisdLevel:null,
+        });
+      }
+    }
+
+    // VALIDACION HTF (bull y bear)
+    if (R.newHtfBar[i]){
+      for (let j=bullSetups.length-1;j>=0;j--){
+        const s=bullSetups[j]; if (!s.pendingHtf) continue;
+        const ok = R.prevLow[i]<s.setNivel && R.prevClose[i]>s.setNivel-p.margenReclamo && R.prevOpen[i]>s.setNivel;
+        if (ok) s.pendingHtf=false;
+        else if (s.cisdLevel==null) bullSetups.splice(j,1);
+        else s.pendingHtf=false;
+      }
+      for (let j=bearSetups.length-1;j>=0;j--){
+        const s=bearSetups[j]; if (!s.pendingHtf) continue;
+        const ok = R.prevHigh[i]>s.setNivel && R.prevClose[i]<s.setNivel+p.margenReclamo && R.prevOpen[i]<s.setNivel;
+        if (ok) s.pendingHtf=false;
+        else if (s.cisdLevel==null) bearSetups.splice(j,1);
+        else s.pendingHtf=false;
+      }
+    }
+
+    // EXPIRACION
+    for (let j=bullSetups.length-1;j>=0;j--){ const s=bullSetups[j]; if (s.cisdLevel==null && (i-s.trig)>p.maxSetupAge) bullSetups.splice(j,1); }
+    for (let j=bearSetups.length-1;j>=0;j--){ const s=bearSetups[j]; if (s.cisdLevel==null && (i-s.trig)>p.maxSetupAge) bearSetups.splice(j,1); }
+
+    // RE-ANCLAJE + CONFIRMACION BULL
+    for (let j=bullSetups.length-1;j>=0;j--){
+      const s=bullSetups[j];
+      if (s.cisdLevel!=null || i<=s.trig) continue;
+      if (i-1>=0 && candles[i-1].close<candles[i-1].open && candles[i-1].low<=s.extreme){
+        const r = snRun(candles, i, true, 1);
+        if (r.cnt>=0 && (i-r.cnt)>=0){
+          const ob = snComputeOB(candles, i, r.foundK, r.cnt, true);
+          s.level=candles[i-r.cnt].open; s.extreme=r.extreme; s.anchor=i-r.cnt;
+          s.obClose=candles[i-r.foundK].close; s.obWidth=r.cnt-r.foundK+1;
+          s.obExtreme2=ob.obExtreme; s.bodyExt=ob.bodyext;
+        }
+      }
+      const fvgOk = fvgOkAt(s.extreme, s.obExtreme2, s.bodyExt, true, c.time);
+      if (c.close>c.open && c.close>s.level && fvgOk){ s.cisdLevel=s.level; s.confirmBar=i; }
+    }
+    // RE-ANCLAJE + CONFIRMACION BEAR
+    for (let j=bearSetups.length-1;j>=0;j--){
+      const s=bearSetups[j];
+      if (s.cisdLevel!=null || i<=s.trig) continue;
+      if (i-1>=0 && candles[i-1].close>candles[i-1].open && candles[i-1].high>=s.extreme){
+        const r = snRun(candles, i, false, 1);
+        if (r.cnt>=0 && (i-r.cnt)>=0){
+          const ob = snComputeOB(candles, i, r.foundK, r.cnt, false);
+          s.level=candles[i-r.cnt].open; s.extreme=r.extreme; s.anchor=i-r.cnt;
+          s.obClose=candles[i-r.foundK].close; s.obWidth=r.cnt-r.foundK+1;
+          s.obExtreme2=ob.obExtreme; s.bodyExt=ob.bodyext;
+        }
+      }
+      const fvgOk2 = fvgOkAt(s.extreme, s.obExtreme2, s.bodyExt, false, c.time);
+      if (c.close<c.open && c.close<s.level && fvgOk2){ s.cisdLevel=s.level; s.confirmBar=i; }
+    }
+
+    // FAKEOUT
+    for (let j=bullSetups.length-1;j>=0;j--){ const s=bullSetups[j]; if (s.confirmBar>=0 && (i-s.confirmBar)<=p.largoCisd && c.close<s.extreme-p.margenReclamo) bullSetups.splice(j,1); }
+    for (let j=bearSetups.length-1;j>=0;j--){ const s=bearSetups[j]; if (s.confirmBar>=0 && (i-s.confirmBar)<=p.largoCisd && c.close>s.extreme+p.margenReclamo) bearSetups.splice(j,1); }
+
+    pruneConfirmed();
+  }
+
+  return { bullSetups, bearSetups, barStep };
+}
+
+// ══════════════════════════════════════════════════════════
+//  SNIPER — FVG (Paso 2): M15 y H4 únicamente, independientes del TF
+//  que esté mirando el chart (igual que el request.security del Pine).
+//  Se piden aparte al puente, se cachean por símbolo, y se refrescan solos
+//  cada 5 minutos — no en cada redibujo (eso sería un pedido de red por
+//  cada frame de drag/scroll, carísimo).
+// ══════════════════════════════════════════════════════════
+const _snFvgCache = {};
+const SN_FVG_REFRESH_MS = 5*60*1000;
+
+async function snFetchTf(symbol, interval, bars){
+  try {
+    const res = await fetch(`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}`);
+    const json = await res.json();
+    if (json.error || !Array.isArray(json.bars)) return null;
+    return json.bars;
+  } catch(e){ return null; }
+}
+
+async function snEnsureFvgData(symbol){
+  const entry = _snFvgCache[symbol];
+  const [m15, h4] = await Promise.all([
+    snFetchTf(symbol, '15min', 1000),
+    snFetchTf(symbol, '4h', 1000),
+  ]);
+  if (m15) entry.m15 = m15;
+  if (h4) entry.h4 = h4;
+  entry.fetchedAt = Date.now();
+  entry.pending = false;
+  renderSniper();
+}
+function snGetFvgData(symbol){
+  let entry = _snFvgCache[symbol];
+  if (!entry){
+    entry = _snFvgCache[symbol] = { m15:[], h4:[], fetchedAt:0, pending:true };
+    snEnsureFvgData(symbol);
+  } else if (!entry.pending && Date.now()-entry.fetchedAt > SN_FVG_REFRESH_MS){
+    entry.pending = true;
+    snEnsureFvgData(symbol);
+  }
+  return entry;
+}
+
+// Patrón clásico de 3 velas ICT sobre la serie M15/H4 propia (no la del
+// chart principal): gap entre el high de hace 2 velas y el low actual
+// (bull), o al revés (bear). Invalidación por CIERRE (no mecha) más allá
+// del borde — así es como el Pine trata M15/H4 específicamente
+// (use_close_based=true), a diferencia de otros TF del indicador original
+// que no portamos.
+function snDetectFvgs(candles){
+  const bull=[], bear=[];
+  for (let i=2;i<candles.length;i++){
+    const c0=candles[i-2], c2=candles[i];
+    if (c0.high < c2.low)  bull.push({ startIdx:i-2, createIdx:i, top:c2.low, bottom:c0.high, filledIdx:null });
+    if (c0.low  > c2.high) bear.push({ startIdx:i-2, createIdx:i, top:c0.low, bottom:c2.high, filledIdx:null });
+  }
+  function markFilled(list, isBull){
+    list.forEach(f=>{
+      for (let k=f.createIdx+1; k<candles.length; k++){
+        const c=candles[k];
+        const invalid = isBull ? (c.close<f.bottom) : (c.close>f.top);
+        if (invalid){ f.filledIdx=k; break; }
+      }
+    });
+  }
+  markFilled(bull,true); markFilled(bear,false);
+  return {bull,bear};
+}
+
+// ══════════════════════════════════════════════════════════
+//  SNIPER — Paso 3: filtro de confluencia FVG (conecta el FVG del Paso 2
+//  con la confirmación del CISD del Paso 1)
+// ══════════════════════════════════════════════════════════
+
+// Qué FVGs de una lista (M15 o H4, bull o bear) estaban activos en el
+// instante `t` — ya habían nacido y todavía no se habían invalidado. Se usa
+// durante el replay histórico: en la barra i, "activo" significa activo
+// EN ESE MOMENTO del pasado, no activo ahora.
+function snActiveFvgsAtTime(fvgList, mtfCandles, t){
+  const out=[];
+  for (const f of fvgList){
+    const createTime = mtfCandles[f.createIdx].time;
+    if (createTime > t) continue;
+    if (f.filledIdx!=null && mtfCandles[f.filledIdx].time <= t) continue;
+    out.push(f);
+  }
+  return out;
+}
+
+// classify_pen del Pine: qué tan adentro del FVG cerró la vela con el wick
+// más profundo del order block.
+function snClassifyPen(bodyExtreme, top, bottom, wantBullFvg){
+  const frange = top-bottom;
+  if (frange<=0) return 'NONE';
+  if (wantBullFvg){
+    if (bodyExtreme > top) return 'ONLY_WICK';
+    if (bodyExtreme < bottom) return 'THROUGH';
+    return (top-bodyExtreme)/frange < 0.5 ? 'SHALLOW' : 'DEEP';
+  } else {
+    if (bodyExtreme < bottom) return 'ONLY_WICK';
+    if (bodyExtreme > top) return 'THROUGH';
+    return (bodyExtreme-bottom)/frange < 0.5 ? 'SHALLOW' : 'DEEP';
+  }
+}
+function snBucketMeets(bucket, minPenetration){
+  if (minPenetration==='any') return bucket!=='NONE';
+  if (minPenetration==='deep_or_more') return bucket==='DEEP' || bucket==='THROUGH';
+  if (minPenetration==='through_only') return bucket==='THROUGH';
+  return false;
+}
+// range_touches_htf_fvg del Pine: el rango del OB [lo,hi] tiene que TOCAR
+// (overlap) un FVG activo del mismo lado, Y la penetración del candle más
+// profundo del OB tiene que cumplir el mínimo configurado.
+function snRangeTouchesHtfFvg(lo, hi, bodyExtreme, wantBullFvg, fvgSources, minPenetration){
+  for (const list of fvgSources){
+    for (const f of list){
+      if (lo<=f.top && hi>=f.bottom && snBucketMeets(snClassifyPen(bodyExtreme,f.top,f.bottom,wantBullFvg), minPenetration)){
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Los horarios de M15/H4 casi nunca calzan con la grilla de velas del
+// chart principal (si estás mirando en 1H, por ejemplo) — timeToCoordinate
+// devuelve null para un horario que no es una vela real de ESA serie (el
+// mismo bug que ya resolvimos en Watchtower/ORG). Hay que enganchar al
+// candle real más cercano del chart antes de pasarle el tiempo a wtRect.
+function snDrawFvgBoxes(svg, chartCandles, mtfCandles, list, color, showToggle, maxCount, hideFilled, lastTime, barStepMtf){
+  if (!showToggle || !mtfCandles.length) return;
+  let shown = hideFilled ? list.filter(f=>f.filledIdx==null) : list;
+  shown = shown.slice().sort((a,b)=>b.createIdx-a.createIdx).slice(0, maxCount);
+  shown.forEach(f=>{
+    const rawT1 = mtfCandles[f.startIdx].time;
+    const rawT2 = f.filledIdx!=null ? mtfCandles[f.filledIdx].time : (lastTime + 10*barStepMtf);
+    const t1 = wtNearestCandleTime(chartCandles, rawT1);
+    const t2 = wtNearestCandleTime(chartCandles, rawT2);
+    wtRect(svg, t1, t2, f.top, f.bottom, color, 1, 'none', 'Sniper');
+  });
+}
+
+function renderSniper(){
+  if (!window._sniperSvg) return;
+  const svg = window._sniperSvg;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sniper');
+  if (!STATE.sniper.enabled) return;
+  const candles = window._lastCandles||[];
+  if (candles.length<5) return;
+  const sn = STATE.sniper;
+  const lastTime = candles[candles.length-1].time;
+
+  // FVG (M15/H4) primero, para que las cajas queden DEBAJO de las líneas
+  // de sweep/CISD en el orden de dibujo del SVG (z-order natural). Se
+  // calculan acá (una sola vez) y se reusan para el filtro de confluencia
+  // del replay de abajo — no tiene sentido detectar los FVG dos veces.
+  const fvgData = snGetFvgData(STATE.symbol);
+  const m15Fvgs = fvgData.m15.length ? snDetectFvgs(fvgData.m15) : {bull:[],bear:[]};
+  const h4Fvgs  = fvgData.h4.length  ? snDetectFvgs(fvgData.h4)  : {bull:[],bear:[]};
+  if (fvgData.m15.length){
+    const m15Step = fvgData.m15[1].time - fvgData.m15[0].time;
+    snDrawFvgBoxes(svg, candles, fvgData.m15, m15Fvgs.bull, sn.m15BullColor, sn.showM15Bull, sn.m15Count, sn.hideFilledBull, lastTime, m15Step);
+    snDrawFvgBoxes(svg, candles, fvgData.m15, m15Fvgs.bear, sn.m15BearColor, sn.showM15Bear, sn.m15Count, sn.hideFilledBear, lastTime, m15Step);
+  }
+  if (fvgData.h4.length){
+    const h4Step = fvgData.h4[1].time - fvgData.h4[0].time;
+    snDrawFvgBoxes(svg, candles, fvgData.h4, h4Fvgs.bull, sn.h4BullColor, sn.showH4Bull, sn.h4Count, sn.hideFilledBull, lastTime, h4Step);
+    snDrawFvgBoxes(svg, candles, fvgData.h4, h4Fvgs.bear, sn.h4BearColor, sn.showH4Bear, sn.h4Count, sn.hideFilledBear, lastTime, h4Step);
+  }
+
+  const cfg = SNIPER_HTF_MAP[STATE.timeframe];
+  if (!cfg) return; // TF sin HTF en el Pine original -> el sweep/CISD no corre, igual que en TV (el FVG arriba sí queda)
+  const { bullSetups, bearSetups, barStep } = snReplay(candles, cfg, {
+    mostrarAlcista: sn.mostrarAlcista, mostrarBajista: sn.mostrarBajista,
+    margenReclamo: sn.margenReclamo, maxSetupAge: sn.maxSetupAge,
+    maxHtfVisibles: sn.maxHtfVisibles, largoCisd: sn.largoCisd,
+    requireHtfFvg: sn.requireHtfFvg, reqFvgM15: sn.reqFvgM15, reqFvgH4: sn.reqFvgH4,
+    fvgMinPenetration: sn.fvgMinPenetration,
+    fvgM15: fvgData.m15, fvgH4: fvgData.h4, m15Fvgs, h4Fvgs,
+  });
+
+  function draw(setups, isBull){
+    const sweepColor = isBull ? sn.colorSweepLow : sn.colorSweepHigh;
+    const cisdColor  = isBull ? sn.colorCisdBull : sn.colorCisdBear;
+    setups.forEach(s=>{
+      if (s.sweepStart!=null && s.sweepStart < candles.length){
+        const t1 = candles[s.sweepStart].time;
+        const t2 = t1 + (s.sweepEnd - s.sweepStart) * barStep;
+        wtLine(svg, t1, t2, s.setNivel, sweepColor, sn.anchoLineaSweep, s.pendingHtf?'2,2':null, 'Sniper');
+      }
+      if (sn.showCisdLine && s.anchor>=0 && s.anchor<candles.length){
+        const t1 = candles[s.anchor].time;
+        const t2 = t1 + sn.largoCisd*barStep;
+        const confirmed = s.cisdLevel!=null;
+        wtLine(svg, t1, t2, s.level, cisdColor, sn.anchoCisd, confirmed?null:'2,2', 'Sniper');
+        wtLabel(svg, t2, s.level, confirmed?'CISD':'CISD?', cisdColor, 'Sniper');
+      }
+    });
+  }
+  draw(bullSetups, true);
+  draw(bearSetups, false);
+}
+
+// ══════════════════════════════════════════════════════════
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id).classList.add('open');}
@@ -3096,6 +3783,7 @@ function applyPreset(name){
   setActiveTF(STATE.timeframe);
   renderIndList();
   renderWatchtower();
+  renderSniper();
   fillChartSettingsForm(STATE.chartSettings);
 }
 
@@ -3170,6 +3858,7 @@ function renderSeries(timeframe){
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
   renderWatchtower();
+  renderSniper();
 }
 
 // Recalcula EMA/SMA/VWAP sobre el set completo de velas cargadas — si no,
