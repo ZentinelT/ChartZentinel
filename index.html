@@ -3740,6 +3740,7 @@ function captureCurrentDesign(){
     indicators: STATE.indicators,
     indicatorStyles: STATE.indicatorStyles,
     watchtower: STATE.watchtower,
+    sniper: STATE.sniper,
   };
 }
 
@@ -3782,12 +3783,15 @@ function applyPreset(name){
   STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(JSON.stringify(p.chartSettings || {})));
   STATE.indicatorStyles = JSON.parse(JSON.stringify(p.indicatorStyles || {}));
   STATE.watchtower = JSON.parse(JSON.stringify(p.watchtower || STATE.watchtower));
+  STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(p.sniper || {})));
   STATE.indicators = [...(p.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
+  STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 
   saveChartSettingsState();
   saveIndicatorStylesState();
   saveWatchtowerState();
+  saveSniperState();
   saveState();
 
   Object.keys(overlays).forEach(n => { try { chart.removeSeries(overlays[n]); } catch(e){} delete overlays[n]; });
