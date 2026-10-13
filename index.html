@@ -2763,6 +2763,23 @@ function renderWtMNO(svg, byDate, lastTime){
   wtLabel(svg, lastTime, mnoCandle.open, 'MNO', '#80deea');
 }
 
+// lightweight-charts se niega a ubicar una coordenada X para un horario que
+// no corresponde a ninguna vela real (timeToCoordinate devuelve null) — y
+// los horarios "calculados" (9:30, 16:15 exactos) casi nunca calzan con el
+// borde de una vela salvo en TF chicos. Por eso toda vez que se vaya a
+// DIBUJAR algo en uno de esos horarios, hay que engancharlo a la vela real
+// más cercana (el precio ya se resolvió aparte, con precisión real, en
+// wtPriceAtBoundary / el fetch de 1min — esto es solo "dónde" plotearlo).
+function wtNearestCandleTime(dayCandles, targetTime){
+  if (!dayCandles.length) return targetTime;
+  let nearest = dayCandles[0].time, bestDiff = Math.abs(nearest - targetTime);
+  for (const c of dayCandles){
+    const diff = Math.abs(c.time - targetTime);
+    if (diff < bestDiff){ bestDiff = diff; nearest = c.time; }
+  }
+  return nearest;
+}
+
 // Devuelve una estimación del precio exacto a `boundaryTime` interpolando
 // dentro de la vela que contiene ese instante (open→close, lineal). Hace
 // falta porque en timeframes grandes (1H, 4H...) puede no existir ninguna
@@ -2783,6 +2800,34 @@ function wtPriceAtBoundary(dayCandles, boundaryTime, barStep){
   return before.length ? before[before.length-1].close : dayCandles[0].open;
 }
 
+// Con velas de 15-20min+ la interpolación lineal de wtPriceAtBoundary puede
+// errarle feo si justo esa vela tuvo un movimiento grande y no lineal (p.ej.
+// el spike típico de la apertura de NY a las 9:30). Para el precio EXACTO
+// de los límites del ORG se le pide al puente la vela de 1 minuto puntual
+// — esa sí siempre cae justo en el horario, sin adivinar nada — y se
+// cachea por símbolo+día para no repetir el pedido en cada redibujo.
+const _wtOrgCache = {};
+async function wtFetchBoundaryPrice(symbol, boundaryTime){
+  try {
+    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=1min&bars=3&before=${boundaryTime+120}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error || !Array.isArray(json.bars) || !json.bars.length) return null;
+    const exact = json.bars.find(b => b.time === boundaryTime);
+    if (exact) return exact.open;
+    const before = json.bars.filter(b=>b.time<=boundaryTime);
+    return before.length ? before[before.length-1].close : null;
+  } catch(e) { return null; }
+}
+async function wtEnsureOrgBoundaries(cacheKey, symbol, prevEndTime, todayStartTime){
+  const [prevClose, todayOpen] = await Promise.all([
+    wtFetchBoundaryPrice(symbol, prevEndTime),
+    wtFetchBoundaryPrice(symbol, todayStartTime),
+  ]);
+  _wtOrgCache[cacheKey] = (prevClose!=null && todayOpen!=null) ? {prevClose, todayOpen} : null;
+  renderWatchtower(); // ya tenemos el dato preciso — redibuja con eso en vez de la aproximación
+}
+
 function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   const todayKey=wtDayKey(lastTime);
   const idx=dateKeys.indexOf(todayKey);
@@ -2798,8 +2843,17 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   const prevEndTime=wtTimestampSameCalDay(dateKeys[idx-1]+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
   const todayStartTime=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.start[0], ORG_SESSION.start[1]);
   if (todayStartTime > lastTime) return; // la sesión de hoy todavía no abrió
-  const prevClose=wtPriceAtBoundary(prevDayCandles, prevEndTime, barStep);
-  const todayOpen=wtPriceAtBoundary(todayDayCandles, todayStartTime, barStep);
+
+  const cacheKey = `${STATE.symbol}|${todayKey}`;
+  let cached = _wtOrgCache[cacheKey];
+  if (cached === undefined) {
+    _wtOrgCache[cacheKey] = null; // evita disparar el mismo fetch de nuevo mientras llega
+    wtEnsureOrgBoundaries(cacheKey, STATE.symbol, prevEndTime, todayStartTime);
+  }
+  // Mientras no llegó (o si falló) la vela de 1min exacta, se aproxima por
+  // interpolación para no dejar el indicador sin dibujar ni un segundo.
+  const prevClose = cached ? cached.prevClose : wtPriceAtBoundary(prevDayCandles, prevEndTime, barStep);
+  const todayOpen  = cached ? cached.todayOpen  : wtPriceAtBoundary(todayDayCandles, todayStartTime, barStep);
   if(prevClose==null || todayOpen==null) return;
   const top=Math.max(prevClose,todayOpen), bottom=Math.min(prevClose,todayOpen), ce=(prevClose+todayOpen)/2;
   const gap=todayOpen-prevClose;
@@ -2809,18 +2863,22 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   // caja crece hasta "ahora"; al cerrar, se fija en el horario real.
   const sessionEnd=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
   const endTime=Math.min(sessionEnd, lastTime);
+  // "Dónde" dibujar (enganchado a velas reales) — el precio (top/bottom/ce)
+  // ya quedó resuelto arriba con precisión real, esto no lo toca.
+  const plotStart = wtNearestCandleTime(todayDayCandles, todayStartTime);
+  const plotEnd = endTime===lastTime ? lastTime : wtNearestCandleTime(todayDayCandles, endTime);
   const col=STATE.watchtower.orgColor||'#ffeb3b';
   const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
   // Como en Pine: solo 2 líneas horizontales (H/L, sin bordes verticales) +
   // relleno entre ellas (linefill, intensidad = transparencia global de cajas)
   // + línea CE punteada al 50%.
-  if(fillOpacity>0) wtRect(svg, todayStartTime, endTime, top, bottom, col, fillOpacity, 'none');
-  wtLine(svg, todayStartTime, endTime, top, col, 1);
-  wtLine(svg, todayStartTime, endTime, bottom, col, 1);
-  wtLine(svg, todayStartTime, endTime, ce, '#ffb74d', 1, '4,3');
-  wtLabel(svg, endTime, top, 'ORG H', col);
-  wtLabel(svg, endTime, bottom, 'ORG L', col);
-  wtLabel(svg, endTime, ce, `ORG CE  ${gap>=0?'+':''}${gap.toFixed(1)} pts`, '#ffb74d');
+  if(fillOpacity>0) wtRect(svg, plotStart, plotEnd, top, bottom, col, fillOpacity, 'none');
+  wtLine(svg, plotStart, plotEnd, top, col, 1);
+  wtLine(svg, plotStart, plotEnd, bottom, col, 1);
+  wtLine(svg, plotStart, plotEnd, ce, '#ffb74d', 1, '4,3');
+  wtLabel(svg, plotEnd, top, 'ORG H', col);
+  wtLabel(svg, plotEnd, bottom, 'ORG L', col);
+  wtLabel(svg, plotEnd, ce, `ORG CE  ${gap>=0?'+':''}${gap.toFixed(1)} pts`, '#ffb74d');
 }
 
 function renderWtBias(byDate, dateKeys, lastTime){
