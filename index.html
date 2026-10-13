@@ -2763,31 +2763,61 @@ function renderWtMNO(svg, byDate, lastTime){
   wtLabel(svg, lastTime, mnoCandle.open, 'MNO', '#80deea');
 }
 
-function renderWtORG(svg, byDate, dateKeys, lastTime){
+// Devuelve una estimación del precio exacto a `boundaryTime` interpolando
+// dentro de la vela que contiene ese instante (open→close, lineal). Hace
+// falta porque en timeframes grandes (1H, 4H...) puede no existir ninguna
+// vela que abra justo a las 9:30 — sin esto, "todayOpen"/"prevClose" saltaban
+// a la vela más cercana disponible (p.ej. la de las 10:00), desplazando el
+// ORG varios cientos de puntos según el timeframe que estuvieras mirando.
+function wtPriceAtBoundary(dayCandles, boundaryTime, barStep){
+  for (const c of dayCandles){
+    if (boundaryTime >= c.time && boundaryTime < c.time + barStep){
+      const frac = (boundaryTime - c.time) / barStep;
+      return c.open + (c.close - c.open) * frac;
+    }
+  }
+  // Si el límite cae fuera de toda vela cargada (p.ej. todavía no abrió
+  // la sesión), usamos la vela más cercana como aproximación razonable.
+  if (!dayCandles.length) return null;
+  const before = dayCandles.filter(c=>c.time<=boundaryTime);
+  return before.length ? before[before.length-1].close : dayCandles[0].open;
+}
+
+function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   const todayKey=wtDayKey(lastTime);
   const idx=dateKeys.indexOf(todayKey);
   if(idx<=0) return;
-  const prevRth=(byDate.get(dateKeys[idx-1])||[]).filter(c=>wtInWindow(c.time,ORG_SESSION.start,ORG_SESSION.end));
-  const todayRth=(byDate.get(todayKey)||[]).filter(c=>wtInWindow(c.time,ORG_SESSION.start,ORG_SESSION.end));
-  if(!prevRth.length || !todayRth.length) return;
-  const prevClose=prevRth[prevRth.length-1].close, todayOpen=todayRth[0].open;
+  const prevDayCandles=byDate.get(dateKeys[idx-1])||[];
+  const todayDayCandles=byDate.get(todayKey)||[];
+  if(!prevDayCandles.length || !todayDayCandles.length) return;
+  // OJO: la primera vela de cada "día del bróker" (dateKeys) cae a las
+  // 18:00 del día de calendario ANTERIOR (así arranca el D1 de MT5) — usarla
+  // directo como referencia de fecha para "hoy a las 9:30" tomaba el día de
+  // calendario equivocado. +20h desde el límite del día (18:00) cae bien
+  // adentro del día de trading correcto, sin depender de qué vela haya.
+  const prevEndTime=wtTimestampSameCalDay(dateKeys[idx-1]+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
+  const todayStartTime=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.start[0], ORG_SESSION.start[1]);
+  if (todayStartTime > lastTime) return; // la sesión de hoy todavía no abrió
+  const prevClose=wtPriceAtBoundary(prevDayCandles, prevEndTime, barStep);
+  const todayOpen=wtPriceAtBoundary(todayDayCandles, todayStartTime, barStep);
+  if(prevClose==null || todayOpen==null) return;
   const top=Math.max(prevClose,todayOpen), bottom=Math.min(prevClose,todayOpen), ce=(prevClose+todayOpen)/2;
   const gap=todayOpen-prevClose;
   // Proyectar hasta el cierre de la sesión (16:15) se cae del rango de
   // coordenadas mientras esa hora sigue en el futuro (el chart solo tiene
   // "whitespace" acotado para el eje). Mientras la sesión sigue abierta, la
   // caja crece hasta "ahora"; al cerrar, se fija en el horario real.
-  const sessionEnd=wtTimestampSameCalDay(todayRth[0].time, ORG_SESSION.end[0], ORG_SESSION.end[1]);
+  const sessionEnd=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
   const endTime=Math.min(sessionEnd, lastTime);
   const col=STATE.watchtower.orgColor||'#ffeb3b';
   const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
   // Como en Pine: solo 2 líneas horizontales (H/L, sin bordes verticales) +
   // relleno entre ellas (linefill, intensidad = transparencia global de cajas)
   // + línea CE punteada al 50%.
-  if(fillOpacity>0) wtRect(svg, todayRth[0].time, endTime, top, bottom, col, fillOpacity, 'none');
-  wtLine(svg, todayRth[0].time, endTime, top, col, 1);
-  wtLine(svg, todayRth[0].time, endTime, bottom, col, 1);
-  wtLine(svg, todayRth[0].time, endTime, ce, '#ffb74d', 1, '4,3');
+  if(fillOpacity>0) wtRect(svg, todayStartTime, endTime, top, bottom, col, fillOpacity, 'none');
+  wtLine(svg, todayStartTime, endTime, top, col, 1);
+  wtLine(svg, todayStartTime, endTime, bottom, col, 1);
+  wtLine(svg, todayStartTime, endTime, ce, '#ffb74d', 1, '4,3');
   wtLabel(svg, endTime, top, 'ORG H', col);
   wtLabel(svg, endTime, bottom, 'ORG L', col);
   wtLabel(svg, endTime, ce, `ORG CE  ${gap>=0?'+':''}${gap.toFixed(1)} pts`, '#ffb74d');
@@ -2838,7 +2868,7 @@ function renderWatchtower(){
   if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime);
   if(wt.pwLevels)  renderWtPrevWeek(svg, candles, lastTime);
   if(wt.mno)       renderWtMNO(svg, byDate, lastTime);
-  if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime);
+  if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
   if(wt.bias)      renderWtBias(byDate, dateKeys, lastTime);
 }
 
