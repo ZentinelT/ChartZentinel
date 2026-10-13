@@ -154,7 +154,7 @@
      ni de tener el sidebar abierto. */
   #chart-indicator-chips {
     position: absolute;
-    top: 8px;
+    top: 34px;
     left: 8px;
     z-index: 17;
     display: flex;
@@ -182,7 +182,7 @@
 
   /* ─── Indicator settings (gear) ──── */
   .ind-settings-btn {
-    background:none; border:none; color:var(--text-dim); cursor:pointer;
+    background:none; border:none; color:var(--text-secondary); cursor:pointer;
     padding:2px; display:flex; align-items:center; pointer-events:auto;
   }
   .ind-settings-btn:hover { color:var(--text); }
@@ -489,6 +489,21 @@
   }
   .modal input:focus { border-color: var(--gold-dim); }
   .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .cs-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .cs-color-inp {
+    width: 100%; height: 32px; background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 6px; cursor: pointer; padding: 2px; margin-bottom: 14px;
+  }
+  .cs-row .cs-color-inp { margin-bottom: 0; flex: 1; }
+  .cs-tf-list {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 10px;
+    margin-bottom: 14px; max-height: 140px; overflow-y: auto; scrollbar-width: thin;
+  }
+  .cs-tf-list label {
+    display: flex; align-items: center; gap: 5px; margin-bottom: 0;
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); cursor: pointer;
+  }
+  .cs-tf-list input[type=checkbox] { width: auto; margin: 0; }
 
   .btn-primary {
     background: var(--gold-dim); border: 1px solid var(--gold); color: var(--gold-bright);
@@ -632,7 +647,7 @@
     Indicators
   </button>
 
-  <button class="topbar-btn" id="btn-settings" onclick="openApiModal()">
+  <button class="topbar-btn" id="btn-settings" onclick="openChartSettingsModal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="3"/>
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -640,35 +655,11 @@
     Settings
   </button>
 
-  <div id="api-badge" onclick="openApiModal()">NO API KEY</div>
+  <div id="api-badge" onclick="openChartSettingsModal()">BRIDGE…</div>
 </div>
 
 <!-- ══ TIMEFRAME BAR ═════════════════════════════════════ -->
-<div id="tf-bar">
-  <button class="tf-btn" data-tf="1min">1m</button>
-  <button class="tf-btn" data-tf="2min">2m</button>
-  <button class="tf-btn" data-tf="3min">3m</button>
-  <button class="tf-btn" data-tf="4min">4m</button>
-  <button class="tf-btn" data-tf="5min">5m</button>
-  <button class="tf-btn" data-tf="6min">6m</button>
-  <button class="tf-btn" data-tf="10min">10m</button>
-  <button class="tf-btn" data-tf="12min">12m</button>
-  <button class="tf-btn" data-tf="15min">15m</button>
-  <button class="tf-btn" data-tf="20min">20m</button>
-  <button class="tf-btn" data-tf="30min">30m</button>
-  <div class="tf-sep"></div>
-  <button class="tf-btn" data-tf="1h">1H</button>
-  <button class="tf-btn" data-tf="2h">2H</button>
-  <button class="tf-btn" data-tf="3h">3H</button>
-  <button class="tf-btn" data-tf="4h">4H</button>
-  <button class="tf-btn" data-tf="6h">6H</button>
-  <button class="tf-btn" data-tf="8h">8H</button>
-  <button class="tf-btn" data-tf="12h">12H</button>
-  <div class="tf-sep"></div>
-  <button class="tf-btn" data-tf="1day">D</button>
-  <button class="tf-btn" data-tf="1week">W</button>
-  <button class="tf-btn" data-tf="1month">M</button>
-</div>
+<div id="tf-bar"></div>
 
 <!-- ══ MAIN ══════════════════════════════════════════════ -->
 <div id="main">
@@ -856,17 +847,51 @@
   </button>
 </div>
 
-<!-- ══ MODAL: API KEY ════════════════════════════════════ -->
-<div class="modal-overlay" id="modal-api">
-  <div class="modal">
-    <h2>Settings</h2>
-    <label>Twelve Data API Key</label>
-    <input type="password" id="inp-apikey" placeholder="Enter your API key…">
-    <label>Default Symbol</label>
-    <input type="text" id="inp-defsym" placeholder="NAS100.fs" value="NAS100.fs">
+<!-- ══ MODAL: CHART SETTINGS ═══════════════════════════════ -->
+<div class="modal-overlay" id="modal-chart-settings">
+  <div class="modal" style="max-height:85vh;overflow-y:auto;">
+    <h2>Chart Settings</h2>
+    <label>Background</label>
+    <input type="color" id="cs-bg" class="cs-color-inp">
+    <label>Candle up / down</label>
+    <div class="cs-row">
+      <input type="color" id="cs-up" class="cs-color-inp">
+      <input type="color" id="cs-down" class="cs-color-inp">
+    </div>
+    <label>Wick up / down</label>
+    <div class="cs-row">
+      <input type="color" id="cs-wick-up" class="cs-color-inp">
+      <input type="color" id="cs-wick-down" class="cs-color-inp">
+    </div>
+    <label><input type="checkbox" id="cs-priceline-on" style="width:auto;margin-right:6px;">Show real-time price line</label>
+    <div class="cs-row">
+      <input type="color" id="cs-priceline-color" class="cs-color-inp">
+      <select id="cs-priceline-style" class="dtb-select" style="flex:1;">
+        <option value="0">Solid</option>
+        <option value="1">Dotted</option>
+        <option value="2" selected>Dashed</option>
+        <option value="3">Large dashed</option>
+        <option value="4">Sparse dotted</option>
+      </select>
+    </div>
+    <label><input type="checkbox" id="cs-grid-on" style="width:auto;margin-right:6px;">Show background grid</label>
+    <label><input type="checkbox" id="cs-watermark-on" style="width:auto;margin-right:6px;">Show watermark</label>
+    <label style="margin-top:10px;">Crosshair line</label>
+    <div class="cs-row">
+      <input type="color" id="cs-crosshair-color" class="cs-color-inp">
+      <select id="cs-crosshair-style" class="dtb-select" style="flex:1;">
+        <option value="0">Solid</option>
+        <option value="1">Dotted</option>
+        <option value="2" selected>Dashed</option>
+        <option value="3">Large dashed</option>
+        <option value="4">Sparse dotted</option>
+      </select>
+    </div>
+    <label style="margin-top:10px;">Timeframes shown in the bar</label>
+    <div id="cs-tf-list" class="cs-tf-list"></div>
     <div class="modal-btns">
-      <button class="btn-ghost" onclick="closeModal('modal-api')">Cancel</button>
-      <button class="btn-primary" onclick="saveSettings()">Save</button>
+      <button class="btn-ghost" onclick="resetChartSettings()">Reset to default</button>
+      <button class="btn-primary" onclick="saveChartSettings()">Save</button>
     </div>
   </div>
 </div>
@@ -923,8 +948,31 @@ Object.keys(WT_KZ_DEFAULTS).forEach(k => {
   _wtKz[k] = Object.assign({}, WT_KZ_DEFAULTS[k], (_wtSaved.kz && _wtSaved.kz[k]) || {});
 });
 
+const ALL_TIMEFRAMES = [
+  { tf:'1min',  label:'1m',  group:'m' }, { tf:'2min',  label:'2m',  group:'m' },
+  { tf:'3min',  label:'3m',  group:'m' }, { tf:'4min',  label:'4m',  group:'m' },
+  { tf:'5min',  label:'5m',  group:'m' }, { tf:'6min',  label:'6m',  group:'m' },
+  { tf:'10min', label:'10m', group:'m' }, { tf:'12min', label:'12m', group:'m' },
+  { tf:'15min', label:'15m', group:'m' }, { tf:'20min', label:'20m', group:'m' },
+  { tf:'30min', label:'30m', group:'m' },
+  { tf:'1h',  label:'1H',  group:'h' }, { tf:'2h',  label:'2H',  group:'h' },
+  { tf:'3h',  label:'3H',  group:'h' }, { tf:'4h',  label:'4H',  group:'h' },
+  { tf:'6h',  label:'6H',  group:'h' }, { tf:'8h',  label:'8H',  group:'h' },
+  { tf:'12h', label:'12H', group:'h' },
+  { tf:'1day',   label:'D', group:'d' },
+  { tf:'1week',  label:'W', group:'d' },
+  { tf:'1month', label:'M', group:'d' },
+];
+const CHART_SETTINGS_DEFAULTS = {
+  bgColor:'#0a0a0c',
+  upColor:'#26a69a', downColor:'#909090',
+  wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
+  priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
+  showGrid:true, showWatermark:true,
+  crosshairColor:'#c9a84c', crosshairStyle:2,
+  visibleTFs: ALL_TIMEFRAMES.map(t=>t.tf),
+};
 const STATE = {
-  apiKey:     localStorage.getItem('td_apikey') || '',
   symbol:     localStorage.getItem('td_symbol') || 'NAS100.fs',
   timeframe:  localStorage.getItem('td_tf')     || '1h',
   watchlist:  JSON.parse(localStorage.getItem('td_watchlist') || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
@@ -934,11 +982,16 @@ const STATE = {
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
   }, _wtSaved, { kz: _wtKz }),
+  chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(localStorage.getItem('td_chart_settings') || '{}')),
+  indicatorStyles: JSON.parse(localStorage.getItem('td_ind_styles') || '{}'),
 };
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 function saveWatchtowerState(){ localStorage.setItem('td_watchtower', JSON.stringify(STATE.watchtower)); }
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
 function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
+function saveChartSettingsState(){ localStorage.setItem('td_chart_settings', JSON.stringify(STATE.chartSettings)); }
+function saveIndicatorStylesState(){ localStorage.setItem('td_ind_styles', JSON.stringify(STATE.indicatorStyles)); }
+function getIndicatorStyle(name, def){ return Object.assign({ color: def.color, lineWidth: 1 }, STATE.indicatorStyles[name] || {}); }
 
 let chart, candleSeries, volumeSeries;
 const overlays = {};
@@ -1434,23 +1487,20 @@ function initWatchtowerLayer() {
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
-    layout: { background:{ color:'#0a0a0c' }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
-    grid:   { vertLines:{color:'#18182a',style:1}, horzLines:{color:'#18182a',style:1} },
+    layout: { background:{ color: STATE.chartSettings.bgColor }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
+    grid:   { vertLines:{color:'#18182a',style:1,visible:STATE.chartSettings.showGrid}, horzLines:{color:'#18182a',style:1,visible:STATE.chartSettings.showGrid} },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: { color:'#c9a84c55', labelBackgroundColor:'#1e1e2a' },
-      horzLine: { color:'#c9a84c55', labelBackgroundColor:'#1e1e2a' },
+      vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
+      horzLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
     },
     rightPriceScale: { borderColor:'#222230', scaleMargins:{top:0.08,bottom:0.18} },
     timeScale: { borderColor:'#222230', timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
-    watermark: { visible:true, fontSize:52, horzAlign:'center', vertAlign:'center', color:'rgba(201,168,76,0.03)', text:'ZENTINEL' },
+    watermark: { visible:STATE.chartSettings.showWatermark, fontSize:52, horzAlign:'center', vertAlign:'center', color:'rgba(201,168,76,0.03)', text:'ZENTINEL' },
   });
 
-  candleSeries = chart.addCandlestickSeries({
-    upColor:'#26a69a', downColor:'#909090',
-    borderUpColor:'#8a8a8a', borderDownColor:'#8a8a8a',
-    wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
-  });
+  candleSeries = chart.addCandlestickSeries({});
+  applyChartSettings();
 
   volumeSeries = chart.addHistogramSeries({
     color:'#c9a84c22', priceFormat:{type:'volume'}, priceScaleId:'vol',
@@ -1907,14 +1957,27 @@ document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==
 // ══════════════════════════════════════════════════════════
 //  TIMEFRAME
 // ══════════════════════════════════════════════════════════
-document.querySelectorAll('.tf-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    STATE.timeframe = btn.dataset.tf;
-    saveState();
-    loadChart(STATE.symbol,STATE.timeframe);
+function renderTfBar() {
+  const bar = document.getElementById('tf-bar');
+  const visible = new Set(STATE.chartSettings.visibleTFs);
+  let html = '';
+  let lastGroup = null;
+  ALL_TIMEFRAMES.forEach(t => {
+    if (!visible.has(t.tf)) return;
+    if (lastGroup !== null && lastGroup !== t.group) html += '<div class="tf-sep"></div>';
+    html += `<button class="tf-btn" data-tf="${t.tf}">${t.label}</button>`;
+    lastGroup = t.group;
   });
+  bar.innerHTML = html;
+}
+document.getElementById('tf-bar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tf-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  STATE.timeframe = btn.dataset.tf;
+  saveState();
+  loadChart(STATE.symbol,STATE.timeframe);
 });
 function setActiveTF(tf) { document.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf)); }
 
@@ -1999,24 +2062,24 @@ function addIndicatorSeries(name) {
   if(overlays[name])return;
   const rawData=window._lastCandles||[]; if(!rawData.length)return;
   const calcData=def.calc(rawData);
-  const series=chart.addLineSeries({color:def.color,lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+  const style=getIndicatorStyle(name, def);
+  const series=chart.addLineSeries({color:style.color,lineWidth:style.lineWidth,priceLineVisible:false,lastValueVisible:true});
   series.setData(calcData); overlays[name]=series;
 }
 
 const IND_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 
 // Chips fijos arriba-izq del chart: acceso directo a la config de cada
-// indicador "custom" (con settings propios, ej. Watchtower) activo —
-// siempre visibles, sin depender de acertarle a un dibujo fino en el chart
-// ni de tener el sidebar/watchlist abierto. Cualquier indicador futuro con
-// `custom:true` en INDICATOR_DEFS aparece acá solo.
+// indicador activo — siempre visibles, sin depender de acertarle a un
+// dibujo fino en el chart ni de tener el sidebar/watchlist abierto.
+// Cualquier indicador nuevo en INDICATOR_DEFS aparece acá solo.
 function renderIndicatorChips() {
   const el = document.getElementById('chart-indicator-chips');
   if (!el) return;
   el.innerHTML = '';
   STATE.indicators.forEach(name => {
     const def = INDICATOR_DEFS.find(d => d.name === name);
-    if (!def || !def.custom) return;
+    if (!def) return;
     const chip = document.createElement('div');
     chip.className = 'ind-chip';
     chip.title = name + ' settings';
@@ -2032,8 +2095,9 @@ function renderIndList() {
   if(!STATE.indicators.length){el.innerHTML='<div class="ind-item" style="color:var(--text-dim);font-size:10px">None active</div>';return;}
   STATE.indicators.forEach(name=>{
     const def=INDICATOR_DEFS.find(d=>d.name===name);
+    const dotColor = def && !def.custom ? getIndicatorStyle(name, def).color : (def?.color||'#888');
     const item=document.createElement('div'); item.className='ind-item';
-    item.innerHTML=`<div class="ind-dot" style="background:${def?.color||'#888'}"></div><span>${name}</span><button class="ind-settings-btn" title="Settings" onclick="openIndicatorSettings('${name}')">${IND_GEAR_SVG}</button><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
+    item.innerHTML=`<div class="ind-dot" style="background:${dotColor}"></div><span>${name}</span><button class="ind-settings-btn" title="Settings" onclick="openIndicatorSettings('${name}')">${IND_GEAR_SVG}</button><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
     el.appendChild(item);
   });
 }
@@ -2091,7 +2155,17 @@ function openIndicatorSettings(name) {
         <input type="color" id="wt-org-color" value="${STATE.watchtower.orgColor}">
       </div>`;
   } else {
-    body.innerHTML = `<div class="wt-set-row" style="color:var(--text-dim)">Sin configuración disponible para este indicador.</div>`;
+    const def = INDICATOR_DEFS.find(d => d.name === name);
+    const style = getIndicatorStyle(name, def);
+    body.innerHTML = `
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="ind-style-color" value="${style.color}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Grosor de línea</span>
+        <input type="number" id="ind-style-width" min="1" max="5" step="1" value="${style.lineWidth}" style="width:56px">
+      </div>`;
   }
   openModal('modal-ind-settings');
 }
@@ -2119,6 +2193,22 @@ function saveIndicatorSettings() {
     if (boxOpacityEl) STATE.watchtower.boxOpacity = Math.max(0, Math.min(100, Number(boxOpacityEl.value) || 0));
     if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
     saveWatchtowerState();
+  } else {
+    const colorEl=document.getElementById('ind-style-color');
+    const widthEl=document.getElementById('ind-style-width');
+    if (colorEl && widthEl) {
+      STATE.indicatorStyles[_indSettingsTarget] = {
+        color: colorEl.value,
+        lineWidth: Math.max(1, Math.min(5, Number(widthEl.value) || 1)),
+      };
+      saveIndicatorStylesState();
+      if (overlays[_indSettingsTarget]) {
+        overlays[_indSettingsTarget].applyOptions({
+          color: STATE.indicatorStyles[_indSettingsTarget].color,
+          lineWidth: STATE.indicatorStyles[_indSettingsTarget].lineWidth,
+        });
+      }
+    }
   }
   closeModal('modal-ind-settings');
 }
@@ -2448,16 +2538,85 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);});});
 
-function openApiModal(){document.getElementById('inp-apikey').value=STATE.apiKey;document.getElementById('inp-defsym').value=STATE.symbol;openModal('modal-api');}
+function renderCsTfList(visibleTFs){
+  const visible = new Set(visibleTFs);
+  const html = ALL_TIMEFRAMES.map(t =>
+    `<label><input type="checkbox" data-cs-tf="${t.tf}" ${visible.has(t.tf)?'checked':''}>${t.label}</label>`
+  ).join('');
+  document.getElementById('cs-tf-list').innerHTML = html;
+}
 
-function saveSettings(){
-  const key=document.getElementById('inp-apikey').value.trim();
-  const sym=document.getElementById('inp-defsym').value.trim()||'NAS100.fs';
-  STATE.apiKey=key; localStorage.setItem('td_apikey',key);
-  const badge=document.getElementById('api-badge');
-  if(key){badge.textContent='API ✓';badge.classList.add('connected');}else{badge.textContent='NO API KEY';badge.classList.remove('connected');}
-  closeModal('modal-api');
-  if(key){STATE.symbol=sym;selectSymbol(sym);}
+function fillChartSettingsForm(cs){
+  document.getElementById('cs-bg').value=cs.bgColor;
+  document.getElementById('cs-up').value=cs.upColor;
+  document.getElementById('cs-down').value=cs.downColor;
+  document.getElementById('cs-wick-up').value=cs.wickUpColor;
+  document.getElementById('cs-wick-down').value=cs.wickDownColor;
+  document.getElementById('cs-priceline-on').checked=cs.priceLineVisible;
+  document.getElementById('cs-priceline-color').value=cs.priceLineColor||cs.upColor;
+  document.getElementById('cs-priceline-style').value=String(cs.priceLineStyle);
+  document.getElementById('cs-grid-on').checked=cs.showGrid;
+  document.getElementById('cs-watermark-on').checked=cs.showWatermark;
+  document.getElementById('cs-crosshair-color').value=cs.crosshairColor;
+  document.getElementById('cs-crosshair-style').value=String(cs.crosshairStyle);
+  renderCsTfList(cs.visibleTFs);
+}
+function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); openModal('modal-chart-settings'); }
+
+function saveChartSettings(){
+  let visibleTFs = Array.from(document.querySelectorAll('#cs-tf-list input[data-cs-tf]:checked')).map(el=>el.dataset.csTf);
+  if (visibleTFs.length === 0) visibleTFs = [STATE.timeframe];
+  STATE.chartSettings = {
+    bgColor: document.getElementById('cs-bg').value,
+    upColor: document.getElementById('cs-up').value,
+    downColor: document.getElementById('cs-down').value,
+    wickUpColor: document.getElementById('cs-wick-up').value,
+    wickDownColor: document.getElementById('cs-wick-down').value,
+    priceLineVisible: document.getElementById('cs-priceline-on').checked,
+    priceLineColor: document.getElementById('cs-priceline-color').value,
+    priceLineStyle: Number(document.getElementById('cs-priceline-style').value),
+    showGrid: document.getElementById('cs-grid-on').checked,
+    showWatermark: document.getElementById('cs-watermark-on').checked,
+    crosshairColor: document.getElementById('cs-crosshair-color').value,
+    crosshairStyle: Number(document.getElementById('cs-crosshair-style').value),
+    visibleTFs,
+  };
+  saveChartSettingsState();
+  applyChartSettings();
+  renderTfBar();
+  setActiveTF(STATE.timeframe);
+  closeModal('modal-chart-settings');
+}
+
+function resetChartSettings(){
+  STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS);
+  fillChartSettingsForm(STATE.chartSettings);
+  saveChartSettingsState();
+  applyChartSettings();
+  renderTfBar();
+  setActiveTF(STATE.timeframe);
+}
+
+function applyChartSettings(){
+  if(!chart || !candleSeries) return;
+  const cs = STATE.chartSettings;
+  chart.applyOptions({
+    layout: { background: { color: cs.bgColor } },
+    grid: { vertLines:{visible:cs.showGrid}, horzLines:{visible:cs.showGrid} },
+    crosshair: {
+      vertLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
+      horzLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
+    },
+    watermark: { visible: cs.showWatermark },
+  });
+  candleSeries.applyOptions({
+    upColor: cs.upColor, downColor: cs.downColor,
+    borderUpColor: cs.upColor, borderDownColor: cs.downColor,
+    wickUpColor: cs.wickUpColor, wickDownColor: cs.wickDownColor,
+    priceLineVisible: cs.priceLineVisible,
+    priceLineColor: cs.priceLineColor || undefined,
+    priceLineStyle: cs.priceLineStyle,
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2519,6 +2678,18 @@ function renderSeries(timeframe){
   const last=candles[candles.length-1];
   candleSeries.setData(candles.concat(futureWhitespace(last.time, timeframe, 15)));
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
+  refreshOverlays(candles);
+}
+
+// Recalcula EMA/SMA/VWAP sobre el set completo de velas cargadas — si no,
+// al pedir más historial hacia atrás (loadMoreHistory) la línea se queda
+// corta en el tramo inicial de 500 barras y "desaparece" más allá de eso.
+function refreshOverlays(candles){
+  Object.keys(overlays).forEach(name=>{
+    const def=INDICATOR_DEFS.find(d=>d.name===name);
+    if(!def||!def.calc)return;
+    overlays[name].setData(def.calc(candles));
+  });
 }
 
 // Scroll infinito hacia atrás: cuando te acercás al borde izquierdo de lo
@@ -2751,6 +2922,7 @@ function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
   initDrawingLayer();
   renderWatchlist();
   renderIndList();
+  renderTfBar();
   setActiveTF(STATE.timeframe);
   document.getElementById('symbol-input').value=STATE.symbol;
 
