@@ -1122,17 +1122,27 @@ function renderLayoutGrid(n){
   });
 
   // Presets ya guardados (mismo storage que usan los paneles — sin sufijo
-  // de pane, por eso se puede leer directo acá afuera).
+  // de pane, por eso se puede leer directo acá afuera). Guardar uno nuevo
+  // pasa DENTRO de un panel (iframe) — el 'storage' event es lo que avisa
+  // acá afuera que cambió, así la lista no queda vieja sin recargar todo.
   const presetSel = gbar.querySelector('#gc-preset');
   function renderPresetOptions(){
+    const current = presetSel.value;
     let presets = {};
     try { presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
     const names = Object.keys(presets).sort();
     presetSel.innerHTML = names.length
       ? names.map(nm=>`<option value="${nm}">${nm}</option>`).join('')
       : `<option value="">(sin presets guardados)</option>`;
+    if (names.includes(current)) presetSel.value = current;
   }
   renderPresetOptions();
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'td_presets') renderPresetOptions();
+  });
+  // Por si el 'storage' event no llega a tiempo en algún navegador: la
+  // releemos también justo antes de abrir el desplegable.
+  presetSel.addEventListener('mousedown', renderPresetOptions);
   gbar.querySelector('#gc-preset-apply').addEventListener('click', ()=>{
     const name = presetSel.value;
     if (!name) return;
@@ -2927,6 +2937,7 @@ function renderPresetSelect(){
   const sel = document.getElementById('cs-preset-select');
   if (!sel) return;
   const current = sel.value;
+  try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
   const names = Object.keys(STATE.presets).sort();
   sel.innerHTML = '<option value="">— elegir preset —</option>'
     + names.map(n => `<option value="${n}">${n}</option>`).join('');
@@ -2951,6 +2962,11 @@ function applySelectedPreset(){
 }
 
 function applyPreset(name){
+  // Relee del storage en vez de confiar en STATE.presets: ese objeto se
+  // cargó una sola vez al arrancar este panel, así que si el preset se
+  // guardó después (desde este mismo panel más tarde, o desde otro panel
+  // en el modo multi-chart) no estaría todavía en memoria.
+  try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
   const p = STATE.presets[name];
   if (!p) return;
   STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(JSON.stringify(p.chartSettings || {})));
