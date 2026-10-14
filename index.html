@@ -245,11 +245,13 @@
      Cada panel del grid 2×/4⊞ no necesita repetir el header completo
      (buscador de símbolo, O/H/L/C/V, refresh, settings, badge del
      puente) — eso vive una sola vez en la barra global de afuera.
-     Adentro de cada panel solo queda: tf-bar (símbolo chico + TF +
-     Indicators), el gráfico, y la paleta de dibujo. */
-  html.embed-mode #topbar,
-  html.embed-mode #sidebar,
-  html.embed-mode #btn-sidebar-toggle { display: none !important; }
+     El watchlist (#sidebar) SÍ se deja: es el único lugar de donde elegir
+     símbolo con un click (la barra global solo tiene un input de texto
+     libre, sin lista ni autocompletado) — sin esto, cada panel quedaba sin
+     ninguna forma de abrir/ver el watchlist. Arranca colapsado por panel
+     (mismo mecanismo de siempre, persistido con el sufijo de cada pane) así
+     no come espacio de entrada en una grilla de por sí chica. */
+  html.embed-mode #topbar { display: none !important; }
 
   #api-badge {
     font-family: var(--font-mono);
@@ -2481,7 +2483,13 @@ function toggleSidebar() {
   document.getElementById('btn-sidebar-toggle').classList.toggle('collapsed', collapsed);
   lsSet(lsKey('td_sidebar_collapsed'), collapsed ? '1' : '0');
 }
-if (lsGet(lsKey('td_sidebar_collapsed')) === '1') {
+// En un panel embebido (grilla 2×/4⊞) arranca colapsado la primera vez
+// (sin preferencia guardada todavía) — un watchlist completo abierto por
+// default en cada uno de 4 paneles chicos comería casi toda la grilla.
+// Una vez que el usuario lo abre/cierra una vez, esa preferencia (ya
+// persistida con el sufijo de ese pane) manda, igual que en modo 1 gráfico.
+const _sidebarCollapsedSaved = lsGet(lsKey('td_sidebar_collapsed'));
+if (_sidebarCollapsedSaved === '1' || (_sidebarCollapsedSaved === null && EMBED_MODE)) {
   document.getElementById('sidebar').classList.add('collapsed');
   document.getElementById('btn-sidebar-toggle').classList.add('collapsed');
 }
