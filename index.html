@@ -754,6 +754,13 @@
       </svg>
     </button>
     <div class="tool-sep"></div>
+    <button class="tool-btn" id="btn-magnet" data-tip="Magnet (ajustar a vela)" onclick="toggleMagnet()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 3h4v9a2 2 0 0 0 4 0V3h4v9a6 6 0 0 1-12 0V3z"/>
+        <path d="M6 3v4H2V3h4zM18 3v4h4V3h-4z"/>
+      </svg>
+    </button>
+    <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Clear All" onclick="clearDrawings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"/>
@@ -1172,7 +1179,7 @@ function renderLayoutGrid(n){
   for (let i=1;i<=n;i++){
     const iframe = document.createElement('iframe');
     iframe.src = `index.html?embed=1&pane=${i}`;
-    iframe.style.cssText = 'width:100%;height:100%;box-sizing:border-box;display:block;border:2px solid transparent;transition:border-color .15s;';
+    iframe.style.cssText = 'width:100%;height:100%;box-sizing:border-box;display:block;border:1px solid transparent;transition:border-color .15s;';
     grid.appendChild(iframe);
     iframeEls.push(iframe);
   }
@@ -1259,6 +1266,7 @@ const STATE = {
   watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
   indicators: JSON.parse(lsGet(lsKey('td_indicators')) || '[]'),
   activeTool: 'cursor',
+  magnet: lsGet(lsKey('td_magnet')) === '1',
   watchtower: Object.assign({
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
@@ -1912,9 +1920,9 @@ function initDrawingLayer() {
 
   function getCoords(e) {
     const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const price = candleSeries.coordinateToPrice(y);
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+    let price = candleSeries.coordinateToPrice(y);
     let time = chart.timeScale().coordinateToTime(x);
     const candles = window._lastCandles || [];
     if (time === null && candles.length) {
@@ -1926,6 +1934,15 @@ function initDrawingLayer() {
         time = candles[candles.length-1].time + bi * Math.max(1, barsOut);
       } else {
         time = (x <= (firstX||0)) ? candles[0].time : candles[candles.length-1].time;
+      }
+    }
+    if (STATE.magnet && price !== null && time !== null) {
+      const snapped = magnetSnapPoint(candles, time, price);
+      if (snapped) {
+        price = snapped.price; time = snapped.time;
+        const sx = timeToX(snapped.time), sy = priceToY(snapped.price);
+        if (sx !== null) x = sx;
+        if (sy !== null) y = sy;
       }
     }
     return { x, y, price, time };
@@ -2368,10 +2385,39 @@ document.querySelectorAll('.layout-btn').forEach(btn=>{
 });
 
 function setTool(btn, name) {
-  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume')b.classList.remove('active'); });
+  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet')b.classList.remove('active'); });
   btn.classList.add('active');
   STATE.activeTool = name;
   if (name !== 'cursor') deselectDrawing();
+}
+
+// Magnet: mientras está activo, los puntos de los dibujos nuevos (y los
+// que se arrastran) se ajustan al candle más cercano — igual que en TV.
+function toggleMagnet() {
+  STATE.magnet = !STATE.magnet;
+  lsSet(lsKey('td_magnet'), STATE.magnet ? '1' : '0');
+  document.getElementById('btn-magnet').classList.toggle('active', STATE.magnet);
+}
+document.getElementById('btn-magnet').classList.toggle('active', STATE.magnet);
+
+// Dado un precio/tiempo "crudo" del mouse, devuelve el punto {price,time}
+// ajustado al OHLC más cercano del candle más cercano en el tiempo — o el
+// mismo punto sin tocar si no hay candles o el magnet está apagado.
+function magnetSnapPoint(candles, rawTime, rawPrice) {
+  if (!candles || !candles.length || rawTime===null || rawPrice===null) return null;
+  let lo = 0, hi = candles.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (candles[mid].time < rawTime) lo = mid + 1; else hi = mid;
+  }
+  let best = candles[lo];
+  if (lo > 0 && Math.abs(candles[lo-1].time - rawTime) < Math.abs(best.time - rawTime)) best = candles[lo-1];
+  let snapPrice = best.open, bestDist = Math.abs(rawPrice - best.open);
+  [best.high, best.low, best.close].forEach(p => {
+    const dist = Math.abs(rawPrice - p);
+    if (dist < bestDist) { bestDist = dist; snapPrice = p; }
+  });
+  return { price: snapPrice, time: best.time };
 }
 
 // Como en TV: después de terminar un dibujo, la herramienta vuelve sola al
