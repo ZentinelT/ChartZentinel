@@ -143,7 +143,7 @@
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 3px;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 9px;
     color: #cccccc;
     z-index: 16;
     pointer-events: none;
@@ -151,7 +151,7 @@
     overflow: hidden;
   }
   #watchtower-bias-badge .wt-row {
-    padding: 3px 10px;
+    padding: 2px 7px;
     text-align: center;
     border-bottom: 1px solid rgba(255,255,255,0.1);
   }
@@ -1883,6 +1883,21 @@ function initWatchtowerLayer() {
     const plotH = cc.clientHeight - chart.timeScale().height();
     if (mx > plotW || my > plotH) return;
     if (hitTestIndicatorRegions(mx, my)) cc.style.cursor = 'pointer';
+  });
+
+  // Mecanismo 1 (el del comentario de arriba): elementos HTML normales
+  // tageados con data-indicator-name (hoy solo el badge de bias de
+  // Watchtower) — quedaban marcados como clickeables (pointer-events:auto,
+  // cursor:pointer, dataset.indicatorName seteado) pero nada escuchaba el
+  // doble click sobre ellos todavía, así que no reaccionaban. Este sí es un
+  // elemento HTML normal (no el canvas del chart), así que el 'dblclick'
+  // nativo llega sin el problema que describe el comentario de arriba.
+  document.addEventListener('dblclick', (e) => {
+    const target = e.target.closest('[data-indicator-name]');
+    if (!target) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openIndicatorSettings(target.dataset.indicatorName);
   });
 })();
 
