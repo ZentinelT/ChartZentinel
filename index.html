@@ -911,6 +911,11 @@
       <input type="color" id="cs-up" class="cs-color-inp">
       <input type="color" id="cs-down" class="cs-color-inp">
     </div>
+    <label>Candle border up / down</label>
+    <div class="cs-row">
+      <input type="color" id="cs-border-up" class="cs-color-inp">
+      <input type="color" id="cs-border-down" class="cs-color-inp">
+    </div>
     <label>Wick up / down</label>
     <div class="cs-row">
       <input type="color" id="cs-wick-up" class="cs-color-inp">
@@ -1209,6 +1214,7 @@ const ALL_TIMEFRAMES = [
 const CHART_SETTINGS_DEFAULTS = {
   bgColor:'#0a0a0c',
   upColor:'#26a69a', downColor:'#909090',
+  borderUpColor:'#26a69a', borderDownColor:'#909090',
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
   showGrid:true, showWatermark:true,
@@ -1738,6 +1744,14 @@ function initWatchtowerLayer() {
   cc.addEventListener('mousedown', (e) => {
     const rect = cc.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    // Si el click cae sobre el eje de precios (derecha) o el eje de tiempo
+    // (abajo), dejarlo pasar siempre: son zonas donde lightweight-charts
+    // maneja su propio drag/doble-click (reescalar, auto-fit, etc.) y no
+    // deben interpretarse como click sobre un dibujo, aunque la línea del
+    // indicador se extienda visualmente hasta ahí.
+    const plotW = cc.clientWidth - chart.priceScale('right').width();
+    const plotH = cc.clientHeight - chart.timeScale().height();
+    if (mx > plotW || my > plotH) { lastHit = { time:0, x:0, y:0, name:null }; return; }
     const name = hitTestIndicatorRegions(mx, my);
     if (!name) { lastHit = { time:0, x:0, y:0, name:null }; return; }
 
@@ -1762,6 +1776,9 @@ function initWatchtowerLayer() {
     if (window._dragSession) return;
     const rect = cc.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const plotW = cc.clientWidth - chart.priceScale('right').width();
+    const plotH = cc.clientHeight - chart.timeScale().height();
+    if (mx > plotW || my > plotH) return;
     if (hitTestIndicatorRegions(mx, my)) cc.style.cursor = 'pointer';
   });
 })();
@@ -2775,9 +2792,14 @@ function wtWeekKey(t){
 // ══════════════════════════════════════════════════════════
 function tagIndicatorEl(el, name){
   el.dataset.indicatorName = name;
-  const tag = el.tagName.toLowerCase();
-  el.style.pointerEvents = tag==='line' ? 'stroke' : (tag==='rect' ? 'fill' : 'visiblePainted');
-  el.style.cursor = 'pointer';
+  // El doble-click para abrir la config NO depende de esto — lo resuelve
+  // hitTestIndicatorRegions() por coordenadas contra #chart-container (ver
+  // más abajo), sin tocar pointer-events para nada. Dejar el elemento con
+  // pointer-events habilitado acá solo lograba que, al pasar la rueda del
+  // mouse justo encima de una línea/caja de un indicador, el navegador le
+  // mandara el evento 'wheel' al SVG en vez de dejarlo pasar al canvas del
+  // chart de abajo — el zoom se "trababa" sobre cualquier dibujo.
+  el.style.pointerEvents = 'none';
 }
 
 // Segunda vía, más robusta que depender de pointer-events/stacking de SVG
@@ -3655,6 +3677,8 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-bg').value=cs.bgColor;
   document.getElementById('cs-up').value=cs.upColor;
   document.getElementById('cs-down').value=cs.downColor;
+  document.getElementById('cs-border-up').value=cs.borderUpColor;
+  document.getElementById('cs-border-down').value=cs.borderDownColor;
   document.getElementById('cs-wick-up').value=cs.wickUpColor;
   document.getElementById('cs-wick-down').value=cs.wickDownColor;
   document.getElementById('cs-priceline-on').checked=cs.priceLineVisible;
@@ -3675,6 +3699,8 @@ function commitChartSettingsForm(){
     bgColor: document.getElementById('cs-bg').value,
     upColor: document.getElementById('cs-up').value,
     downColor: document.getElementById('cs-down').value,
+    borderUpColor: document.getElementById('cs-border-up').value,
+    borderDownColor: document.getElementById('cs-border-down').value,
     wickUpColor: document.getElementById('cs-wick-up').value,
     wickDownColor: document.getElementById('cs-wick-down').value,
     priceLineVisible: document.getElementById('cs-priceline-on').checked,
@@ -3720,7 +3746,7 @@ function applyChartSettings(){
   });
   candleSeries.applyOptions({
     upColor: cs.upColor, downColor: cs.downColor,
-    borderUpColor: cs.upColor, borderDownColor: cs.downColor,
+    borderUpColor: cs.borderUpColor, borderDownColor: cs.borderDownColor,
     wickUpColor: cs.wickUpColor, wickDownColor: cs.wickDownColor,
     priceLineVisible: cs.priceLineVisible,
     priceLineColor: cs.priceLineColor || undefined,
