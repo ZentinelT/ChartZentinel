@@ -2090,7 +2090,21 @@ function initDrawingLayer() {
       const { price, time } = getCoords(e);
 
       if (window._dragSession.kind === 'handle') {
-        applyHandleDrag(d, window._dragSession.role, price, time);
+        // Shift mientras se arrastra una punta de una trend line: igual que
+        // al dibujarla, la fuerza a quedar horizontal o vertical respecto a
+        // la OTRA punta (la que no se está moviendo).
+        let finalPrice = price, finalTime = time;
+        if (e.shiftKey && d.type === 'trendline' && price!==null && time!==null) {
+          const role = window._dragSession.role;
+          const anchor = role === 'p1' ? d.p2 : d.p1;
+          const anchorX = timeToX(anchor.time), anchorY = priceToY(anchor.price);
+          const curX = timeToX(time), curY = priceToY(price);
+          if (anchorX!==null && anchorY!==null && curX!==null && curY!==null) {
+            const dx = Math.abs(curX-anchorX), dy = Math.abs(curY-anchorY);
+            if (dx > dy) finalPrice = anchor.price; else finalTime = anchor.time;
+          }
+        }
+        applyHandleDrag(d, window._dragSession.role, finalPrice, finalTime);
         redrawDrawing(d);
       } else if (d.type === 'text') {
         d.label.style.left = (mx - 6) + 'px';
