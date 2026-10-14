@@ -1925,12 +1925,14 @@ function initChart() {
     if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
     renderWatchtower();
     renderSniper();
+    syncOverlayPositions();
   }).observe(container);
 
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
     if (range && range.from < 50) loadMoreHistory();
     renderWatchtower();
     renderSniper();
+    syncOverlayPositions();
   });
 
   // El zoom vertical (arrastrar el eje de precio) cambia el rango de
@@ -1947,9 +1949,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -1965,15 +1967,16 @@ function initChart() {
   initWatchtowerLayer();
   initSniperLayer();
 
-  // El badge y las etiquetas de los dibujos se re-posicionan en cada frame
-  // (en vez de perseguir cada gesto posible: zoom, pan, arrastre del eje de
-  // precio). Watchtower NO va acá: redibujar sus cajas/líneas desde cero es
-  // caro (recorre velas, recalcula killzones, etc) y hacerlo 60 veces por
-  // segundo todo el tiempo —incluso sin tocar nada— es lo que hacía sentir
-  // lento el arrastre del mouse. Ahora solo se recalcula cuando algo
-  // realmente cambia: pan/zoom (arriba), resize (arriba), o datos/config
-  // nuevos (ver renderSeries, addIndicatorSeries, saveIndicatorSettings).
-  (function badgeRafLoop(){
+  // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
+  // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
+  // para siempre (60-120 veces por segundo, sin parar nunca, incluso con el
+  // chart totalmente quieto), igual que le pasaba a Watchtower antes de que
+  // se corrigiera (ver comentario de _wtDragLoop más arriba: "hacerlo 60
+  // veces por segundo todo el tiempo es lo que hacía sentir lento"). Mismo
+  // diagnóstico, mismo arreglo acá: solo hace falta reposicionar esto
+  // cuando algo realmente cambia — pan/zoom, drag/wheel activo, resize —
+  // no en un loop perpetuo de fondo todo el tiempo que el chart esté abierto.
+  function syncOverlayPositions(){
     if (window._lastCandles){ const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open); }
     drawings.forEach(d=>{
       if (window._dragSession && window._dragSession.drawing===d) return;
@@ -1987,8 +1990,9 @@ function initChart() {
         syncRectFill(d);
       }
     });
-    requestAnimationFrame(badgeRafLoop);
-  })();
+  }
+  window._syncOverlayPositions = syncOverlayPositions;
+  syncOverlayPositions();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3462,6 +3466,29 @@ function snComputeOB(candles, i, foundK, cnt, isBull){
   return {obExtreme, bodyext};
 }
 
+// snReplay recorre TODAS las velas cargadas (pueden ser miles, sobre todo
+// ahora que Watchtower trae más historial para la semana anterior) armando
+// desde cero toda la máquina de estados de sweep+CISD. renderSniper() se
+// llama en el mismo loop de 60fps que usa Watchtower durante pan/zoom/drag
+// (_wtDragLoop) — sin este cache, paneabas o hacías zoom con Sniper
+// prendido y se recalculaba el replay completo en cada frame sin que las
+// velas ni la configuración hubiesen cambiado un poco, lo cual se sentía
+// muy pesado/entrecortado. Cachea por una huella barata (largo + primer y
+// último timestamp de las velas + símbolo/TF + los parámetros que de verdad
+// afectan el resultado + cuándo se actualizaron los FVG de M15/H4) y solo
+// vuelve a correr el replay cuando esa huella cambia.
+let _snReplayCache = null; // {key, result}
+function snReplayCached(candles, cfg, p, fvgFetchedAt){
+  const key = candles.length + '|' + (candles.length?candles[0].time:0) + '|' + (candles.length?candles[candles.length-1].time:0)
+    + '|' + STATE.symbol + '|' + STATE.timeframe + '|' + fvgFetchedAt
+    + '|' + p.mostrarAlcista + p.mostrarBajista + p.margenReclamo + p.maxSetupAge + p.maxHtfVisibles
+    + p.requireHtfFvg + p.reqFvgM15 + p.reqFvgH4 + p.fvgMinPenetration;
+  if (_snReplayCache && _snReplayCache.key === key) return _snReplayCache.result;
+  const result = snReplay(candles, cfg, p);
+  _snReplayCache = { key, result };
+  return result;
+}
+
 // Replay completo: reproduce, en el mismo orden que el Pine ejecuta sus
 // bloques en cada vela, toda la máquina de estados de sweep+CISD.
 function snReplay(candles, cfg, p){
@@ -3658,6 +3685,12 @@ async function snEnsureFvgData(symbol){
   ]);
   if (m15) entry.m15 = m15;
   if (h4) entry.h4 = h4;
+  // Detectar los FVG acá (una vez cada vez que llega data nueva) en vez de
+  // en renderSniper — ese corre en el loop de 60fps durante pan/zoom/drag,
+  // y recorrer de nuevo 1000 velas de M15/H4 en cada frame sin que la data
+  // haya cambiado era puro desperdicio.
+  entry.m15Fvgs = entry.m15.length ? snDetectFvgs(entry.m15) : {bull:[],bear:[]};
+  entry.h4Fvgs  = entry.h4.length  ? snDetectFvgs(entry.h4)  : {bull:[],bear:[]};
   entry.fetchedAt = Date.now();
   entry.pending = false;
   renderSniper();
@@ -3665,7 +3698,7 @@ async function snEnsureFvgData(symbol){
 function snGetFvgData(symbol){
   let entry = _snFvgCache[symbol];
   if (!entry){
-    entry = _snFvgCache[symbol] = { m15:[], h4:[], fetchedAt:0, pending:true };
+    entry = _snFvgCache[symbol] = { m15:[], h4:[], m15Fvgs:{bull:[],bear:[]}, h4Fvgs:{bull:[],bear:[]}, fetchedAt:0, pending:true };
     snEnsureFvgData(symbol);
   } else if (!entry.pending && Date.now()-entry.fetchedAt > SN_FVG_REFRESH_MS){
     entry.pending = true;
@@ -3801,12 +3834,13 @@ function renderSniper(){
   const lastTime = candles[candles.length-1].time;
 
   // FVG (M15/H4) primero, para que las cajas queden DEBAJO de las líneas
-  // de sweep/CISD en el orden de dibujo del SVG (z-order natural). Se
-  // calculan acá (una sola vez) y se reusan para el filtro de confluencia
-  // del replay de abajo — no tiene sentido detectar los FVG dos veces.
+  // de sweep/CISD en el orden de dibujo del SVG (z-order natural). Ya
+  // vienen detectados desde snEnsureFvgData — no tiene sentido re-escanear
+  // 1000 velas de M15/H4 en cada render (este corre en el loop de 60fps
+  // durante pan/zoom/drag) si la data no cambió.
   const fvgData = snGetFvgData(STATE.symbol);
-  const m15Fvgs = fvgData.m15.length ? snDetectFvgs(fvgData.m15) : {bull:[],bear:[]};
-  const h4Fvgs  = fvgData.h4.length  ? snDetectFvgs(fvgData.h4)  : {bull:[],bear:[]};
+  const m15Fvgs = fvgData.m15Fvgs || {bull:[],bear:[]};
+  const h4Fvgs  = fvgData.h4Fvgs  || {bull:[],bear:[]};
   if (fvgData.m15.length){
     const m15Step = fvgData.m15[1].time - fvgData.m15[0].time;
     snDrawFvgBoxes(svg, candles, fvgData.m15, m15Fvgs.bull, sn.m15BullColor, sn.showM15Bull, sn.m15Count, sn.hideFilledBull, lastTime, m15Step);
@@ -3820,14 +3854,14 @@ function renderSniper(){
 
   const cfg = SNIPER_HTF_MAP[STATE.timeframe];
   if (!cfg) return; // TF sin HTF en el Pine original -> el sweep/CISD no corre, igual que en TV (el FVG arriba sí queda)
-  const { bullSetups, bearSetups, barStep } = snReplay(candles, cfg, {
+  const { bullSetups, bearSetups, barStep } = snReplayCached(candles, cfg, {
     mostrarAlcista: sn.mostrarAlcista, mostrarBajista: sn.mostrarBajista,
     margenReclamo: sn.margenReclamo, maxSetupAge: sn.maxSetupAge,
     maxHtfVisibles: sn.maxHtfVisibles, largoCisd: sn.largoCisd,
     requireHtfFvg: sn.requireHtfFvg, reqFvgM15: sn.reqFvgM15, reqFvgH4: sn.reqFvgH4,
     fvgMinPenetration: sn.fvgMinPenetration,
     fvgM15: fvgData.m15, fvgH4: fvgData.h4, m15Fvgs, h4Fvgs,
-  });
+  }, fvgData.fetchedAt);
 
   function draw(setups, isBull){
     const sweepColor = isBull ? sn.colorSweepLow : sn.colorSweepHigh;
@@ -4388,6 +4422,14 @@ async function refreshFormingCandle(symbol, timeframe){
     const bar=json.bars[0];
     const last=window._lastCandles[window._lastCandles.length-1];
     if(bar.time!==last.time)return; // ya cerró — eso lo maneja appendNewBar
+    // Este tick corre cada 1s todo el tiempo que la vela sigue en formación
+    // — la mayoría de esos segundos el precio no se movió un tick siquiera.
+    // renderSeries() de acá abajo es caro: reconstruye TODAS las velas
+    // cargadas (miles, desde que Watchtower trae más historial), el
+    // volumen, los overlays y Watchtower/Sniper desde cero. Sin este
+    // chequeo se pagaba ese costo cada segundo aunque no hubiera nada
+    // nuevo que mostrar.
+    if (bar.open===last.open && bar.high===last.high && bar.low===last.low && bar.close===last.close && bar.volume===last.volume) return;
 
     window._lastCandles[window._lastCandles.length-1]=bar;
     renderSeries(timeframe);
