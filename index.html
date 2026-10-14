@@ -1154,7 +1154,7 @@ function renderLayoutGrid(n){
   const scopeWrap = bar.querySelector('#gc-scope');
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
-      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="¿A qué panel(es) aplican el símbolo y los TFs rápidos de esta barra?">${s==='active'?'Activo':'Todos'}</button>`
+      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="¿A qué panel(es) aplican el símbolo, los TFs rápidos y 'Aplicar preset' de esta barra?">${s==='active'?'Activo':'Todos'}</button>`
     ).join('');
     scopeWrap.querySelectorAll('[data-scope]').forEach(b=>{
       b.addEventListener('click', ()=>{ scope=b.dataset.scope; renderScopeBtns(); });
@@ -4347,7 +4347,7 @@ function refreshChart(){
   loadChart(STATE.symbol, STATE.timeframe).finally(()=>btn.classList.remove('spinning'));
 }
 
-async function loadChart(symbol, timeframe) {
+async function loadChart(symbol, timeframe, _isUppercaseRetry) {
   setLoaderMsg(`Loading ${symbol} ${timeframe}…`);showOverlay(true);setStatus('loading','● loading…');
 
   // Siempre 500 acá — es lo que ya suele tener MT5 cacheado, responde rápido
@@ -4402,6 +4402,23 @@ async function loadChart(symbol, timeframe) {
     startCountdown(timeframe, last.time, json.serverTime);
 
   } catch(err) {
+    // El input de símbolo se muestra todo en mayúsculas por CSS
+    // (text-transform), pero eso es solo cosmético — lo que viaja al
+    // puente es lo que el usuario tipeó literalmente, y los nombres de
+    // símbolo en MT5 distinguen mayúsculas de minúsculas ("US30" existe,
+    // "us30" no). No podemos simplemente forzar mayúsculas en todos los
+    // casos (hay símbolos reales con sufijo en minúscula, como
+    // "NAS100.fs" — forzar ahí rompería el símbolo que sí funciona). Por
+    // eso: si falló, reintentamos UNA sola vez con el símbolo tal cual lo
+    // tipeó pero en mayúsculas, antes de darnos por vencidos — cubre el
+    // caso común (escribir en minúscula) sin arriesgar nada si el símbolo
+    // ya estaba bien escrito.
+    const upper = symbol.toUpperCase();
+    if (!_isUppercaseRetry && upper !== symbol) {
+      STATE.symbol = upper;
+      loadChart(upper, timeframe, true);
+      return;
+    }
     setLoaderMsg('⚠ '+err.message);
     setStatus('err','● error');
   }
