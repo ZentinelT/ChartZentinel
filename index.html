@@ -2784,6 +2784,7 @@ function saveIndicatorSettings() {
     if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
     saveWatchtowerState();
     renderWatchtower();
+    ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
   } else if (_indSettingsTarget === 'Sniper') {
     const g = id => document.getElementById(id);
     STATE.sniper.mostrarAlcista = g('sn-mostrar-alcista').checked;
@@ -4117,48 +4118,54 @@ async function loadMoreHistory(){
 // chart, PWH/PWL/PWM (que necesitan ver la semana ANTERIOR completa) no
 // tienen con qué calcularse y quedan sin dibujar hasta que el usuario hace
 // zoom out y loadMoreHistory trae más historial "por las dudas". Si el
-// toggle de niveles semanales está prendido, pedimos ese historial de una
-// vez al cargar, en vez de esperar a que el usuario scrollee para notarlo.
+// toggle de niveles semanales está prendido, completamos ese historial en
+// segundo plano, en vez de esperar a que el usuario scrollee para notarlo.
 //
-// OJO: no reusa loadMoreHistory() para esto — esa función, además de traer
-// velas viejas, corrige la posición de scroll asumiendo que la llamó un
-// scroll manual del usuario cerca del borde izquierdo (desplaza el rango
-// visible para que la vista no "salte"). Disparada sola, varias veces
-// seguidas, apenas se abre el chart, ese desplazamiento se acumula sobre una
-// vista que en realidad nunca se movió y termina arruinando el zoom (todas
-// las velas amontonadas a la izquierda, chart vacío). Acá solo pegamos el
-// historial viejo adelante y al final reseteamos la vista una sola vez.
+// Un solo pedido grande, NO una cadena de pedidos de a 300: el puente habla
+// con MT5 por archivo (escribe un pedido, sondea cada 100ms la respuesta, y
+// el lado MT5 reintenta hasta 15 veces con su propio delay si todavía no
+// tiene esas velas descargadas) — cada ida y vuelta ya es lenta de por sí,
+// y encadenar varias en secuencia (como hacía antes, pidiendo de a 300) se
+// sentía lento Y a los tirones, con el chart re-renderizando en varios
+// pasos visibles. Acá se calcula de una sola vez cuánto falta y se pide
+// todo junto — un solo re-render, prolijo, al final.
+//
+// Tampoco reusa loadMoreHistory(): esa función además corrige la posición
+// de scroll asumiendo que la llamó un scroll manual del usuario cerca del
+// borde izquierdo. Disparada sola, apenas se abre el chart, ese ajuste se
+// aplica sobre una vista que en realidad nunca se movió.
 async function ensureWeeklyHistoryForWatchtower(){
   if (!STATE.watchtower.enabled || !STATE.watchtower.pwLevels) return;
-  let fetchedMore = false;
-  for (let guard=0; guard<20; guard++){
-    const candles = window._lastCandles;
-    if (!candles || !candles.length || candles.length>8000) break;
-    // No alcanza con que haya UNA vela de la semana anterior metida en el
-    // batch (eso daba un high/low de PW calculado con una semana incompleta,
-    // que después "saltaba" a la posición correcta apenas el zoom traía el
-    // resto) — hace falta que el historial cargado llegue hasta el
-    // ARRANQUE real de esa semana anterior.
-    const prevWeekStart = wtWeekKey(candles[candles.length-1].time) - 7*86400;
-    if (candles[0].time <= prevWeekStart) break;
-    try {
-      const oldest = candles[0].time;
-      const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=300&before=${oldest}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.error || !Array.isArray(json.bars) || json.bars.length===0) break;
-      const older = json.bars.filter(b => b.time < oldest);
-      if (older.length===0) break;
-      window._lastCandles = older.concat(candles);
-      fetchedMore = true;
-    } catch(e) { break; }
-  }
-  if (fetchedMore) {
-    renderSeries(STATE.timeframe);
-    chart.timeScale().scrollToRealTime();
-    const candles = window._lastCandles;
-    updateStatusBar(STATE.symbol, STATE.timeframe, candles.length, candles[0], candles[candles.length-1]);
-  }
+  const candles = window._lastCandles;
+  if (!candles || !candles.length || candles.length>8000) return;
+  // No alcanza con que haya UNA vela de la semana anterior metida en el
+  // batch (eso daba un high/low de PW calculado con una semana incompleta,
+  // que después "saltaba" a la posición correcta apenas el zoom traía el
+  // resto) — hace falta que el historial cargado llegue hasta el ARRANQUE
+  // real de esa semana anterior.
+  const prevWeekStart = wtWeekKey(candles[candles.length-1].time) - 7*86400;
+  if (candles[0].time <= prevWeekStart) return; // ya está completo
+
+  const step = TF_SECONDS[STATE.timeframe];
+  const missingSeconds = candles[0].time - prevWeekStart;
+  // +50% de margen por los huecos de mercado cerrado (fines de semana).
+  const extraBars = step ? Math.min(6000, Math.ceil(missingSeconds/step*1.5) + 50) : 300;
+
+  try {
+    const oldest = candles[0].time;
+    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=${extraBars}&before=${oldest}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error || !Array.isArray(json.bars) || json.bars.length===0) return;
+    const older = json.bars.filter(b => b.time < oldest);
+    if (older.length===0) return;
+    window._lastCandles = older.concat(candles);
+  } catch(e) { return; }
+
+  renderSeries(STATE.timeframe);
+  chart.timeScale().scrollToRealTime();
+  const updated = window._lastCandles;
+  updateStatusBar(STATE.symbol, STATE.timeframe, updated.length, updated[0], updated[updated.length-1]);
 }
 
 // Cierre de vela: pega solo la(s) vela(s) nueva(s) sin recargar todo el chart
@@ -4204,6 +4211,11 @@ function refreshChart(){
 async function loadChart(symbol, timeframe) {
   setLoaderMsg(`Loading ${symbol} ${timeframe}…`);showOverlay(true);setStatus('loading','● loading…');
 
+  // Siempre 500 acá — es lo que ya suele tener MT5 cacheado, responde rápido
+  // (chart visible al toque). El historial extra para los niveles semanales
+  // de Watchtower (que suele requerir que MT5 vaya a buscar velas que
+  // todavía no tiene, mucho más lento) se completa aparte, en segundo
+  // plano, después de este primer pintado — ver ensureWeeklyHistoryForWatchtower.
   const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=500`;
 
   try {
