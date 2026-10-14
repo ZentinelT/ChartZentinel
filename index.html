@@ -369,17 +369,32 @@
   .tool-btn:hover::after { opacity: 1; }
 
   /* ─── SIDEBAR ─────────────────────────────────────────── */
+  /* ¿Por qué un wrapper interno de ancho fijo? Animar el "width" de
+     #sidebar directamente (como estaba antes) hacía que TODO su contenido
+     (texto, filas del watchlist) se reacomodara cuadro a cuadro durante la
+     transición — el texto envolvía/desbordaba mientras el panel se
+     angostaba, así que se veía brusco en vez de un deslizamiento prolijo.
+     Ahora #sidebar es solo el "marco" que recorta (overflow:hidden) — el
+     contenido real vive en .sidebar-inner con un ancho FIJO que nunca
+     cambia, así que nunca se reacomoda: solo se ve "correr" hacia afuera
+     de la vista a medida que el marco se achica, que es el efecto que se
+     busca. */
   #sidebar {
     width: var(--sidebar-w);
     background: var(--bg-panel);
     border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
-    transition: width .15s ease;
+    transition: width .22s cubic-bezier(.4,0,.2,1);
+    will-change: width;
   }
   #sidebar.collapsed { width: 0; border-right: none; }
+  .sidebar-inner {
+    width: var(--sidebar-w);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
 
   #btn-sidebar-toggle {
     width: 13px;
@@ -795,21 +810,23 @@
 
   <!-- ── SIDEBAR ───────────────────────────────────────── -->
   <div id="sidebar">
-    <div class="sidebar-header">
-      Watchlist
-      <button class="sidebar-add-btn" onclick="toggleAddSym()" title="Add symbol">+</button>
-    </div>
-    <div id="add-sym-form">
-      <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20">
-      <button id="add-sym-ok" onclick="addSymbol()">→</button>
-    </div>
-    <div id="watchlist"></div>
-    <div class="sidebar-indicators">
+    <div class="sidebar-inner">
       <div class="sidebar-header">
-        Active Indicators
-        <button class="sidebar-add-btn" onclick="openIndicatorModal()" title="Add indicator">+</button>
+        Watchlist
+        <button class="sidebar-add-btn" onclick="toggleAddSym()" title="Add symbol">+</button>
       </div>
-      <div id="ind-list"></div>
+      <div id="add-sym-form">
+        <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20">
+        <button id="add-sym-ok" onclick="addSymbol()">→</button>
+      </div>
+      <div id="watchlist"></div>
+      <div class="sidebar-indicators">
+        <div class="sidebar-header">
+          Active Indicators
+          <button class="sidebar-add-btn" onclick="openIndicatorModal()" title="Add indicator">+</button>
+        </div>
+        <div id="ind-list"></div>
+      </div>
     </div>
   </div>
 
@@ -2483,6 +2500,13 @@ function toggleSidebar() {
   document.getElementById('btn-sidebar-toggle').classList.toggle('collapsed', collapsed);
   lsSet(lsKey('td_sidebar_collapsed'), collapsed ? '1' : '0');
 }
+// Clickear el chart con el watchlist abierto lo cierra — no bloquea nada
+// (sin preventDefault/stopPropagation), así el click sigue haciendo lo que
+// ya hacía (seleccionar/dibujar) y además cierra la barra lateral.
+document.getElementById('chart-container').addEventListener('mousedown', () => {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && !sidebar.classList.contains('collapsed')) toggleSidebar();
+});
 // En un panel embebido (grilla 2×/4⊞) arranca colapsado la primera vez
 // (sin preferencia guardada todavía) — un watchlist completo abierto por
 // default en cada uno de 4 paneles chicos comería casi toda la grilla.
