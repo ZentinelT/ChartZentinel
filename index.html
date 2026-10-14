@@ -77,7 +77,10 @@
   .logo-sep { width: 1px; height: 24px; background: var(--border-light); margin: 0 4px; }
 
   #symbol-search-wrap { position: relative; display: flex; align-items: center; }
-  #symbol-input {
+  /* Clase compartida: la usan tanto #symbol-input (modo 1 gráfico) como el
+     buscador de símbolo global de renderLayoutGrid (modo 2×/4⊞), para que
+     ambos se vean exactamente igual en vez de reimplementar el estilo. */
+  .topbar-input {
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
     border-radius: 6px;
@@ -92,7 +95,7 @@
     text-transform: uppercase;
     transition: border-color .2s, box-shadow .2s;
   }
-  #symbol-input:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 2px var(--gold-glow); }
+  .topbar-input:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 2px var(--gold-glow); }
 
   #price-display { display: flex; align-items: baseline; gap: 8px; }
   #price-last { font-family: var(--font-mono); font-size: 18px; font-weight: 500; color: var(--text-primary); }
@@ -103,21 +106,27 @@
   #ohlcv-bar { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
   #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
 
-  /* ─── COUNTDOWN BADGE (pegado al precio actual, como TV) ──── */
+  /* ─── COUNTDOWN BADGE (pegado al precio actual, como TV) ────
+     Posición/ancho/alto se fijan por JS (positionCountdownBadge), medidos
+     pixel a pixel contra el tag de precio nativo que dibuja el chart: ese
+     tag NO ocupa todo el ancho de la escala de precio (deja ~6px de margen
+     a la derecha) y mide 17px de alto — por eso acá se replica ese mismo
+     tamaño en vez de adivinar. font-weight normal (no 500): en fuente
+     monoespaciada, el trazo más grueso hacía que se viera más grande que
+     el precio aunque el font-size nominal fuera menor. */
   #price-countdown-badge {
     position: absolute;
-    right: 0;
-    transform: translateY(2px);
+    display: none;
+    align-items: center;
+    justify-content: center;
     font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 10px;
+    font-weight: 400;
     color: #0a0a0c;
-    padding: 2px 6px;
     border-radius: 0 0 3px 3px;
     white-space: nowrap;
     z-index: 5;
     pointer-events: none;
-    display: none;
   }
   #price-countdown-badge.up { background: var(--green); }
   #price-countdown-badge.dn { background: var(--red); }
@@ -655,7 +664,7 @@
   <div class="logo-sep"></div>
 
   <div id="symbol-search-wrap">
-    <input id="symbol-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
+    <input id="symbol-input" class="topbar-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
   </div>
 
   <div id="price-display">
@@ -1030,7 +1039,7 @@ if (!_lsOK) console.warn('Zentinel: localStorage no disponible (bloqueado por el
 if (LAYOUT_N > 1 && !EMBED_MODE) setTimeout(() => renderLayoutGrid(LAYOUT_N), 0);
 function renderLayoutGrid(n){
   document.body.innerHTML = '';
-  document.body.style.cssText = 'margin:0;height:100vh;display:flex;flex-direction:column;background:#0a0a0c;';
+  document.body.style.cssText = 'margin:0;height:100vh;display:flex;flex-direction:column;background:var(--bg-primary);';
 
   // Panel "activo": el que tiene el borde dorado. Como cada panel es un
   // iframe aparte, un click adentro no genera un evento que el padre pueda
@@ -1042,7 +1051,7 @@ function renderLayoutGrid(n){
   let scope = 'active'; // 'active' | 'all' — a quién les llegan los controles globales
   function setActivePane(idx){
     activePane = idx;
-    iframeEls.forEach((el,i) => { el.style.borderColor = (i+1===idx) ? '#c9a84c' : 'transparent'; });
+    iframeEls.forEach((el,i) => { el.style.borderColor = (i+1===idx) ? 'var(--gold)' : 'transparent'; });
   }
   // Aviso explícito de cada panel al clickearlo — más confiable que el
   // 'blur' de abajo, que solo agarra bien el primer salto de foco.
@@ -1068,12 +1077,40 @@ function renderLayoutGrid(n){
     targetFrames().forEach(el => el.contentWindow.postMessage(msg, '*'));
   }
 
-  // ─── Barra 1: logo + layout picker ────────────────────────
+  // ─── Barra 1 y 2: MISMA estructura/orden que #topbar y #tf-bar en modo
+  // 1 gráfico (no solo mismas clases/colores — el motivo de que antes "no
+  // se vieran iguales" pese a compartir CSS es que el contenido estaba
+  // repartido distinto). Acá se respeta slot por slot:
+  //   Barra 1 (52px): logo · separador · [controles principales] · spacer
+  //                   · layout-picker · refresh (solo ícono) · settings
+  //   Barra 2 (36px): [identidad a la izquierda] · TFs rápidos
+  // En modo grilla no hay un símbolo/precio único que mostrar (puede haber
+  // uno distinto por panel), así que donde #topbar pone el symbol-input +
+  // precio + OHLCV, acá va el selector "Aplicar a" + el símbolo GLOBAL; y
+  // donde #tf-bar pone el nombre de símbolo, acá va el selector de preset.
   const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex;align-items:center;gap:8px;height:36px;flex-shrink:0;background:#14141c;border-bottom:1px solid #26263a;padding:0 12px;font-family:monospace;';
-  bar.innerHTML = `<span style="color:#c9a84c;font-weight:700;letter-spacing:2px;font-size:12px;">ZENTINEL</span>
-    <span style="color:#55556a;font-size:11px;margin-left:8px;">Layout:</span>
-    ${[1,2,4].map(v=>`<button data-layout="${v}" style="background:${v===n?'rgba(201,168,76,.15)':'none'};color:${v===n?'#c9a84c':'#8888a8'};border:1px solid ${v===n?'#c9a84c55':'#26263a'};border-radius:4px;padding:4px 10px;font-family:monospace;font-size:11px;cursor:pointer;">${v===1?'1':v===2?'2 ×':'4 ⊞'}</button>`).join('')}`;
+  bar.id = 'topbar';
+  bar.innerHTML = `
+    <div class="logo">ZENTINEL</div>
+    <div class="logo-sep"></div>
+    <div id="gc-scope" style="display:flex;gap:2px;"></div>
+    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Símbolo…" autocomplete="off" title="Símbolo para el panel activo o todos — Enter para aplicar" style="width:120px;">
+    <div class="topbar-spacer"></div>
+    <div id="layout-picker" title="Cantidad de gráficos">
+      ${[1,2,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':'4 ⊞'}</button>`).join('')}
+    </div>
+    <button class="topbar-btn" id="gc-refresh" title="Refrescar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="topbar-btn" id="gc-settings" title="Configuración del panel activo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Settings
+    </button>
+    <div id="api-badge" style="pointer-events:none;">MULTI</div>
+  `;
   bar.querySelectorAll('[data-layout]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const v = btn.dataset.layout;
@@ -1081,32 +1118,24 @@ function renderLayoutGrid(n){
     });
   });
 
-  // ─── Barra 2: controles globales (símbolo / TF / preset) ──
   const gbar = document.createElement('div');
-  gbar.style.cssText = 'display:flex;align-items:center;gap:10px;height:40px;flex-shrink:0;background:#101018;border-bottom:1px solid #26263a;padding:0 12px;font-family:monospace;font-size:11px;color:#8888a8;';
-  const btnStyle = 'background:none;border:1px solid #26263a;border-radius:4px;color:#8888a8;padding:4px 8px;font-family:monospace;font-size:11px;cursor:pointer;';
+  gbar.id = 'tf-bar';
   gbar.innerHTML = `
-    <span style="color:#55556a;">Aplicar a:</span>
-    <span id="gc-scope" style="display:flex;gap:2px;"></span>
-    <span style="width:1px;height:18px;background:#26263a;"></span>
-    <input id="gc-symbol" type="text" placeholder="Símbolo…" autocomplete="off" style="width:110px;background:#0a0a0c;border:1px solid #26263a;border-radius:4px;color:#e8e8f0;padding:5px 8px;font-family:monospace;font-size:11px;text-transform:uppercase;outline:none;">
-    <span style="width:1px;height:18px;background:#26263a;"></span>
-    <span id="gc-tf" style="display:flex;gap:2px;"></span>
-    <span style="width:1px;height:18px;background:#26263a;"></span>
-    <select id="gc-preset" style="background:#0a0a0c;border:1px solid #26263a;border-radius:4px;color:#e8e8f0;padding:5px 8px;font-family:monospace;font-size:11px;outline:none;"></select>
-    <button id="gc-preset-apply" style="${btnStyle}">Aplicar preset</button>
-    <span style="flex:1;"></span>
-    <button id="gc-refresh" title="Refrescar" style="${btnStyle}">⟳ Refresh</button>
-    <button id="gc-settings" title="Configuración del panel activo" style="${btnStyle}">⚙ Settings</button>
+    <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:6px;">
+      <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;">Preset:</span>
+      <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
+      <button id="gc-preset-apply" class="topbar-btn">Aplicar</button>
+    </div>
+    <div id="tf-bar-tfs"></div>
   `;
   document.body.appendChild(bar);
   document.body.appendChild(gbar);
 
   // Scope: Activo / Todos
-  const scopeWrap = gbar.querySelector('#gc-scope');
+  const scopeWrap = bar.querySelector('#gc-scope');
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
-      `<button data-scope="${s}" style="${btnStyle}${s===scope?'background:rgba(201,168,76,.15);color:#c9a84c;border-color:#c9a84c55;':''}">${s==='active'?'Panel activo':'Todos'}</button>`
+      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="¿A qué panel(es) aplican el símbolo y los TFs rápidos de esta barra?">${s==='active'?'Activo':'Todos'}</button>`
     ).join('');
     scopeWrap.querySelectorAll('[data-scope]').forEach(b=>{
       b.addEventListener('click', ()=>{ scope=b.dataset.scope; renderScopeBtns(); });
@@ -1115,7 +1144,7 @@ function renderLayoutGrid(n){
   renderScopeBtns();
 
   // Símbolo: Enter para aplicar
-  const symbolInp = gbar.querySelector('#gc-symbol');
+  const symbolInp = bar.querySelector('#gc-symbol');
   symbolInp.addEventListener('keydown', e=>{
     if (e.key !== 'Enter') return;
     const sym = symbolInp.value.trim();
@@ -1127,8 +1156,8 @@ function renderLayoutGrid(n){
   // Timeframes más comunes (acceso rápido global — cada panel sigue
   // teniendo su propia barra completa de TF para ajustes finos).
   const QUICK_TFS = [ ['1min','1m'], ['5min','5m'], ['15min','15m'], ['1h','1H'], ['4h','4H'], ['1day','D'] ];
-  const tfWrap = gbar.querySelector('#gc-tf');
-  tfWrap.innerHTML = QUICK_TFS.map(([tf,label]) => `<button data-tf="${tf}" style="${btnStyle}">${label}</button>`).join('');
+  const tfWrap = gbar.querySelector('#tf-bar-tfs');
+  tfWrap.innerHTML = QUICK_TFS.map(([tf,label]) => `<button class="tf-btn" data-tf="${tf}">${label}</button>`).join('');
   tfWrap.querySelectorAll('[data-tf]').forEach(b=>{
     b.addEventListener('click', ()=>broadcast({ type:'zentinel:setTimeframe', tf:b.dataset.tf }));
   });
@@ -1161,13 +1190,13 @@ function renderLayoutGrid(n){
     broadcast({ type:'zentinel:applyPreset', name });
   });
 
-  gbar.querySelector('#gc-refresh').addEventListener('click', ()=>{
+  bar.querySelector('#gc-refresh').addEventListener('click', ()=>{
     broadcast({ type:'zentinel:refresh' });
   });
   // Settings abre un modal — no tiene sentido "a todos" (solo se puede
   // mirar uno a la vez), así que siempre apunta al panel activo sin
   // importar lo que diga el selector de alcance.
-  gbar.querySelector('#gc-settings').addEventListener('click', ()=>{
+  bar.querySelector('#gc-settings').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
   });
 
@@ -1175,7 +1204,7 @@ function renderLayoutGrid(n){
   const grid = document.createElement('div');
   const cols = n===4 ? 2 : n;
   const rows = n===4 ? 2 : 1;
-  grid.style.cssText = `flex:1;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:2px;background:#000;min-height:0;`;
+  grid.style.cssText = `flex:1;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:2px;background:var(--bg-primary);min-height:0;`;
   for (let i=1;i<=n;i++){
     const iframe = document.createElement('iframe');
     iframe.src = `index.html?embed=1&pane=${i}`;
@@ -4136,36 +4165,53 @@ async function loadMoreHistory(){
 // aplica sobre una vista que en realidad nunca se movió.
 async function ensureWeeklyHistoryForWatchtower(){
   if (!STATE.watchtower.enabled || !STATE.watchtower.pwLevels) return;
-  const candles = window._lastCandles;
-  if (!candles || !candles.length || candles.length>8000) return;
-  // No alcanza con que haya UNA vela de la semana anterior metida en el
-  // batch (eso daba un high/low de PW calculado con una semana incompleta,
-  // que después "saltaba" a la posición correcta apenas el zoom traía el
-  // resto) — hace falta que el historial cargado llegue hasta el ARRANQUE
-  // real de esa semana anterior.
-  const prevWeekStart = wtWeekKey(candles[candles.length-1].time) - 7*86400;
-  if (candles[0].time <= prevWeekStart) return; // ya está completo
-
+  if (!window._lastCandles || !window._lastCandles.length) return;
   const step = TF_SECONDS[STATE.timeframe];
-  const missingSeconds = candles[0].time - prevWeekStart;
-  // +50% de margen por los huecos de mercado cerrado (fines de semana).
-  const extraBars = step ? Math.min(6000, Math.ceil(missingSeconds/step*1.5) + 50) : 300;
+  let fetchedMore = false;
 
-  try {
-    const oldest = candles[0].time;
-    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=${extraBars}&before=${oldest}`;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json.error || !Array.isArray(json.bars) || json.bars.length===0) return;
-    const older = json.bars.filter(b => b.time < oldest);
-    if (older.length===0) return;
-    window._lastCandles = older.concat(candles);
-  } catch(e) { return; }
+  // La estimación de cuántas velas hacen falta (extraBars) puede quedarse
+  // corta en la práctica — fines de semana, feriados, o historial que MT5
+  // todavía no tenía descargado y devolvió incompleto pese al margen del
+  // 50%. Un solo pedido que se conforma con lo que llegó reproduce el bug
+  // original (nivel calculado con semana incompleta, se "acomoda" recién
+  // cuando el usuario hace zoom). Por eso se vuelve a verificar después de
+  // cada pedido y, si todavía falta, se pide de nuevo — acotado a pocas
+  // vueltas, no las ~20 de a 300 de antes, porque la estimación ya debería
+  // acertarle casi siempre de una.
+  for (let guard=0; guard<5; guard++){
+    const candles = window._lastCandles;
+    if (candles.length>8000) break;
+    // No alcanza con que haya UNA vela de la semana anterior metida en el
+    // batch (eso daba un high/low de PW calculado con una semana incompleta,
+    // que después "saltaba" a la posición correcta apenas el zoom traía el
+    // resto) — hace falta que el historial cargado llegue hasta el ARRANQUE
+    // real de esa semana anterior.
+    const prevWeekStart = wtWeekKey(candles[candles.length-1].time) - 7*86400;
+    if (candles[0].time <= prevWeekStart) break; // ya está completo
 
-  renderSeries(STATE.timeframe);
-  chart.timeScale().scrollToRealTime();
-  const updated = window._lastCandles;
-  updateStatusBar(STATE.symbol, STATE.timeframe, updated.length, updated[0], updated[updated.length-1]);
+    const missingSeconds = candles[0].time - prevWeekStart;
+    // +50% de margen por los huecos de mercado cerrado (fines de semana).
+    const extraBars = step ? Math.min(6000, Math.ceil(missingSeconds/step*1.5) + 50) : 300;
+
+    try {
+      const oldest = candles[0].time;
+      const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=${extraBars}&before=${oldest}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.error || !Array.isArray(json.bars) || json.bars.length===0) break;
+      const older = json.bars.filter(b => b.time < oldest);
+      if (older.length===0) break; // el bridge no tiene más historial — no insistir
+      window._lastCandles = older.concat(candles);
+      fetchedMore = true;
+    } catch(e) { break; }
+  }
+
+  if (fetchedMore) {
+    renderSeries(STATE.timeframe);
+    chart.timeScale().scrollToRealTime();
+    const updated = window._lastCandles;
+    updateStatusBar(STATE.symbol, STATE.timeframe, updated.length, updated[0], updated[updated.length-1]);
+  }
 }
 
 // Cierre de vela: pega solo la(s) vela(s) nueva(s) sin recargar todo el chart
@@ -4313,8 +4359,19 @@ function positionCountdownBadge(lastClose, lastOpen){
   if(!candleSeries||lastClose==null){ badge.style.display='none'; return; }
   const y=candleSeries.priceToCoordinate(lastClose);
   if(y==null){ badge.style.display='none'; return; }
-  badge.style.display='block';
-  badge.style.top=(y+9)+'px';
+  const container=document.getElementById('chart-container');
+  const priceScaleW=chart.priceScale('right').width();
+  // Medido pixel a pixel contra el tag de precio nativo: no ocupa todo el
+  // ancho de la escala de precio, deja ~6px de margen del lado derecho, y
+  // mide 17px de alto centrado en la línea del precio.
+  const RIGHT_GAP=6, TAG_H=17;
+  badge.style.display='flex';
+  badge.style.left=(container.clientWidth-priceScaleW)+'px';
+  badge.style.width=(priceScaleW-RIGHT_GAP)+'px';
+  badge.style.height=TAG_H+'px';
+  // El tag nativo no está centrado en "y": mide pixel a pixel de y-5 a
+  // y+11 (17px) — su borde inferior real es y+11, no y+altura/2.
+  badge.style.top=(y+11)+'px';
   badge.classList.toggle('up', lastClose>=lastOpen);
   badge.classList.toggle('dn', lastClose<lastOpen);
 }
