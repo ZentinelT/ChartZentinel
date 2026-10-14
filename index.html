@@ -1191,11 +1191,11 @@ function renderLayoutGrid(n){
 //  STATE
 // ══════════════════════════════════════════════════════════
 const WT_KZ_DEFAULTS = {
-  asia:  { enabled:true, start:[19,0], end:[20,0] },
-  london:{ enabled:true, start:[2,0],  end:[5,0]  },
-  nyam:  { enabled:true, start:[9,0],  end:[10,0] },
-  nylu:  { enabled:true, start:[10,0], end:[11,0] },
-  nypm:  { enabled:true, start:[11,0], end:[12,0] },
+  asia:  { enabled:true, start:[19,0], end:[20,0], color:'#f7525f' },
+  london:{ enabled:true, start:[2,0],  end:[5,0],  color:'#5b9cf6' },
+  nyam:  { enabled:true, start:[9,0],  end:[10,0], color:'#e0e0e0' },
+  nylu:  { enabled:true, start:[10,0], end:[11,0], color:'#ffa726' },
+  nypm:  { enabled:true, start:[11,0], end:[12,0], color:'#e0e0e0' },
 };
 const _wtSaved = JSON.parse(lsGet(lsKey('td_watchtower')) || '{}');
 const _wtKz = {};
@@ -2566,7 +2566,8 @@ function openIndicatorSettings(name) {
       return `
       <div class="wt-set-row" style="gap:8px">
         <input type="checkbox" data-kz-enabled="${s.key}" ${cfg.enabled ? 'checked' : ''}>
-        <span style="flex:1;color:${s.color}">${s.label}</span>
+        <span style="flex:1;color:${cfg.color}">${s.label}</span>
+        <input type="color" data-kz-color="${s.key}" value="${cfg.color}">
         <input type="time" data-kz-start="${s.key}" value="${wtTimeToStr(cfg.start)}" style="width:92px">
         <span style="color:var(--text-dim)">–</span>
         <input type="time" data-kz-end="${s.key}" value="${wtTimeToStr(cfg.end)}" style="width:92px">
@@ -2696,11 +2697,13 @@ function saveIndicatorSettings() {
       const enEl = document.querySelector(`[data-kz-enabled="${s.key}"]`);
       const stEl = document.querySelector(`[data-kz-start="${s.key}"]`);
       const enEl2 = document.querySelector(`[data-kz-end="${s.key}"]`);
+      const colorEl = document.querySelector(`[data-kz-color="${s.key}"]`);
       if (!enEl || !stEl || !enEl2) return;
       STATE.watchtower.kz[s.key] = {
         enabled: enEl.checked,
         start: wtStrToTime(stEl.value),
         end: wtStrToTime(enEl2.value),
+        color: colorEl ? colorEl.value : STATE.watchtower.kz[s.key].color,
       };
     });
     const colorEl=document.getElementById('wt-org-color');
@@ -2962,10 +2965,11 @@ function renderWtKillzones(svg, byDate, dateKeys, barStep){
       if(!cfg || !cfg.enabled) return;
       const inSess=dayCandles.filter(c=>wtOverlapsWindow(c.time,barStep,cfg.start,cfg.end));
       if(!inSess.length) return;
+      const color=cfg.color||sess.color;
       let top=-Infinity,bottom=Infinity,tHigh=inSess[0].time,tLow=inSess[0].time;
       inSess.forEach(c=>{ if(c.high>top){top=c.high;tHigh=c.time;} if(c.low<bottom){bottom=c.low;tLow=c.time;} });
       const boxRight=inSess[inSess.length-1].time+barStep;
-      wtRect(svg, inSess[0].time, boxRight, top, bottom, sess.color, (STATE.watchtower.boxOpacity??10)/100, 'none');
+      wtRect(svg, inSess[0].time, boxRight, top, bottom, color, (STATE.watchtower.boxOpacity??10)/100, 'none');
 
       const lastIdx=dayCandles.indexOf(inSess[inSess.length-1]);
       const after=dayCandles.slice(lastIdx+1);
@@ -2975,8 +2979,8 @@ function renderWtKillzones(svg, byDate, dateKeys, barStep){
         if(lActive){ lEnd=c.time; if(c.low<=bottom) lActive=false; }
         if(!hActive && !lActive) break;
       }
-      wtLine(svg, tHigh, Math.max(hEnd,boxRight), top, sess.color, 1);
-      wtLine(svg, tLow, Math.max(lEnd,boxRight), bottom, sess.color, 1);
+      wtLine(svg, tHigh, Math.max(hEnd,boxRight), top, color, 1);
+      wtLine(svg, tLow, Math.max(lEnd,boxRight), bottom, color, 1);
     });
   });
 }
