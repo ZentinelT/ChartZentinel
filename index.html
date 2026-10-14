@@ -2962,6 +2962,12 @@ function hitTestIndicatorRegions(mx,my){
   return null;
 }
 
+// Todo nivel/línea de un indicador que todavía está "vigente" (no fue
+// invalidado) tiene que seguir proyectándose un poco más allá de la última
+// vela en curso, no cortar justo ahí — si no, visualmente parece que el
+// nivel "ya terminó" apenas toca el borde derecho del chart.
+const LEVEL_EXTEND_BARS = 8;
+
 function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke,indName){
   indName = indName || 'Watchtower';
   const x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
@@ -3049,28 +3055,31 @@ function renderWtKillzones(svg, byDate, dateKeys, barStep){
         if(lActive){ lEnd=c.time; if(c.low<=bottom) lActive=false; }
         if(!hActive && !lActive) break;
       }
+      if (hActive) hEnd = dayCandles[dayCandles.length-1].time + LEVEL_EXTEND_BARS*barStep;
+      if (lActive) lEnd = dayCandles[dayCandles.length-1].time + LEVEL_EXTEND_BARS*barStep;
       wtLine(svg, tHigh, Math.max(hEnd,boxRight), top, color, 1);
       wtLine(svg, tLow, Math.max(lEnd,boxRight), bottom, color, 1);
     });
   });
 }
 
-function renderWtPrevDay(svg, byDate, dateKeys, lastTime){
+function renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep){
   const todayKey=wtDayKey(lastTime);
   const idx=dateKeys.indexOf(todayKey);
   if(idx<=0) return;
   const prevCandles=byDate.get(dateKeys[idx-1]);
   const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
   const x1=byDate.get(todayKey)[0].time;
-  wtLine(svg, x1, lastTime, high, '#ffffff', 1);
-  wtLine(svg, x1, lastTime, low,  '#ffffff', 1);
-  wtLine(svg, x1, lastTime, mid,  '#ffffff', 1, '4,3');
-  wtLabel(svg, lastTime, high, 'PDH', '#ffffff');
-  wtLabel(svg, lastTime, low,  'PDL', '#ffffff');
-  wtLabel(svg, lastTime, mid,  'PDM', '#ffffff');
+  const x2=lastTime+LEVEL_EXTEND_BARS*barStep;
+  wtLine(svg, x1, x2, high, '#ffffff', 1);
+  wtLine(svg, x1, x2, low,  '#ffffff', 1);
+  wtLine(svg, x1, x2, mid,  '#ffffff', 1, '4,3');
+  wtLabel(svg, x2, high, 'PDH', '#ffffff');
+  wtLabel(svg, x2, low,  'PDL', '#ffffff');
+  wtLabel(svg, x2, mid,  'PDM', '#ffffff');
 }
 
-function renderWtPrevWeek(svg, candles, lastTime){
+function renderWtPrevWeek(svg, candles, lastTime, barStep){
   const byWeek=new Map();
   candles.forEach(c=>{ const wk=wtWeekKey(c.time); if(!byWeek.has(wk))byWeek.set(wk,[]); byWeek.get(wk).push(c); });
   const weekKeys=[...byWeek.keys()].sort((a,b)=>a-b);
@@ -3080,15 +3089,16 @@ function renderWtPrevWeek(svg, candles, lastTime){
   const prevCandles=byWeek.get(weekKeys[idx-1]);
   const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
   const x1=byWeek.get(curWeek)[0].time;
-  wtLine(svg, x1, lastTime, high, '#c99cd0', 1);
-  wtLine(svg, x1, lastTime, low,  '#c99cd0', 1);
-  wtLine(svg, x1, lastTime, mid,  '#c99cd0', 1, '4,3');
-  wtLabel(svg, lastTime, high, 'PWH', '#c99cd0');
-  wtLabel(svg, lastTime, low,  'PWL', '#c99cd0');
-  wtLabel(svg, lastTime, mid,  'PWM', '#c99cd0');
+  const x2=lastTime+LEVEL_EXTEND_BARS*barStep;
+  wtLine(svg, x1, x2, high, '#c99cd0', 1);
+  wtLine(svg, x1, x2, low,  '#c99cd0', 1);
+  wtLine(svg, x1, x2, mid,  '#c99cd0', 1, '4,3');
+  wtLabel(svg, x2, high, 'PWH', '#c99cd0');
+  wtLabel(svg, x2, low,  'PWL', '#c99cd0');
+  wtLabel(svg, x2, mid,  'PWM', '#c99cd0');
 }
 
-function renderWtMNO(svg, byDate, lastTime){
+function renderWtMNO(svg, byDate, lastTime, barStep){
   const todayKey=wtDayKey(lastTime);
   const dayCandles=byDate.get(todayKey);
   if(!dayCandles || !dayCandles.length) return;
@@ -3097,8 +3107,9 @@ function renderWtMNO(svg, byDate, lastTime){
   const midnightTs=todayKey+6*3600;
   const mnoCandle=dayCandles.find(c=>c.time>=midnightTs);
   if(!mnoCandle) return;
-  wtLine(svg, mnoCandle.time, lastTime, mnoCandle.open, '#80deea', 1, '2,2');
-  wtLabel(svg, lastTime, mnoCandle.open, 'MNO', '#80deea');
+  const x2=lastTime+LEVEL_EXTEND_BARS*barStep;
+  wtLine(svg, mnoCandle.time, x2, mnoCandle.open, '#80deea', 1, '2,2');
+  wtLabel(svg, x2, mnoCandle.open, 'MNO', '#80deea');
 }
 
 // lightweight-charts se niega a ubicar una coordenada X para un horario que
@@ -3206,9 +3217,11 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   const sessionEnd=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
   const endTime=Math.min(sessionEnd, lastTime);
   // "Dónde" dibujar (enganchado a velas reales) — el precio (top/bottom/ce)
-  // ya quedó resuelto arriba con precisión real, esto no lo toca.
+  // ya quedó resuelto arriba con precisión real, esto no lo toca. Mientras la
+  // sesión sigue abierta (endTime===lastTime) la caja tiene que seguir
+  // proyectándose un poco más allá de la última vela, no cortar justo ahí.
   const plotStart = wtNearestCandleTime(todayDayCandles, todayStartTime);
-  const plotEnd = endTime===lastTime ? lastTime : wtNearestCandleTime(todayDayCandles, endTime);
+  const plotEnd = endTime===lastTime ? (lastTime+LEVEL_EXTEND_BARS*barStep) : wtNearestCandleTime(todayDayCandles, endTime);
   const col=STATE.watchtower.orgColor||'#ffeb3b';
   const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
   // Como en Pine: solo 2 líneas horizontales (H/L, sin bordes verticales) +
@@ -3265,9 +3278,9 @@ function renderWatchtower(){
   const dateKeys=[...byDate.keys()].sort((a,b)=>a-b);
 
   if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
-  if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime);
-  if(wt.pwLevels)  renderWtPrevWeek(svg, candles, lastTime);
-  if(wt.mno)       renderWtMNO(svg, byDate, lastTime);
+  if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep);
+  if(wt.pwLevels)  renderWtPrevWeek(svg, candles, lastTime, barStep);
+  if(wt.mno)       renderWtMNO(svg, byDate, lastTime, barStep);
   if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
   if(wt.bias)      renderWtBias(byDate, dateKeys, lastTime);
 }
@@ -3719,13 +3732,29 @@ function snRangeTouchesHtfFvg(lo, hi, bodyExtreme, wantBullFvg, fvgSources, minP
 // candle real más cercano del chart antes de pasarle el tiempo a wtRect.
 function snDrawFvgBoxes(svg, chartCandles, mtfCandles, list, color, showToggle, maxCount, hideFilled, lastTime, barStepMtf){
   if (!showToggle || !mtfCandles.length) return;
+  // El viejo +10*barStepMtf estaba en la escala del TF del FVG (M15/H4), no
+  // en la del chart principal: en un TF chico (M1/M5) con FVGs de H4, esas
+  // 10 velas de H4 (40hs) caen bien afuera de las ~15 velas "fantasma" que
+  // tiene cargadas el eje de tiempo, timeToCoordinate devuelve null y la
+  // caja no se dibuja NADA (antes, al enganchar siempre a la última vela
+  // real, por lo menos se veía, aunque quedara corta). Medimos la extensión
+  // en velas del chart que se está mirando, que es lo que de verdad importa
+  // y además entra siempre dentro del whitespace ya cargado.
+  const chartBarStep = chartCandles.length>1 ? (chartCandles[1].time-chartCandles[0].time) : barStepMtf;
   let shown = hideFilled ? list.filter(f=>f.filledIdx==null) : list;
   shown = shown.slice().sort((a,b)=>b.createIdx-a.createIdx).slice(0, maxCount);
   shown.forEach(f=>{
     const rawT1 = mtfCandles[f.startIdx].time;
-    const rawT2 = f.filledIdx!=null ? mtfCandles[f.filledIdx].time : (lastTime + 10*barStepMtf);
     const t1 = wtNearestCandleTime(chartCandles, rawT1);
-    const t2 = wtNearestCandleTime(chartCandles, rawT2);
+    // Si está rellenado, el final SÍ es un horario real pasado -> hay que
+    // enganchar al candle real más cercano del chart (igual que t1). Si
+    // sigue abierto, el final ya está calculado en la grilla del propio
+    // chart (lastTime + N velas del chart) -> usarlo directo, sin buscarle
+    // "la vela más cercana" porque esas velas futuras todavía no existen
+    // como datos reales (son el whitespace que ya engancha timeToCoordinate).
+    const t2 = f.filledIdx!=null
+      ? wtNearestCandleTime(chartCandles, mtfCandles[f.filledIdx].time)
+      : lastTime + LEVEL_EXTEND_BARS*chartBarStep;
     wtRect(svg, t1, t2, f.top, f.bottom, color, 1, 'none', 'Sniper');
   });
 }
@@ -4083,6 +4112,55 @@ async function loadMoreHistory(){
   }
 }
 
+// El batch inicial de 500 velas, en timeframes chicos (M5 y similares), no
+// llega a cubrir una semana completa hacia atrás — así que al abrir el
+// chart, PWH/PWL/PWM (que necesitan ver la semana ANTERIOR completa) no
+// tienen con qué calcularse y quedan sin dibujar hasta que el usuario hace
+// zoom out y loadMoreHistory trae más historial "por las dudas". Si el
+// toggle de niveles semanales está prendido, pedimos ese historial de una
+// vez al cargar, en vez de esperar a que el usuario scrollee para notarlo.
+//
+// OJO: no reusa loadMoreHistory() para esto — esa función, además de traer
+// velas viejas, corrige la posición de scroll asumiendo que la llamó un
+// scroll manual del usuario cerca del borde izquierdo (desplaza el rango
+// visible para que la vista no "salte"). Disparada sola, varias veces
+// seguidas, apenas se abre el chart, ese desplazamiento se acumula sobre una
+// vista que en realidad nunca se movió y termina arruinando el zoom (todas
+// las velas amontonadas a la izquierda, chart vacío). Acá solo pegamos el
+// historial viejo adelante y al final reseteamos la vista una sola vez.
+async function ensureWeeklyHistoryForWatchtower(){
+  if (!STATE.watchtower.enabled || !STATE.watchtower.pwLevels) return;
+  let fetchedMore = false;
+  for (let guard=0; guard<20; guard++){
+    const candles = window._lastCandles;
+    if (!candles || !candles.length || candles.length>8000) break;
+    // No alcanza con que haya UNA vela de la semana anterior metida en el
+    // batch (eso daba un high/low de PW calculado con una semana incompleta,
+    // que después "saltaba" a la posición correcta apenas el zoom traía el
+    // resto) — hace falta que el historial cargado llegue hasta el
+    // ARRANQUE real de esa semana anterior.
+    const prevWeekStart = wtWeekKey(candles[candles.length-1].time) - 7*86400;
+    if (candles[0].time <= prevWeekStart) break;
+    try {
+      const oldest = candles[0].time;
+      const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=300&before=${oldest}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.error || !Array.isArray(json.bars) || json.bars.length===0) break;
+      const older = json.bars.filter(b => b.time < oldest);
+      if (older.length===0) break;
+      window._lastCandles = older.concat(candles);
+      fetchedMore = true;
+    } catch(e) { break; }
+  }
+  if (fetchedMore) {
+    renderSeries(STATE.timeframe);
+    chart.timeScale().scrollToRealTime();
+    const candles = window._lastCandles;
+    updateStatusBar(STATE.symbol, STATE.timeframe, candles.length, candles[0], candles[candles.length-1]);
+  }
+}
+
 // Cierre de vela: pega solo la(s) vela(s) nueva(s) sin recargar todo el chart
 // (sin overlay, sin refit de zoom — eso es lo que se "notaba").
 async function appendNewBar(symbol, timeframe){
@@ -4145,6 +4223,7 @@ async function loadChart(symbol, timeframe) {
     renderSeries(timeframe);
     chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
     chart.timeScale().scrollToRealTime();
+    ensureWeeklyHistoryForWatchtower(); // no se espera: completa el historial semanal en segundo plano
 
     Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
     STATE.indicators.forEach(name=>addIndicatorSeries(name));
