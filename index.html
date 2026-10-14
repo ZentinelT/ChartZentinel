@@ -1470,6 +1470,72 @@ function redrawDrawing(d) {
   highlightSelectedSvg(d.id);
 }
 
+// Mientras se arrastra un dibujo (cuerpo o manija), NO lo reconstruimos
+// desde cero en cada mousemove — eso implica sacar y volver a meter sus
+// series del chart muchas veces por segundo, y ese ir-y-venir hace que el
+// right price scale (compartido por TODOS los dibujos) recalcule su
+// autoScale a cada rato, lo que se ve como si el resto de los dibujos
+// "saltaran" mientras uno se mueve y recién se acomodaran bien al soltar.
+// Reusar las mismas series y solo pisarles los datos (setData) evita ese
+// parpadeo. Devuelve false (y no toca nada) si la cantidad/forma de series
+// ya no coincide con lo que este tipo de dibujo necesita — ahí sí hace
+// falta una reconstrucción completa vía redrawDrawing().
+function updateDrawingGeometry(d) {
+  const candles = window._lastCandles || [];
+  if (!candles.length) return false;
+  const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
+  const tFirst = candles[0].time, tLast = candles[candles.length-1].time;
+  const FUTURE_BARS = 50;
+  const tFuture = tLast + barInterval * FUTURE_BARS;
+  const tPast   = Math.max(0, tFirst - barInterval * FUTURE_BARS);
+  let ok = false;
+
+  if (d.type === 'hline' && d.series.length === 1) {
+    d.series[0].setData([{time:d.p1.time, value:d.p1.price},{time:tFuture, value:d.p1.price}]);
+    ok = true;
+
+  } else if (d.type === 'trendline' && d.series.length === 1) {
+    const rawT1=d.p1.time, rawT2=d.p2.time, rawP1=d.p1.price, rawP2=d.p2.price;
+    const slope = (rawT2 !== rawT1) ? (rawP2 - rawP1) / (rawT2 - rawT1) : 0;
+    let t1=rawT1, t2=rawT2, p1=rawP1, p2=rawP2;
+    if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1); }
+    if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
+    d.series[0].setData([{time:t1,value:p1},{time:t2,value:p2}]);
+    ok = true;
+
+  } else if (d.type === 'rect' && d.series.length === 4) {
+    const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+    const t1 = Math.min(d.p1.time, d.p2.time);
+    const t2 = d.extRight ? tFuture : Math.max(d.p1.time, d.p2.time);
+    d.series[0].setData([{time:t1,value:hi},{time:t2,value:hi}]);
+    d.series[1].setData([{time:t1,value:lo},{time:t2,value:lo}]);
+    d.series[2].setData([{time:t1,value:lo},{time:t1,value:hi}]);
+    d.series[3].setData([{time:t2,value:lo},{time:t2,value:hi}]);
+    syncRectFill(d);
+    ok = true;
+
+  } else if (d.type === 'fib') {
+    const levels = (d.levels || []).filter(lv => lv.on);
+    if (d.series.length === levels.length) {
+      const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+      const rawT1 = Math.min(d.p1.time, d.p2.time), rawT2 = Math.max(d.p1.time, d.p2.time);
+      const t1 = d.extLeft  ? tPast   : rawT1;
+      const t2 = d.extRight ? tFuture : rawT2;
+      levels.forEach((lv,i) => {
+        d.series[i].setData([{time:t1,value:hi-(hi-lo)*lv.value},{time:t2,value:hi-(hi-lo)*lv.value}]);
+      });
+      ok = true;
+    }
+
+  } else if (d.type === 'vline') {
+    syncVLine(d);
+    ok = true;
+  }
+
+  if (ok) highlightSelectedSvg(d.id);
+  return ok;
+}
+
 function removeDrawingById(id) {
   const idx = drawings.findIndex(x => x.id === id);
   if (idx === -1) return;
@@ -2105,7 +2171,7 @@ function initDrawingLayer() {
           }
         }
         applyHandleDrag(d, window._dragSession.role, finalPrice, finalTime);
-        redrawDrawing(d);
+        if (!updateDrawingGeometry(d)) redrawDrawing(d);
       } else if (d.type === 'text') {
         d.label.style.left = (mx - 6) + 'px';
         d.label.style.top  = (my - 10) + 'px';
@@ -2118,7 +2184,7 @@ function initDrawingLayer() {
           d.p2.price = window._dragSession.origP2.price + dPrice;
           d.p2.time  = window._dragSession.origP2.time  + dTime;
         }
-        redrawDrawing(d);
+        if (!updateDrawingGeometry(d)) redrawDrawing(d);
       }
       return;
     }
@@ -2416,9 +2482,13 @@ document.getElementById('btn-magnet').classList.toggle('active', STATE.magnet);
 
 // Dado un precio/tiempo "crudo" del mouse, devuelve el punto {price,time}
 // ajustado al OHLC más cercano del candle más cercano en el tiempo — o el
-// mismo punto sin tocar si no hay candles o el magnet está apagado.
+// mismo punto sin tocar si no hay candles, el magnet está apagado, o el
+// punto cae más allá de la última vela (hay que poder seguir arrastrando
+// la línea hacia la derecha más allá de los datos, no quedar pegado al
+// último candle).
 function magnetSnapPoint(candles, rawTime, rawPrice) {
   if (!candles || !candles.length || rawTime===null || rawPrice===null) return null;
+  if (rawTime > candles[candles.length-1].time || rawTime < candles[0].time) return null;
   let lo = 0, hi = candles.length - 1;
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
