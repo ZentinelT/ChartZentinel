@@ -2885,7 +2885,19 @@ function removeIndicator(name){
 //  INDICATOR MATH
 // ══════════════════════════════════════════════════════════
 function ema(data,period){const k=2/(period+1);let prev=null;return data.map(d=>{if(prev===null){prev=d.close;return{time:d.time,value:d.close};}const val=d.close*k+prev*(1-k);prev=val;return{time:d.time,value:val};});}
-function sma(data,period){return data.map((d,i)=>{if(i<period-1)return{time:d.time,value:null};const sum=data.slice(i-period+1,i+1).reduce((a,v)=>a+v.close,0);return{time:d.time,value:sum/period};}).filter(d=>d.value!==null);}
+// Suma corrida (sliding window) en vez de slice()+reduce() por cada vela
+// — esto era O(n×period) con una asignación de array nueva en cada paso;
+// con miles de velas cargadas (desde que Watchtower trae más historial)
+// se notaba cada vez que se recalculaban los overlays.
+function sma(data,period){
+  const out=[]; let sum=0;
+  for (let i=0;i<data.length;i++){
+    sum+=data[i].close;
+    if (i>=period) sum-=data[i-period].close;
+    if (i>=period-1) out.push({time:data[i].time, value:sum/period});
+  }
+  return out;
+}
 function vwap(data){let cumPV=0,cumV=0;return data.map(d=>{const tp=(d.high+d.low+d.close)/3;cumPV+=tp*(d.volume||1);cumV+=(d.volume||1);return{time:d.time,value:cumPV/cumV};});}
 
 // ══════════════════════════════════════════════════════════
