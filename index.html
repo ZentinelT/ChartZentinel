@@ -36,6 +36,33 @@
     --tf-bar-h:     36px;
   }
 
+  /* ─── MODO CLARO ──────────────────────────────────────────
+     Redefine solo las variables de la interfaz (fondos, bordes, texto,
+     acento dorado, verde/rojo semánticos) — el gráfico en sí (velas,
+     fondo del chart, grillas) usa sus propios colores desde
+     STATE.chartSettings, ajenos a estas variables, así que no se tocan
+     acá a propósito. */
+  html[data-theme="light"] {
+    --bg-primary:   #f4f5f7;
+    --bg-secondary: #ffffff;
+    --bg-panel:     #ffffff;
+    --bg-hover:     #eef0f4;
+    --bg-active:    #e4e7ee;
+    --border:       #dde1e8;
+    --border-light: #c9ced8;
+    --gold:         #a07508;
+    --gold-bright:  #c4920f;
+    --gold-dim:     #cbab6c;
+    --gold-glow:    rgba(160,117,8,0.12);
+    --text-primary: #16171d;
+    --text-secondary:#54586b;
+    --text-dim:     #8d90a0;
+    --green:        #0e8a74;
+    --red:          #d33232;
+    --green-dim:    rgba(14,138,116,0.12);
+    --red-dim:      rgba(211,50,50,0.12);
+  }
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -705,6 +732,8 @@
     <button class="layout-btn" data-layout="4">4 ⊞</button>
   </div>
 
+  <button class="topbar-btn theme-toggle-btn" title="Cambiar a modo claro" onclick="toggleTheme()"></button>
+
   <button class="topbar-btn" id="btn-refresh" title="Refresh chart" onclick="refreshChart()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
   </button>
@@ -770,6 +799,22 @@
         <line x1="2" y1="13" x2="20" y2="13"/>
         <line x1="2" y1="17.7" x2="11" y2="17.7"/>
         <line x1="2" y1="22.5" x2="22" y2="22.5"/>
+      </svg>
+    </button>
+    <button class="tool-btn" data-tip="Long Position" onclick="setTool(this,'long')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/>
+        <rect x="3" y="14" width="18" height="7" rx="1" fill="none"/>
+        <line x1="2" y1="10.5" x2="22" y2="10.5"/>
+        <polyline points="9 16 12 19 15 16"/>
+      </svg>
+    </button>
+    <button class="tool-btn" data-tip="Short Position" onclick="setTool(this,'short')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/>
+        <rect x="3" y="3" width="18" height="7" rx="1" fill="none"/>
+        <line x1="2" y1="13.5" x2="22" y2="13.5"/>
+        <polyline points="9 8 12 5 15 8"/>
       </svg>
     </button>
     <div class="tool-sep"></div>
@@ -1052,6 +1097,39 @@ function lsGet(key){ if(!_lsOK) return _lsMem[key] ?? null; try { return localSt
 function lsSet(key, val){ if(!_lsOK){ _lsMem[key]=val; return; } try { localStorage.setItem(key, val); } catch(e){ _lsMem[key]=val; } }
 if (!_lsOK) console.warn('Zentinel: localStorage no disponible (bloqueado por el navegador) — la configuración no va a persistir entre recargas.');
 
+// ══════════════════════════════════════════════════════════
+//  TEMA (claro/oscuro) — afecta toda la interfaz (toolbar, sidebar,
+//  modales, barras) pero NO el gráfico en sí: los colores de velas/fondo
+//  del chart ya se manejan aparte, desde Settings (STATE.chartSettings),
+//  y no dependen de estas variables CSS.
+//
+//  Clave SIN sufijo de pane (lsGet/lsSet directo, no lsKey) a propósito:
+//  es una preferencia de toda la app, no por panel — así en la grilla
+//  multi-chart todos los paneles (y la barra global de afuera, que es una
+//  página aparte) quedan siempre con el mismo tema. Se aplica ACÁ, antes
+//  de cualquier render, para no mostrar un flash con el tema viejo.
+// ══════════════════════════════════════════════════════════
+function applyTheme(theme){
+  if (theme === 'light') document.documentElement.setAttribute('data-theme','light');
+  else document.documentElement.removeAttribute('data-theme');
+  document.querySelectorAll('.theme-toggle-btn').forEach(btn=>{
+    btn.innerHTML = theme==='light' ? THEME_ICON_MOON : THEME_ICON_SUN;
+    btn.title = theme==='light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
+  });
+}
+function toggleTheme(){
+  const next = document.documentElement.getAttribute('data-theme')==='light' ? 'dark' : 'light';
+  lsSet('td_theme', next);
+  applyTheme(next);
+}
+const THEME_ICON_SUN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+const THEME_ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+applyTheme(lsGet('td_theme') || 'dark');
+// Si se cambia el tema desde OTRA pestaña/panel (grilla multi-chart: cada
+// panel y la barra global son documentos separados), el evento 'storage'
+// avisa acá para que este documento también se actualice al toque.
+window.addEventListener('storage', e => { if (e.key === 'td_theme') applyTheme(e.newValue || 'dark'); });
+
 // Diferido: deja que el resto del script (definiciones de funciones,
 // listeners sobre elementos que está por reemplazar) termine de correr
 // sin tirar errores antes de vaciar el <body>.
@@ -1118,6 +1196,7 @@ function renderLayoutGrid(n){
     <div id="layout-picker" title="Cantidad de gráficos">
       ${[1,2,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':'4 ⊞'}</button>`).join('')}
     </div>
+    <button class="topbar-btn theme-toggle-btn" title="Cambiar tema" onclick="toggleTheme()"></button>
     <button class="topbar-btn" id="gc-refresh" title="Refrescar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
@@ -1149,6 +1228,7 @@ function renderLayoutGrid(n){
   `;
   document.body.appendChild(bar);
   document.body.appendChild(gbar);
+  applyTheme(lsGet('td_theme') || 'dark'); // repinta el ícono del botón de tema recién creado
 
   // Scope: Activo / Todos
   const scopeWrap = bar.querySelector('#gc-scope');
@@ -1578,6 +1658,13 @@ function updateDrawingGeometry(d) {
   } else if (d.type === 'vline') {
     syncVLine(d);
     ok = true;
+
+  } else if ((d.type === 'long' || d.type === 'short') && d.series.length === 3) {
+    d.series[0].setData([{time:d.p1.time,value:d.p1.price},{time:d.p2.time,value:d.p1.price}]);
+    d.series[1].setData([{time:d.p1.time,value:d.targetPrice},{time:d.p2.time,value:d.targetPrice}]);
+    d.series[2].setData([{time:d.p1.time,value:d.p2.price},{time:d.p2.time,value:d.p2.price}]);
+    syncPositionTool(d);
+    ok = true;
   }
 
   if (ok) highlightSelectedSvg(d.id);
@@ -1593,6 +1680,11 @@ function removeDrawingById(id) {
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
+  if (d.profitFillEl instanceof Element) d.profitFillEl.remove();
+  if (d.lossFillEl instanceof Element) d.lossFillEl.remove();
+  if (d.entryTextEl instanceof Element) d.entryTextEl.remove();
+  if (d.tpTextEl instanceof Element) d.tpTextEl.remove();
+  if (d.slTextEl instanceof Element) d.slTextEl.remove();
   drawings.splice(idx,1);
 }
 
@@ -1620,6 +1712,36 @@ function syncRectFill(d) {
   d.fillEl.style.display='';
   d.fillEl.setAttribute('x', Math.min(x1,x2)); d.fillEl.setAttribute('y', y1);
   d.fillEl.setAttribute('width', Math.abs(x2-x1)); d.fillEl.setAttribute('height', Math.max(0,y2-y1));
+}
+
+// Reubica los 2 rellenos y las 3 etiquetas de una herramienta de posición
+// (long/short) — igual que syncRectFill, se llama cada vez que cambia el
+// pan/zoom o se arrastra el dibujo.
+function syncPositionTool(d) {
+  if (!(d.profitFillEl instanceof Element)) return;
+  const entry = d.p1.price, stop = d.p2.price, target = d.targetPrice;
+  const x1 = chart.timeScale().timeToCoordinate(d.p1.time), x2 = chart.timeScale().timeToCoordinate(d.p2.time);
+  const yEntry = candleSeries.priceToCoordinate(entry);
+  const yStop  = candleSeries.priceToCoordinate(stop);
+  const yTarget= candleSeries.priceToCoordinate(target);
+  const hidden = x1===null||x2===null||yEntry===null||yStop===null||yTarget===null;
+  [d.profitFillEl, d.lossFillEl, d.entryTextEl, d.tpTextEl, d.slTextEl].forEach(el=>{ if(el) el.style.display = hidden?'none':''; });
+  if (hidden) return;
+
+  const xL = Math.min(x1,x2), xR = Math.max(x1,x2), w = xR-xL;
+  d.profitFillEl.setAttribute('x', xL); d.profitFillEl.setAttribute('y', Math.min(yEntry,yTarget));
+  d.profitFillEl.setAttribute('width', w); d.profitFillEl.setAttribute('height', Math.abs(yEntry-yTarget));
+  d.lossFillEl.setAttribute('x', xL); d.lossFillEl.setAttribute('y', Math.min(yEntry,yStop));
+  d.lossFillEl.setAttribute('width', w); d.lossFillEl.setAttribute('height', Math.abs(yEntry-yStop));
+
+  const risk = Math.abs(entry-stop), reward = Math.abs(target-entry);
+  const rr = risk>0 ? (reward/risk) : 0;
+  d.entryTextEl.setAttribute('x', xR+6); d.entryTextEl.setAttribute('y', yEntry);
+  d.entryTextEl.textContent = `Entry ${fmt(entry)}`;
+  d.tpTextEl.setAttribute('x', xR+6); d.tpTextEl.setAttribute('y', yTarget);
+  d.tpTextEl.textContent = `TP ${fmt(target)}  ·  R:R 1:${rr.toFixed(2)}`;
+  d.slTextEl.setAttribute('x', xR+6); d.slTextEl.setAttribute('y', yStop);
+  d.slTextEl.textContent = `SL ${fmt(stop)}`;
 }
 
 function clearDrawings() {
@@ -1651,6 +1773,14 @@ function buildDrawingOnChart(d) {
       priceLineVisible: false,
       lastValueVisible: opts.lastValue !== undefined ? opts.lastValue : true,
       crosshairMarkerVisible: false,
+      // Un dibujo NO tiene que mover el eje de precio — si no, arrastrar
+      // cualquier línea/rect/fib más allá del rango visible hacía que la
+      // autoescala del precio se expandiera para "hacerle lugar", lo que
+      // comprimía/corría TODAS las velas en vivo mientras arrastrás (y los
+      // indicadores, que no se redibujan en cada frame, se quedaban atrás
+      // hasta soltar). Esto le dice al chart "no cuentes esta serie para
+      // la autoescala".
+      autoscaleInfoProvider: () => null,
     });
     s.setData(pts);
     d.series.push(s);
@@ -1684,7 +1814,7 @@ function buildDrawingOnChart(d) {
     const t2 = d.extRight ? tFuture : t2_raw;
 
     const mkR = (pts) => {
-      const s = chart.addLineSeries({ color: C+'aa', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+      const s = chart.addLineSeries({ color: C+'aa', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null });
       s.setData(pts); d.series.push(s); return s;
     };
     mkR([{time:t1,value:hi},{time:t2,value:hi}]);
@@ -1730,6 +1860,51 @@ function buildDrawingOnChart(d) {
     d.vLineEl.setAttribute('stroke-width', lw);
     d.vLineEl.setAttribute('stroke-dasharray', dash);
     syncVLine(d);
+
+  } else if (d.type === 'long' || d.type === 'short') {
+    // 3 líneas horizontales (entrada/TP/SL, como en TV) + 2 rectángulos de
+    // relleno (zona de ganancia/pérdida, en la capa SVG igual que el
+    // relleno de 'rect') + 3 etiquetas de texto con los precios y el R:R.
+    const mkLvl = (price, color, dashed) => {
+      const s = chart.addLineSeries({
+        color, lineWidth:1, lineStyle: dashed?2:0,
+        priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+        autoscaleInfoProvider: () => null,
+      });
+      s.setData([{time:d.p1.time,value:price},{time:d.p2.time,value:price}]);
+      d.series.push(s);
+    };
+    mkLvl(d.p1.price,      '#e8e8f0', false); // entrada
+    mkLvl(d.targetPrice,   '#26a69a', true);  // take profit
+    mkLvl(d.p2.price,      '#ef5350', true);  // stop loss
+
+    if (!(d.profitFillEl instanceof Element)) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
+      d.profitFillEl = r;
+    }
+    if (!(d.lossFillEl instanceof Element)) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
+      d.lossFillEl = r;
+    }
+    d.profitFillEl.setAttribute('fill', '#26a69a'); d.profitFillEl.setAttribute('fill-opacity', '0.18');
+    d.lossFillEl.setAttribute('fill', '#ef5350'); d.lossFillEl.setAttribute('fill-opacity', '0.18');
+
+    ['entryTextEl','tpTextEl','slTextEl'].forEach(key => {
+      if (!(d[key] instanceof Element)) {
+        const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+        t.setAttribute('font-family', "'DM Mono', monospace");
+        t.setAttribute('font-size', '10');
+        t.setAttribute('dominant-baseline', 'middle');
+        window._drawingLayerSvg.appendChild(t);
+        d[key] = t;
+      }
+    });
+    d.entryTextEl.setAttribute('fill', '#e8e8f0');
+    d.tpTextEl.setAttribute('fill', '#26a69a');
+    d.slTextEl.setAttribute('fill', '#ef5350');
+    syncPositionTool(d);
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
@@ -1784,8 +1959,29 @@ function highlightSelectedSvg(id) {
       addHandle(timeToX(t2), yMid, id, 'right');
     } else if (d.type === 'vline') {
       addHandle(timeToX(d.p1.time), container.clientHeight * 0.5, id, 'vtime');
+    } else if (d.type === 'long' || d.type === 'short') {
+      const xMid = (timeToX(d.p1.time)+timeToX(d.p2.time))/2;
+      addHandle(xMid, priceToY(d.p1.price), id, 'entry');
+      addHandle(xMid, priceToY(d.targetPrice), id, 'target');
+      addHandle(xMid, priceToY(d.p2.price), id, 'stop');
+      addHandle(timeToX(d.p2.time), priceToY(d.p1.price), id, 'time2');
     }
   });
+}
+
+// El borde derecho (p2.time) de una herramienta de posición no puede pasarse
+// de las velas "fantasma" (whitespace) cargadas en el eje de tiempo — ver
+// futureWhitespace, 15 velas — o el time scale del chart termina
+// "corriéndose" solo apenas ese punto se actualiza (ver creación de
+// long/short, mismo límite). Se usa tanto ahí como al arrastrar la manija
+// del borde derecho o el cuerpo entero, para que no se pueda recrear el
+// problema editando el dibujo después de creado.
+function clampPositionToolT2(t2){
+  const candles = window._lastCandles || [];
+  if (!candles.length) return t2;
+  const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
+  const maxT2 = candles[candles.length-1].time + 10*barStep;
+  return Math.min(t2, maxT2);
 }
 
 // Aplica el arrastre de una "manija" (handle) según su rol — normaliza
@@ -1817,6 +2013,19 @@ function applyHandleDrag(d, role, price, time) {
     d.p2 = { time: Math.max(t1,t2), price: Math.min(hi,lo) };
   } else if (d.type === 'vline') {
     d.p1.time = time; d.p2.time = time;
+  } else if (d.type === 'long' || d.type === 'short') {
+    if (role === 'entry') {
+      // Arrastrar la línea de entrada mueve TODO el bloque (entrada, SL,
+      // TP) junto, conservando las distancias — como en TV.
+      const delta = price - d.p1.price;
+      d.p1.price += delta; d.p2.price += delta; d.targetPrice += delta;
+    } else if (role === 'target') {
+      d.targetPrice = price;
+    } else if (role === 'stop') {
+      d.p2.price = price;
+    } else if (role === 'time2') {
+      d.p2.time = clampPositionToolT2(time);
+    }
   }
 }
 
@@ -2022,6 +2231,8 @@ function initChart() {
         syncVLine(d);
       } else if (d.type==='rect') {
         syncRectFill(d);
+      } else if (d.type==='long' || d.type==='short') {
+        syncPositionTool(d);
       }
     });
   }
@@ -2158,6 +2369,15 @@ function initDrawingLayer() {
       const x = timeToX(d.p1.time);
       return x!==null && Math.abs(mx-x) < THRESH;
     }
+    if (d.type === 'long' || d.type === 'short') {
+      // Caja completa (del SL al TP) clickeable en cualquier punto interno
+      // — igual que un rect, no hace falta acertarle a un borde fino.
+      const x1=timeToX(d.p1.time), x2=timeToX(d.p2.time);
+      const prices=[d.p1.price,d.p2.price,d.targetPrice];
+      const y1=priceToY(Math.max(...prices)), y2=priceToY(Math.min(...prices));
+      if (x1===null||x2===null||y1===null||y2===null) return false;
+      return mx>=Math.min(x1,x2) && mx<=Math.max(x1,x2) && my>=y1 && my<=y2;
+    }
     return false;
   }
 
@@ -2204,6 +2424,7 @@ function initDrawingLayer() {
       window._dragSession = {
         kind:'body', drawing:hit, startPrice:price, startTime:time,
         origP1:{...hit.p1}, origP2: hit.p2?{...hit.p2}:null,
+        origTargetPrice: hit.targetPrice,
         labelLeft: hit.label?parseFloat(hit.label.style.left):0,
         labelTop:  hit.label?parseFloat(hit.label.style.top):0,
       };
@@ -2250,6 +2471,21 @@ function initDrawingLayer() {
         if (window._dragSession.origP2) {
           d.p2.price = window._dragSession.origP2.price + dPrice;
           d.p2.time  = window._dragSession.origP2.time  + dTime;
+        }
+        if (window._dragSession.origTargetPrice != null) {
+          d.targetPrice = window._dragSession.origTargetPrice + dPrice;
+        }
+        if ((d.type==='long' || d.type==='short')) {
+          // Si arrastrar el cuerpo entero empujó el borde derecho más allá
+          // del límite seguro (ver clampPositionToolT2), corremos TODA la
+          // caja hacia atrás en vez de solo recortar p2 — así el ancho
+          // (tiempo de riesgo) no queda distorsionado, solo deja de
+          // avanzar más hacia la derecha.
+          const clampedT2 = clampPositionToolT2(d.p2.time);
+          if (clampedT2 !== d.p2.time) {
+            const shift = d.p2.time - clampedT2;
+            d.p1.time -= shift; d.p2.time -= shift;
+          }
         }
         if (!updateDrawingGeometry(d)) redrawDrawing(d);
       }
@@ -2337,13 +2573,15 @@ function initDrawingLayer() {
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
       svg.appendChild(line); previewEl = line;
-    } else if (tool === 'rect') {
+    } else if (tool === 'rect' || tool === 'long' || tool === 'short') {
       const rx=Math.min(drawStart.x,x2), ry=Math.min(drawStart.y,y2);
       const rw=Math.abs(x2-drawStart.x), rh=Math.abs(y2-drawStart.y);
       const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
       rect.setAttribute('x',rx); rect.setAttribute('y',ry); rect.setAttribute('width',rw); rect.setAttribute('height',rh);
-      rect.setAttribute('stroke', GOLDA); rect.setAttribute('stroke-width', toolDefaults.width);
-      rect.setAttribute('stroke-dasharray','4,3'); rect.setAttribute('fill','rgba(201,168,76,0.06)');
+      const previewColor = tool==='long' ? '#26a69a88' : tool==='short' ? '#ef535088' : GOLDA;
+      rect.setAttribute('stroke', previewColor); rect.setAttribute('stroke-width', toolDefaults.width);
+      rect.setAttribute('stroke-dasharray','4,3');
+      rect.setAttribute('fill', tool==='long' ? 'rgba(38,166,154,0.08)' : tool==='short' ? 'rgba(239,83,80,0.08)' : 'rgba(201,168,76,0.06)');
       svg.appendChild(rect); previewEl = rect;
     } else if (tool === 'fib') {
       const ry=Math.min(drawStart.y,y2), rh=Math.abs(y2-drawStart.y);
@@ -2403,6 +2641,36 @@ function initDrawingLayer() {
       d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels:cloneFibLevels(), p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
     } else if (tool === 'vline') {
       d = { id:genId(), type:'vline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:null,time:drawStart.time}, p2:{price:null,time:drawStart.time} };
+    } else if (tool === 'long' || tool === 'short') {
+      // p1 = entrada (el punto donde se apretó el mouse). El stop queda
+      // SIEMPRE del lado correcto según el tipo de herramienta (abajo para
+      // long, arriba para short) — no según hacia dónde arrastró el mouse.
+      // Si tomáramos el precio del punto de arrastre tal cual, arrastrar
+      // para el mismo lado en una Short que en una Long dejaba el take
+      // profit invertido (ganancia hacia arriba en una posición corta, que
+      // es al revés). Solo la MAGNITUD del arrastre define el riesgo; la
+      // dirección la decide el tipo de herramienta. El take profit nace a
+      // un ratio riesgo/beneficio fijo (1:2) y después se puede arrastrar
+      // independiente con su manija.
+      const entry = drawStart.price;
+      const risk = Math.abs(entry - price2);
+      if (risk < 0.0001) { drawStart=null; return; } // clic sin arrastre real
+      const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
+      // El borde derecho de la caja no puede pasarse de las velas "fantasma"
+      // (whitespace) que tiene cargadas el eje de tiempo (ver futureWhitespace,
+      // 15 velas) — si una de las 3 líneas de precio de este dibujo apunta a
+      // un tiempo sin whitespace ahí, el chart no tiene con qué resolver esa
+      // coordenada y (a diferencia de un simple desaparecer, como le pasaba a
+      // las cajas de FVG) el time scale termina "corriéndose" solo apenas se
+      // arrastra el dibujo y ese punto se actualiza. Por eso se acota a un
+      // máximo seguro, bien adentro de esas 15 velas.
+      let t2 = time2 > drawStart.time ? time2 : drawStart.time + barStep*10;
+      t2 = clampPositionToolT2(t2);
+      if (t2 <= drawStart.time) t2 = drawStart.time + barStep;
+      const DEFAULT_RR = 2;
+      const stop   = tool === 'long' ? entry - risk        : entry + risk;
+      const target = tool === 'long' ? entry + risk*DEFAULT_RR : entry - risk*DEFAULT_RR;
+      d = { id:genId(), type:tool, series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:0, extLeft:false, extRight:false, p1:{price:entry,time:drawStart.time}, p2:{price:stop,time:t2}, targetPrice:target };
     }
 
     if (d) {
@@ -3140,6 +3408,19 @@ function renderWtKillzones(svg, byDate, dateKeys, barStep){
       const boxRight=inSess[inSess.length-1].time+barStep;
       wtRect(svg, inSess[0].time, boxRight, top, bottom, color, (STATE.watchtower.boxOpacity??10)/100, 'none');
 
+      // Un pivote de killzone sin tocar se extiende como MÁXIMO hasta el
+      // final de SU día — no cruza a días siguientes aunque nunca se haya
+      // invalidado (eso lo pidió el usuario explícitamente: un nivel de un
+      // día viejo no tiene por qué seguir "corriendo" para siempre). La
+      // única excepción es el día de HOY (el último cargado), que todavía
+      // está en curso: ahí sí se proyecta un poco más allá de la última
+      // vela, igual que el resto de los niveles "todavía vigentes" de la
+      // app — y es seguro hacerlo porque esa extensión cae sobre el
+      // whitespace de HOY, no en el hueco nocturno de un día ya cerrado
+      // (eso fue lo que en un primer intento hacía desaparecer las líneas
+      // de días viejos: timeToCoordinate no podía resolver un horario sin
+      // vela real ni fantasma ahí).
+      const isCurrentDay = dk === dateKeys[dateKeys.length-1];
       const lastIdx=dayCandles.indexOf(inSess[inSess.length-1]);
       const after=dayCandles.slice(lastIdx+1);
       let hActive=true, lActive=true, hEnd=boxRight, lEnd=boxRight;
@@ -3148,8 +3429,13 @@ function renderWtKillzones(svg, byDate, dateKeys, barStep){
         if(lActive){ lEnd=c.time; if(c.low<=bottom) lActive=false; }
         if(!hActive && !lActive) break;
       }
-      if (hActive) hEnd = dayCandles[dayCandles.length-1].time + LEVEL_EXTEND_BARS*barStep;
-      if (lActive) lEnd = dayCandles[dayCandles.length-1].time + LEVEL_EXTEND_BARS*barStep;
+      if (isCurrentDay) {
+        if (hActive) hEnd = dayCandles[dayCandles.length-1].time + LEVEL_EXTEND_BARS*barStep;
+        if (lActive) lEnd = dayCandles[dayCandles.length-1].time + LEVEL_EXTEND_BARS*barStep;
+      }
+      // (día ya cerrado y todavía "activo": hEnd/lEnd ya quedaron en
+      // dayCandles[last].time vía el loop de arriba — el fin del día, sin
+      // extensión extra.)
       wtLine(svg, tHigh, Math.max(hEnd,boxRight), top, color, 1);
       wtLine(svg, tLow, Math.max(lEnd,boxRight), bottom, color, 1);
     });
@@ -4310,6 +4596,12 @@ async function ensureWeeklyHistoryForWatchtower(){
 // Cierre de vela: pega solo la(s) vela(s) nueva(s) sin recargar todo el chart
 // (sin overlay, sin refit de zoom — eso es lo que se "notaba").
 async function appendNewBar(symbol, timeframe){
+  // Igual que refreshFormingCandle: no lo pisamos en medio de un arrastre.
+  // Acá sí hay que esperar (no saltear sin más) — el countdown ya se paró
+  // para llamar a esto, así que si nos vamos sin hacer nada el reloj queda
+  // trabado para siempre. Esperamos a que termine el arrastre y recién ahí
+  // seguimos.
+  while (window._dragSession) { await new Promise(r=>setTimeout(r,200)); }
   try{
     const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=3`;
     const res=await fetch(url);
@@ -4413,8 +4705,19 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // tipeó pero en mayúsculas, antes de darnos por vencidos — cubre el
     // caso común (escribir en minúscula) sin arriesgar nada si el símbolo
     // ya estaba bien escrito.
+    //
+    // OJO: esto solo tiene sentido si el error es realmente "símbolo no
+    // encontrado" — cualquier OTRO error (el puente ocupado con otro
+    // panel, timeout esperando a MT5, etc.) no tiene nada que ver con
+    // mayúsculas/minúsculas. Reintentar igual convertía un error
+    // TRANSITORIO (que se resolvía solo con un refresh) en uno PERMANENTE
+    // y confuso: el símbolo en mayúsculas de verdad no existe, así que el
+    // reintento fallaba también y mostraba "symbol not found: NAS100.FS"
+    // para un símbolo que en realidad sí estaba bien escrito y ya andaba
+    // en otro panel — eso es lo que pasaba al abrir 2 gráficos a la vez.
+    const isUnknownSymbol = /symbol not found/i.test(err.message || '');
     const upper = symbol.toUpperCase();
-    if (!_isUppercaseRetry && upper !== symbol) {
+    if (isUnknownSymbol && !_isUppercaseRetry && upper !== symbol) {
       STATE.symbol = upper;
       loadChart(upper, timeframe, true);
       return;
@@ -4489,6 +4792,16 @@ function positionCountdownBadge(lastClose, lastOpen){
 let _formingFetchInFlight=false;
 async function refreshFormingCandle(symbol, timeframe){
   if(_formingFetchInFlight || !window._lastCandles) return;
+  // Si el usuario está en medio de arrastrar un dibujo (mover el cuerpo o
+  // estirar una manija), no lo interrumpimos con un refresh de precio acá
+  // — eso de abajo reconstruye TODO el chart (velas, volumen, overlays,
+  // Watchtower, Sniper) cada vez que entra, y como el precio real se mueve
+  // casi todos los segundos, es muy probable que ese refresh caiga justo
+  // en medio de un arrastre: se sentía como que "todo tiembla" (las velas,
+  // los ejes, Watchtower) mientras intentás mover algo, aunque el dibujo
+  // en sí no tenga nada que ver. El próximo tick, ya sin drag activo,
+  // atrapa el precio más reciente igual.
+  if (window._dragSession) return;
   _formingFetchInFlight=true;
   try{
     const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=1`;
