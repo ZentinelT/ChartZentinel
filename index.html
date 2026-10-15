@@ -215,6 +215,12 @@
   }
   .ind-chip:hover { color: var(--gold); border-color: var(--gold); }
   .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; }
+  .ind-chip-hidden { opacity: .45; }
+  .ind-eye-btn {
+    background: none; border: none; padding: 0; margin: 0; display: flex;
+    color: inherit; cursor: pointer; flex-shrink: 0;
+  }
+  .ind-eye-btn:hover { color: var(--gold); }
 
   /* ─── Replay mode ──── */
   #replay-pick-hint {
@@ -1627,6 +1633,12 @@ const STATE = {
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
+  // "Ocultos" vía el ojo del chip — independiente de estar activo
+  // (STATE.indicators/watchtower.enabled/etc. siguen intactos, el
+  // indicador sigue calculando; esto solo oculta lo que dibuja). Separado
+  // a propósito de "enabled" para no tener que pasar por el modal de
+  // Indicators solo para tapar/destapar algo un rato.
+  hiddenIndicators: JSON.parse(lsGet(lsKey('td_ind_hidden')) || '[]'),
   // Los presets NO llevan el sufijo de pane (lsKey): un preset guardado en
   // cualquier ventana del grid multi-chart queda disponible en todas.
   presets: JSON.parse(lsGet('td_presets') || '{}'),
@@ -1637,6 +1649,18 @@ STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
 function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
+function saveHiddenIndicatorsState(){ lsSet(lsKey('td_ind_hidden'), JSON.stringify(STATE.hiddenIndicators)); }
+function isIndicatorHidden(name){ return STATE.hiddenIndicators.includes(name); }
+function toggleIndicatorVisibility(name){
+  const i = STATE.hiddenIndicators.indexOf(name);
+  if (i === -1) STATE.hiddenIndicators.push(name); else STATE.hiddenIndicators.splice(i, 1);
+  saveHiddenIndicatorsState();
+  renderIndicatorChips();
+  if (name === 'Watchtower') renderWatchtower();
+  else if (name === 'Sniper') renderSniper();
+  else if (name === 'Sweeps') renderSweeps();
+  else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
+}
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
 function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
 function saveChartSettingsState(){ lsSet(lsKey('td_chart_settings'), JSON.stringify(STATE.chartSettings)); }
@@ -3194,11 +3218,13 @@ function addIndicatorSeries(name) {
   const rawData=window._lastCandles||[]; if(!rawData.length)return;
   const calcData=def.calc(rawData);
   const style=getIndicatorStyle(name, def);
-  const series=chart.addLineSeries({color:style.color,lineWidth:style.lineWidth,priceLineVisible:false,lastValueVisible:true});
+  const series=chart.addLineSeries({color:style.color,lineWidth:style.lineWidth,priceLineVisible:false,lastValueVisible:true,visible:!isIndicatorHidden(name)});
   series.setData(calcData); overlays[name]=series;
 }
 
 const IND_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+const IND_EYE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const IND_EYE_OFF_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.4 18.4 0 0 1 4.22-5.07M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
 // Chips fijos arriba-izq del chart: acceso directo a la config de cada
 // indicador activo — siempre visibles, sin depender de acertarle a un
@@ -3211,10 +3237,12 @@ function renderIndicatorChips() {
   STATE.indicators.forEach(name => {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     if (!def) return;
+    const hidden = isIndicatorHidden(name);
     const chip = document.createElement('div');
-    chip.className = 'ind-chip';
+    chip.className = 'ind-chip' + (hidden ? ' ind-chip-hidden' : '');
     chip.title = name + ' settings';
-    chip.innerHTML = `${IND_GEAR_SVG}<span>${name}</span>`;
+    chip.innerHTML = `<button class="ind-eye-btn" title="${hidden ? 'Mostrar' : 'Ocultar'} ${name}">${hidden ? IND_EYE_OFF_SVG : IND_EYE_SVG}</button>${IND_GEAR_SVG}<span>${name}</span>`;
+    chip.querySelector('.ind-eye-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleIndicatorVisibility(name); });
     chip.addEventListener('click', () => openIndicatorSettings(name));
     el.appendChild(chip);
   });
@@ -3979,7 +4007,7 @@ function renderWatchtower(){
   while(svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Watchtower');
   document.getElementById('watchtower-bias-badge').style.display='none';
-  if(!STATE.watchtower.enabled) return;
+  if(!STATE.watchtower.enabled || isIndicatorHidden('Watchtower')) return;
   const candles=window._lastCandles||[];
   if(candles.length<2) return;
   const wt=STATE.watchtower;
@@ -4515,7 +4543,7 @@ function renderSniper(){
   const svg = window._sniperSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sniper');
-  if (!STATE.sniper.enabled) return;
+  if (!STATE.sniper.enabled || isIndicatorHidden('Sniper')) return;
   const candles = window._lastCandles||[];
   if (candles.length<5) return;
   const sn = STATE.sniper;
@@ -4586,7 +4614,7 @@ function renderSweeps(){
   const svg = window._sweepsSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sweeps');
-  if (!STATE.sweeps.enabled) return;
+  if (!STATE.sweeps.enabled || isIndicatorHidden('Sweeps')) return;
   const candles = window._lastCandles||[];
   if (candles.length<2) return;
   const sw = STATE.sweeps;
