@@ -216,6 +216,50 @@
   .ind-chip:hover { color: var(--gold); border-color: var(--gold); }
   .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; }
 
+  /* ─── Replay mode ──── */
+  #replay-pick-hint {
+    position: absolute;
+    top: 8px; left: 50%; transform: translateX(-50%);
+    background: rgba(20,20,28,0.92);
+    border: 1px solid var(--gold-dim);
+    color: var(--gold);
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    z-index: 21;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #replay-bar {
+    position: absolute;
+    bottom: 10px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(20,20,28,0.92);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 8px;
+    z-index: 21;
+  }
+  #replay-bar button {
+    background: none; border: 1px solid var(--border); border-radius: 3px;
+    color: var(--text-secondary); cursor: pointer;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  }
+  #replay-bar button:hover { color: var(--gold); border-color: var(--gold-dim); }
+  #replay-bar button svg { width: 13px; height: 13px; }
+  #replay-bar select {
+    background: var(--bg-alt, #15151f); border: 1px solid var(--border); border-radius: 3px;
+    color: var(--text); font-family: var(--font-mono); font-size: 10px; padding: 2px 4px;
+    color-scheme: dark;
+  }
+  #replay-bar #replay-label {
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+    white-space: nowrap; min-width: 90px; text-align: center;
+  }
+  #replay-bar #replay-exit-btn { color: var(--red); font-size: 12px; }
+  #replay-pick-hint.hidden, #replay-bar.hidden { display: none; }
+
   /* ─── Indicator settings (gear) ──── */
   .ind-settings-btn {
     background:none; border:none; color:var(--text-secondary); cursor:pointer;
@@ -757,6 +801,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     Indicators
   </button>
+  <button class="topbar-btn" id="btn-replay" title="Replay: click a candle to start" onclick="toggleReplayPicker()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Replay
+  </button>
 </div>
 
 <!-- ══ MAIN ══════════════════════════════════════════════ -->
@@ -881,6 +929,23 @@
       <div id="price-countdown-badge">—</div>
       <div id="watchtower-bias-badge"></div>
       <div id="chart-indicator-chips"></div>
+      <div id="replay-pick-hint" class="hidden">Click a candle to start replay (Esc to cancel)</div>
+      <div id="replay-bar" class="hidden">
+        <button id="replay-play-btn" title="Play / Pause" onclick="toggleReplayPlay()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        </button>
+        <button id="replay-step-btn" title="Step forward one bar" onclick="replayStep()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 5 20 12 13 19"/><line x1="4" y1="5" x2="4" y2="19"/></svg>
+        </button>
+        <select id="replay-speed-sel" onchange="setReplaySpeed(this.value)">
+          <option value="1200">0.5×</option>
+          <option value="600" selected>1×</option>
+          <option value="300">2×</option>
+          <option value="120">4×</option>
+        </select>
+        <span id="replay-label">—</span>
+        <button id="replay-exit-btn" title="Exit replay" onclick="exitReplay()">✕</button>
+      </div>
       <div id="loading-overlay">
         <div class="loader-logo">ZENTINEL</div>
         <div class="loader-bar"><div class="loader-fill"></div></div>
@@ -3650,6 +3715,17 @@ function wtNearestCandleTime(dayCandles, targetTime){
   return nearest;
 }
 
+// Variante "a partir de" para el borde IZQUIERDO de cajas ancladas a un
+// horario de sesión (p.ej. ORG, que arranca a las 9:30 NY): en TF donde no
+// existe ninguna vela que abra justo a esa hora (1H, 4H...), la vela más
+// CERCANA puede ser la anterior (p.ej. la de las 9:00) — eso dibujaba la
+// caja empezando visualmente ANTES de la apertura real. Acá en cambio se
+// toma la primera vela que ya arrancó en o después del horario buscado.
+function wtNearestCandleTimeAtOrAfter(dayCandles, targetTime){
+  for (const c of dayCandles){ if (c.time >= targetTime) return c.time; }
+  return dayCandles.length ? dayCandles[dayCandles.length-1].time : targetTime;
+}
+
 // Devuelve una estimación del precio exacto a `boundaryTime` interpolando
 // dentro de la vela que contiene ese instante (open→close, lineal). Hace
 // falta porque en timeframes grandes (1H, 4H...) puede no existir ninguna
@@ -3741,7 +3817,7 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   // ya quedó resuelto arriba con precisión real, esto no lo toca. Mientras la
   // sesión sigue abierta (endTime===lastTime) la caja tiene que seguir
   // proyectándose un poco más allá de la última vela, no cortar justo ahí.
-  const plotStart = wtNearestCandleTime(todayDayCandles, todayStartTime);
+  const plotStart = wtNearestCandleTimeAtOrAfter(todayDayCandles, todayStartTime);
   const plotEnd = endTime===lastTime ? (lastTime+LEVEL_EXTEND_BARS*barStep) : wtNearestCandleTime(todayDayCandles, endTime);
   const col=STATE.watchtower.orgColor||'#ffeb3b';
   const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
@@ -4425,6 +4501,133 @@ function renderSweeps(){
 }
 
 // ══════════════════════════════════════════════════════════
+//  REPLAY MODE
+//  window._replay = { full, idx, playing, timer, speedMs } cuando está
+//  activo, null si no. La idea central: window._lastCandles (la fuente
+//  de datos que YA leen candleSeries/volumeSeries/overlays/Watchtower/
+//  Sniper/Sweeps en cada render) se reemplaza por un slice(0, idx+1) del
+//  historial completo — así todo el pipeline de render existente se
+//  reutiliza tal cual, sin tocar nada de Watchtower/Sniper/Sweeps: para
+//  ellos, esas son simplemente "las velas que hay".
+// ══════════════════════════════════════════════════════════
+let _replayClickHandler = null;
+
+function toggleReplayPicker(){
+  if (window._replay) { exitReplay(); return; } // ya activo -> "Replay" de nuevo = salir
+  if (_replayClickHandler) { cancelReplayPicking(); return; } // picking -> cancelar
+  startReplayPicking();
+}
+
+function startReplayPicking(){
+  backToCursor(); // si había una herramienta de dibujo activa, el SVG de dibujo
+                   // tiene pointer-events:all y se come el click antes que
+                   // chart.subscribeClick lo vea (ver initDrawingLayer)
+  document.getElementById('btn-replay').classList.add('active');
+  document.getElementById('chart-container').style.cursor = 'crosshair';
+  document.getElementById('replay-pick-hint').classList.remove('hidden');
+  _replayClickHandler = (param) => {
+    if (!param.time) return; // click afuera del área de velas (eje, etc.)
+    finishReplayPick(param.time);
+  };
+  chart.subscribeClick(_replayClickHandler);
+  document.addEventListener('keydown', _replayEscHandler);
+}
+
+function _replayEscHandler(e){
+  if (e.key === 'Escape' && _replayClickHandler) cancelReplayPicking();
+}
+
+function cancelReplayPicking(){
+  if (_replayClickHandler) { chart.unsubscribeClick(_replayClickHandler); _replayClickHandler = null; }
+  document.removeEventListener('keydown', _replayEscHandler);
+  document.getElementById('btn-replay').classList.remove('active');
+  document.getElementById('chart-container').style.cursor = '';
+  document.getElementById('replay-pick-hint').classList.add('hidden');
+}
+
+function finishReplayPick(time){
+  cancelReplayPicking();
+  const candles = window._lastCandles || [];
+  let idx = candles.findIndex(c => c.time === time);
+  if (idx < 0) {
+    // clickeaste en el whitespace futuro u otro punto sin vela exacta:
+    // nos quedamos con la última vela real a la izquierda del click.
+    idx = 0;
+    for (let i=0; i<candles.length; i++){ if (candles[i].time <= time) idx = i; else break; }
+  }
+  startReplay(idx);
+}
+
+function startReplay(idx){
+  const full = (window._lastCandles || []).slice();
+  if (!full.length) return;
+  idx = Math.max(0, Math.min(idx, full.length - 1));
+  clearInterval(_countdownTimer);
+  const badge = document.getElementById('price-countdown-badge');
+  if (badge) badge.style.display = 'none';
+  window._replay = { full, idx, playing:false, timer:null, speedMs:600 };
+  document.getElementById('btn-replay').classList.add('active');
+  document.getElementById('replay-bar').classList.remove('hidden');
+  _applyReplayFrame();
+}
+
+function _applyReplayFrame(){
+  const r = window._replay; if (!r) return;
+  window._lastCandles = r.full.slice(0, r.idx + 1);
+  renderSeries(STATE.timeframe);
+  const last = window._lastCandles[window._lastCandles.length - 1];
+  const prev = window._lastCandles[window._lastCandles.length - 2];
+  updateTopbarPrice(last, prev);
+  updateTopbarOHLCV(last);
+  const d = new Date(last.time * 1000);
+  document.getElementById('replay-label').textContent =
+    `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}  ·  ${r.idx+1}/${r.full.length}`;
+  if (r.idx >= r.full.length - 1) replayPause();
+}
+
+function replayStep(){
+  const r = window._replay; if (!r) return;
+  if (r.idx >= r.full.length - 1) { replayPause(); return; }
+  r.idx++;
+  _applyReplayFrame();
+}
+
+function replayPlay(){
+  const r = window._replay; if (!r || r.playing || r.idx >= r.full.length - 1) return;
+  r.playing = true;
+  document.getElementById('replay-play-btn').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/></svg>';
+  r.timer = setInterval(replayStep, r.speedMs);
+}
+
+function replayPause(){
+  const r = window._replay; if (!r) return;
+  r.playing = false;
+  if (r.timer) { clearInterval(r.timer); r.timer = null; }
+  const btn = document.getElementById('replay-play-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+}
+
+function toggleReplayPlay(){
+  const r = window._replay; if (!r) return;
+  r.playing ? replayPause() : replayPlay();
+}
+
+function setReplaySpeed(ms){
+  const r = window._replay; if (!r) return;
+  r.speedMs = Number(ms) || 600;
+  if (r.playing) { replayPause(); replayPlay(); }
+}
+
+// Apagado explícito desde el botón ✕ — vuelve a cargar en vivo (misma
+// vía que usa todo lo demás para resincronizar: countdown, serverTime,
+// etc.). loadChart() ya detecta window._replay activo y lo limpia solo,
+// así que alcanza con disparar la carga.
+function exitReplay(){
+  if (!window._replay) return;
+  loadChart(STATE.symbol, STATE.timeframe);
+}
+
+// ══════════════════════════════════════════════════════════
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id).classList.add('open');}
@@ -4688,7 +4891,7 @@ function refreshOverlays(candles){
 // el tramo anterior) y las pega adelante sin mover la vista de un salto.
 let _loadingMoreHistory = false;
 async function loadMoreHistory(){
-  if (_loadingMoreHistory) return;
+  if (_loadingMoreHistory || window._replay) return;
   const candles = window._lastCandles;
   if (!candles || !candles.length || candles.length > 8000) return;
   _loadingMoreHistory = true;
@@ -4834,6 +5037,19 @@ function refreshChart(){
 }
 
 async function loadChart(symbol, timeframe, _isUppercaseRetry) {
+  // Cambiar de símbolo/TF o refrescar en medio de un replay no tiene forma
+  // sensata de "seguir" el replay (los datos de abajo cambian por completo),
+  // así que directamente lo cerramos acá — cualquier camino que termine
+  // llamando a loadChart (buscador, watchlist, TF bar, Refresh, exitReplay)
+  // deja todo limpio sin tener que acordarse de hacerlo en cada uno.
+  if (window._replay) {
+    replayPause();
+    window._replay = null;
+    document.getElementById('replay-bar')?.classList.add('hidden');
+    document.getElementById('btn-replay')?.classList.remove('active');
+    const badge = document.getElementById('price-countdown-badge');
+    if (badge) badge.style.display = '';
+  }
   setLoaderMsg(`Loading ${symbol} ${timeframe}…`);showOverlay(true);setStatus('loading','● loading…');
 
   // Siempre 500 acá — es lo que ya suele tener MT5 cacheado, responde rápido
