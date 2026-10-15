@@ -36,6 +36,13 @@
     --tf-bar-h:     36px;
   }
 
+  /* Ver applyTheme(): corta en seco cualquier transition justo alrededor
+     del cambio de tema, para que no se vea como un fundido de ~150ms (eso
+     es lo que hacía notar el desfasaje de unos ms entre la barra global y
+     cada panel en modo grilla, aunque el cambio de estado en sí ya esté
+     sincronizado). */
+  html.theme-switching, html.theme-switching * { transition: none !important; }
+
   /* ─── MODO CLARO ──────────────────────────────────────────
      Redefine solo las variables de la interfaz (fondos, bordes, texto,
      acento dorado, verde/rojo semánticos) — el gráfico en sí (velas,
@@ -1224,13 +1231,40 @@ if (!_lsOK) console.warn('Zentinel: localStorage no disponible (bloqueado por el
 //  página aparte) quedan siempre con el mismo tema. Se aplica ACÁ, antes
 //  de cualquier render, para no mostrar un flash con el tema viejo.
 // ══════════════════════════════════════════════════════════
+let _lastAppliedTheme = null;
 function applyTheme(theme){
-  if (theme === 'light') document.documentElement.setAttribute('data-theme','light');
-  else document.documentElement.removeAttribute('data-theme');
+  // changed=false pasa en dos casos normales (no son bugs): el 'storage'
+  // event de respaldo reaplicando lo mismo que ya llegó por postMessage
+  // un rato antes, y el redibujo explícito del ícono de un botón de tema
+  // recién creado (grilla multi-chart) sin que el tema haya cambiado.
+  // En ambos casos igual hace falta repintar el ícono (por eso ese bloque
+  // queda afuera del if), pero no hace falta tocar el atributo/transición.
+  const changed = theme !== _lastAppliedTheme;
+  _lastAppliedTheme = theme;
+  const root = document.documentElement;
+  if (changed) {
+    // El cambio de color en sí (fondo/texto/bordes, vía las variables CSS)
+    // tiene transition en un montón de elementos para las interacciones
+    // normales (hover, etc.) — pero eso mismo hacía que el cambio de tema
+    // se viera como un fundido de ~150ms en vez de un corte limpio. En
+    // modo grilla, la barra de afuera (este doc) y cada panel (otro doc,
+    // avisado por postMessage con unos ms de diferencia) ya no quedan
+    // perfectamente sincronizados a nivel de evento — pero si cada uno
+    // corta en seco en vez de desvanecer, esa pequeña diferencia de
+    // tiempo deja de notarse como "primero uno, después el otro". Se
+    // apaga toda transición un frame nomás, justo alrededor del cambio.
+    root.classList.add('theme-switching');
+    if (theme === 'light') root.setAttribute('data-theme','light');
+    else root.removeAttribute('data-theme');
+  }
   document.querySelectorAll('.theme-toggle-btn').forEach(btn=>{
     btn.innerHTML = theme==='light' ? THEME_ICON_MOON : THEME_ICON_SUN;
     btn.title = theme==='light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
   });
+  if (changed) {
+    root.offsetHeight; // fuerza a pintar el cambio de arriba YA, sin transición
+    requestAnimationFrame(() => root.classList.remove('theme-switching'));
+  }
 }
 function toggleTheme(){
   const next = document.documentElement.getAttribute('data-theme')==='light' ? 'dark' : 'light';
@@ -1244,6 +1278,11 @@ applyTheme(lsGet('td_theme') || 'dark');
 // panel y la barra global son documentos separados), el evento 'storage'
 // avisa acá para que este documento también se actualice al toque.
 window.addEventListener('storage', e => { if (e.key === 'td_theme') applyTheme(e.newValue || 'dark'); });
+// Vía rápida (mismo tick) para los paneles embebidos: ver el postMessage
+// que manda la barra global en renderLayoutGrid — el 'storage' de arriba
+// queda como respaldo (por si este panel se abre después del cambio, o
+// algo dispara el cambio sin pasar por esa barra).
+window.addEventListener('message', e => { if (e.data && e.data.type === 'zentinel:themeChanged') applyTheme(e.data.theme || 'dark'); });
 
 // Diferido: deja que el resto del script (definiciones de funciones,
 // listeners sobre elementos que está por reemplazar) termine de correr
@@ -1311,7 +1350,7 @@ function renderLayoutGrid(n){
     <div id="layout-picker" title="Cantidad de gráficos">
       ${[1,2,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':'4 ⊞'}</button>`).join('')}
     </div>
-    <button class="topbar-btn theme-toggle-btn" title="Cambiar tema" onclick="toggleTheme()"></button>
+    <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
     <button class="topbar-btn" id="gc-refresh" title="Refrescar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
@@ -1344,6 +1383,20 @@ function renderLayoutGrid(n){
   document.body.appendChild(bar);
   document.body.appendChild(gbar);
   applyTheme(lsGet('td_theme') || 'dark'); // repinta el ícono del botón de tema recién creado
+
+  // El cambio de tema desde ACÁ (la barra global) se veía en dos tiempos
+  // si cada panel se enteraba solo por el 'storage' event (asíncrono,
+  // tarda unos cientos de ms) o incluso por postMessage (sigue siendo
+  // asíncrono — medido ~35-75ms de por medio entre esta barra y cada
+  // panel, suficiente para notarse). Shell y paneles son incluso mismo
+  // origin (todo sirve desde http://localhost:8787), así que no hace
+  // falta mensajería para esto: se llama applyTheme() DIRECTO sobre el
+  // contentWindow de cada iframe, síncrono, en el mismo tick que acá.
+  bar.querySelector('#gc-theme-toggle').addEventListener('click', () => {
+    toggleTheme();
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    iframeEls.forEach(el => { try { el.contentWindow.applyTheme(theme); } catch(e){} });
+  });
 
   // Scope: Activo / Todos
   const scopeWrap = bar.querySelector('#gc-scope');
