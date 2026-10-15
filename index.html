@@ -1046,8 +1046,6 @@
         <option value="4">Sparse dotted</option>
       </select>
     </div>
-    <label><input type="checkbox" id="cs-grid-on" style="width:auto;margin-right:6px;">Show background grid</label>
-    <label><input type="checkbox" id="cs-watermark-on" style="width:auto;margin-right:6px;">Show watermark</label>
     <label style="margin-top:10px;">Crosshair line</label>
     <div class="cs-row">
       <input type="color" id="cs-crosshair-color" class="cs-color-inp">
@@ -1386,7 +1384,6 @@ const CHART_SETTINGS_DEFAULTS = {
   borderUpColor:'#26a69a', borderDownColor:'#909090',
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
-  showGrid:true, showWatermark:true,
   crosshairColor:'#c9a84c', crosshairStyle:2,
   visibleTFs: ALL_TIMEFRAMES.map(t=>t.tf),
 };
@@ -2212,7 +2209,7 @@ function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
     layout: { background:{ color: STATE.chartSettings.bgColor }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
-    grid:   { vertLines:{color:'#18182a',style:1,visible:STATE.chartSettings.showGrid}, horzLines:{color:'#18182a',style:1,visible:STATE.chartSettings.showGrid} },
+    grid:   { vertLines:{visible:false}, horzLines:{visible:false} },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
       vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
@@ -2220,7 +2217,7 @@ function initChart() {
     },
     rightPriceScale: { borderColor:'#222230', scaleMargins:{top:0.08,bottom:0.18} },
     timeScale: { borderColor:'#222230', timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
-    watermark: { visible:STATE.chartSettings.showWatermark, fontSize:52, horzAlign:'center', vertAlign:'center', color:'rgba(201,168,76,0.03)', text:'ZENTINEL' },
+    watermark: { visible:false },
   });
 
   candleSeries = chart.addCandlestickSeries({});
@@ -4335,8 +4332,6 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-priceline-on').checked=cs.priceLineVisible;
   document.getElementById('cs-priceline-color').value=cs.priceLineColor||cs.upColor;
   document.getElementById('cs-priceline-style').value=String(cs.priceLineStyle);
-  document.getElementById('cs-grid-on').checked=cs.showGrid;
-  document.getElementById('cs-watermark-on').checked=cs.showWatermark;
   document.getElementById('cs-crosshair-color').value=cs.crosshairColor;
   document.getElementById('cs-crosshair-style').value=String(cs.crosshairStyle);
   renderCsTfList(cs.visibleTFs);
@@ -4357,8 +4352,6 @@ function commitChartSettingsForm(){
     priceLineVisible: document.getElementById('cs-priceline-on').checked,
     priceLineColor: document.getElementById('cs-priceline-color').value,
     priceLineStyle: Number(document.getElementById('cs-priceline-style').value),
-    showGrid: document.getElementById('cs-grid-on').checked,
-    showWatermark: document.getElementById('cs-watermark-on').checked,
     crosshairColor: document.getElementById('cs-crosshair-color').value,
     crosshairStyle: Number(document.getElementById('cs-crosshair-style').value),
     visibleTFs,
@@ -4388,12 +4381,10 @@ function applyChartSettings(){
   const cs = STATE.chartSettings;
   chart.applyOptions({
     layout: { background: { color: cs.bgColor } },
-    grid: { vertLines:{visible:cs.showGrid}, horzLines:{visible:cs.showGrid} },
     crosshair: {
       vertLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
       horzLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
     },
-    watermark: { visible: cs.showWatermark },
   });
   candleSeries.applyOptions({
     upColor: cs.upColor, downColor: cs.downColor,
@@ -4742,6 +4733,13 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // resolución interna vieja y las velas se ven apretadas en una esquina.
     const _cc = document.getElementById('chart-container');
     chart.applyOptions({ width:_cc.clientWidth, height:_cc.clientHeight });
+    // Arrastrar el eje de precio (zoom vertical manual) apaga el autoScale
+    // de ese priceScale — comportamiento propio de la librería, no algo que
+    // seteemos nosotros. Como refreshChart() reutiliza el mismo chart (no
+    // lo recrea), esa desactivación quedaba pegada para siempre: sin esto
+    // un refresh después de tocar el zoom vertical dejaba el rango de
+    // precio viejo en vez de reacomodarse a los datos nuevos.
+    chart.priceScale('right').applyOptions({ autoScale: true });
     renderSeries(timeframe);
     chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
     chart.timeScale().scrollToRealTime();
