@@ -902,10 +902,34 @@
 
 <!-- ══ FLOATING DRAWING TOOLBAR ══════════════════════════ -->
 <div id="draw-toolbar">
-  <div class="dtb-color-wrap">
+  <div class="dtb-color-wrap" id="dtb-color-wrap">
     <span class="dtb-label">Color</span>
     <div class="dtb-color-swatch" id="dtb-color-swatch" style="background:#c9a84c">
       <input type="color" id="dtb-color" value="#c9a84c" oninput="onDtbColorChange(this.value)">
+    </div>
+  </div>
+  <!-- La herramienta de posición (long/short) no tiene UN color — tiene 3
+       (entrada/TP/SL), fijos en el código hasta ahora. El selector de
+       arriba no hacía nada para ella (engañaba: parecía que cambiaba algo
+       y no pasaba nada). Estos 3 swatches solo se muestran para long/short. -->
+  <div class="dtb-color-wrap" id="dtb-pos-colors" style="display:none;gap:10px;">
+    <div class="dtb-color-wrap" style="gap:4px;">
+      <span class="dtb-label">Entry</span>
+      <div class="dtb-color-swatch" id="dtb-pos-entry-swatch">
+        <input type="color" id="dtb-pos-entry-color" oninput="onDtbPosColorChange('entryColor', this.value, this)">
+      </div>
+    </div>
+    <div class="dtb-color-wrap" style="gap:4px;">
+      <span class="dtb-label">TP</span>
+      <div class="dtb-color-swatch" id="dtb-pos-tp-swatch">
+        <input type="color" id="dtb-pos-tp-color" oninput="onDtbPosColorChange('profitColor', this.value, this)">
+      </div>
+    </div>
+    <div class="dtb-color-wrap" style="gap:4px;">
+      <span class="dtb-label">SL</span>
+      <div class="dtb-color-swatch" id="dtb-pos-sl-swatch">
+        <input type="color" id="dtb-pos-sl-color" oninput="onDtbPosColorChange('lossColor', this.value, this)">
+      </div>
     </div>
   </div>
   <div class="dtb-sep"></div>
@@ -942,6 +966,16 @@
       <line x1="2" y1="8" x2="14" y2="8"/><polyline points="10,4 14,8 10,12"/>
     </svg>
     Right
+  </button>
+  <!-- Solo para 'rect': hoy borde y relleno comparten color y siempre están
+       los dos prendidos — esto permite apagar uno sin el otro. -->
+  <button class="dtb-btn active" id="dtb-rect-border" title="Mostrar/ocultar el borde" onclick="onDtbToggleRectPart('showBorder')" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/></svg>
+    Border
+  </button>
+  <button class="dtb-btn active" id="dtb-rect-fill" title="Mostrar/ocultar el relleno" onclick="onDtbToggleRectPart('showFill')" style="display:none">
+    <svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/></svg>
+    Fill
   </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" id="dtb-lock" title="Lock drawing" onclick="onDtbLock()">
@@ -1457,8 +1491,21 @@ function selectDrawing(id) {
   selectedDrawingId = id;
   const d = drawings.find(x => x.id === id);
   if (!d) { hideDrawToolbar(); return; }
-  document.getElementById('dtb-color').value = d.color;
-  document.getElementById('dtb-color-swatch').style.background = d.color;
+  const isPosition = (d.type === 'long' || d.type === 'short');
+  document.getElementById('dtb-color-wrap').style.display = isPosition ? 'none' : '';
+  document.getElementById('dtb-pos-colors').style.display = isPosition ? 'flex' : 'none';
+  if (isPosition) {
+    const entryC = d.entryColor||'#e8e8f0', tpC = d.profitColor||'#26a69a', slC = d.lossColor||'#ef5350';
+    document.getElementById('dtb-pos-entry-color').value = entryC;
+    document.getElementById('dtb-pos-entry-swatch').style.background = entryC;
+    document.getElementById('dtb-pos-tp-color').value = tpC;
+    document.getElementById('dtb-pos-tp-swatch').style.background = tpC;
+    document.getElementById('dtb-pos-sl-color').value = slC;
+    document.getElementById('dtb-pos-sl-swatch').style.background = slC;
+  } else {
+    document.getElementById('dtb-color').value = d.color;
+    document.getElementById('dtb-color-swatch').style.background = d.color;
+  }
   document.getElementById('dtb-width').value = d.width;
   document.getElementById('dtb-style').value = d.style;
   document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
@@ -1467,6 +1514,10 @@ function selectDrawing(id) {
   document.getElementById('dtb-ext-right').style.display = extendApplies ? '' : 'none';
   document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
   document.getElementById('dtb-ext-right').classList.toggle('active', !!d.extRight);
+  document.getElementById('dtb-rect-border').style.display = d.type==='rect' ? '' : 'none';
+  document.getElementById('dtb-rect-fill').style.display   = d.type==='rect' ? '' : 'none';
+  document.getElementById('dtb-rect-border').classList.toggle('active', d.showBorder !== false);
+  document.getElementById('dtb-rect-fill').classList.toggle('active', d.showFill !== false);
   document.getElementById('dtb-lock').classList.toggle('active', !!d.locked);
   showDrawToolbar();
   highlightSelectedSvg(id);
@@ -1514,6 +1565,22 @@ function onDtbLock() {
   const d = getSelected(); if (!d) return;
   d.locked = !d.locked;
   document.getElementById('dtb-lock').classList.toggle('active', d.locked);
+}
+// La herramienta de posición no tiene un solo "color" como el resto de los
+// dibujos — tiene 3 (entrada/TP/SL). `field` es cuál de los 3 tocar.
+function onDtbPosColorChange(field, val, inputEl) {
+  const d = getSelected(); if (!d || (d.type!=='long' && d.type!=='short')) return;
+  inputEl.parentElement.style.background = val;
+  d[field] = val;
+  redrawDrawing(d);
+}
+// Solo para 'rect': apaga/prende el borde o el relleno sin tocar el otro.
+function onDtbToggleRectPart(field) {
+  const d = getSelected(); if (!d || d.type!=='rect') return;
+  d[field] = (d[field] === false) ? true : false; // default true -> primer click apaga
+  const btnId = field === 'showBorder' ? 'dtb-rect-border' : 'dtb-rect-fill';
+  document.getElementById(btnId).classList.toggle('active', d[field] !== false);
+  redrawDrawing(d);
 }
 // ══════════════════════════════════════════════════════════
 //  NIVELES DE FIBONACCI (editable por dibujo: agregar/sacar/editar)
@@ -1813,8 +1880,14 @@ function buildDrawingOnChart(d) {
     const t2_raw = Math.max(d.p1.time, d.p2.time);
     const t2 = d.extRight ? tFuture : t2_raw;
 
+    // Borde y relleno se pueden apagar por separado (ver dtb-rect-border /
+    // dtb-rect-fill) — las 4 series del borde se crean igual siempre
+    // (así d.series.length se mantiene en 4 y el update en vivo durante un
+    // arrastre sigue tomando el camino liviano de updateDrawingGeometry),
+    // solo se las oculta con "visible:false" cuando el borde está apagado.
+    const borderOn = d.showBorder !== false;
     const mkR = (pts) => {
-      const s = chart.addLineSeries({ color: C+'aa', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null });
+      const s = chart.addLineSeries({ color: C+'aa', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null, visible: borderOn });
       s.setData(pts); d.series.push(s); return s;
     };
     mkR([{time:t1,value:hi},{time:t2,value:hi}]);
@@ -1830,7 +1903,7 @@ function buildDrawingOnChart(d) {
       d.fillEl = r;
     }
     d.fillEl.setAttribute('fill', C);
-    d.fillEl.setAttribute('fill-opacity', '0.12');
+    d.fillEl.setAttribute('fill-opacity', d.showFill === false ? '0' : '0.12');
     syncRectFill(d);
 
   } else if (d.type === 'fib') {
@@ -1865,6 +1938,12 @@ function buildDrawingOnChart(d) {
     // 3 líneas horizontales (entrada/TP/SL, como en TV) + 2 rectángulos de
     // relleno (zona de ganancia/pérdida, en la capa SVG igual que el
     // relleno de 'rect') + 3 etiquetas de texto con los precios y el R:R.
+    // Colores propios por zona (no el selector de color genérico, que acá
+    // no tiene sentido — ver dtb-pos-colors), con default si todavía no
+    // se personalizaron.
+    const entryColor = d.entryColor || '#e8e8f0';
+    const profitColor = d.profitColor || '#26a69a';
+    const lossColor = d.lossColor || '#ef5350';
     const mkLvl = (price, color, dashed) => {
       const s = chart.addLineSeries({
         color, lineWidth:1, lineStyle: dashed?2:0,
@@ -1874,9 +1953,9 @@ function buildDrawingOnChart(d) {
       s.setData([{time:d.p1.time,value:price},{time:d.p2.time,value:price}]);
       d.series.push(s);
     };
-    mkLvl(d.p1.price,      '#e8e8f0', false); // entrada
-    mkLvl(d.targetPrice,   '#26a69a', true);  // take profit
-    mkLvl(d.p2.price,      '#ef5350', true);  // stop loss
+    mkLvl(d.p1.price,      entryColor, false); // entrada
+    mkLvl(d.targetPrice,   profitColor, true);  // take profit
+    mkLvl(d.p2.price,      lossColor, true);  // stop loss
 
     if (!(d.profitFillEl instanceof Element)) {
       const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -1888,8 +1967,8 @@ function buildDrawingOnChart(d) {
       window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
       d.lossFillEl = r;
     }
-    d.profitFillEl.setAttribute('fill', '#26a69a'); d.profitFillEl.setAttribute('fill-opacity', '0.18');
-    d.lossFillEl.setAttribute('fill', '#ef5350'); d.lossFillEl.setAttribute('fill-opacity', '0.18');
+    d.profitFillEl.setAttribute('fill', profitColor); d.profitFillEl.setAttribute('fill-opacity', '0.18');
+    d.lossFillEl.setAttribute('fill', lossColor); d.lossFillEl.setAttribute('fill-opacity', '0.18');
 
     ['entryTextEl','tpTextEl','slTextEl'].forEach(key => {
       if (!(d[key] instanceof Element)) {
@@ -1901,9 +1980,9 @@ function buildDrawingOnChart(d) {
         d[key] = t;
       }
     });
-    d.entryTextEl.setAttribute('fill', '#e8e8f0');
-    d.tpTextEl.setAttribute('fill', '#26a69a');
-    d.slTextEl.setAttribute('fill', '#ef5350');
+    d.entryTextEl.setAttribute('fill', entryColor);
+    d.tpTextEl.setAttribute('fill', profitColor);
+    d.slTextEl.setAttribute('fill', lossColor);
     syncPositionTool(d);
   }
 
