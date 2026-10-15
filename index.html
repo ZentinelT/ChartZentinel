@@ -742,6 +742,18 @@
   .drawing-handle:hover { r: 7; }
   [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
   .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
+
+  /* ─── Divisores arrastrables entre paneles (modo 2×/4⊞) ──── */
+  .grid-divider { background: var(--bg-primary); position: relative; }
+  .grid-divider::after {
+    content: ''; position: absolute; background: var(--border);
+    transition: background .1s;
+  }
+  .grid-divider-col::after { top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); }
+  .grid-divider-row::after { left: 0; right: 0; top: 50%; height: 1px; transform: translateY(-50%); }
+  .grid-divider-col { cursor: col-resize; }
+  .grid-divider-row { cursor: row-resize; }
+  .grid-divider:hover::after, .grid-divider.dragging::after { background: var(--gold); }
 </style>
 </head>
 <body>
@@ -1397,17 +1409,119 @@ function renderLayoutGrid(n){
   });
 
   // ─── Grilla de paneles ─────────────────────────────────────
+  // Cada panel y cada divisor es un grid-item posicionado por línea
+  // explícita (no `repeat(n,1fr)` automático): así los divisores tienen su
+  // propio track angosto entre paneles, arrastrable para cambiar el tamaño
+  // relativo (en `fr`) del par de paneles a cada lado. El split elegido se
+  // guarda en localStorage (sin sufijo de pane: es del layout, no de un
+  // panel individual) para que sobreviva a un refresh.
   const grid = document.createElement('div');
   const cols = n===4 ? 2 : n;
   const rows = n===4 ? 2 : 1;
-  grid.style.cssText = `flex:1;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:2px;background:var(--bg-primary);min-height:0;`;
-  for (let i=1;i<=n;i++){
-    const iframe = document.createElement('iframe');
-    iframe.src = `index.html?embed=1&pane=${i}`;
-    iframe.style.cssText = 'width:100%;height:100%;box-sizing:border-box;display:block;border:1px solid transparent;transition:border-color .15s;';
-    grid.appendChild(iframe);
-    iframeEls.push(iframe);
+  const DIVIDER_PX = 6;
+  const MIN_PANE_PX = 150;
+
+  const savedSplit = (() => { try { return JSON.parse(lsGet('td_grid_split_'+n) || '{}'); } catch(e){ return {}; } })();
+  const colFr = (Array.isArray(savedSplit.cols) && savedSplit.cols.length===cols) ? savedSplit.cols.slice() : Array(cols).fill(1);
+  const rowFr = (Array.isArray(savedSplit.rows) && savedSplit.rows.length===rows) ? savedSplit.rows.slice() : Array(rows).fill(1);
+  function saveSplit(){ lsSet('td_grid_split_'+n, JSON.stringify({cols:colFr, rows:rowFr})); }
+  function colTemplate(){ return colFr.map(f=>`${f}fr`).join(` ${DIVIDER_PX}px `); }
+  function rowTemplate(){ return rowFr.map(f=>`${f}fr`).join(` ${DIVIDER_PX}px `); }
+  function applyTemplate(){
+    grid.style.gridTemplateColumns = colTemplate();
+    grid.style.gridTemplateRows = rowTemplate();
   }
+
+  grid.style.cssText = `flex:1;display:grid;background:var(--bg-primary);min-height:0;position:relative;`;
+  applyTemplate();
+
+  for (let r=0;r<rows;r++){
+    for (let c=0;c<cols;c++){
+      const i = r*cols + c + 1;
+      const iframe = document.createElement('iframe');
+      iframe.src = `index.html?embed=1&pane=${i}`;
+      iframe.style.cssText = 'width:100%;height:100%;box-sizing:border-box;display:block;border:1px solid transparent;transition:border-color .15s;';
+      iframe.style.gridColumn = String(2*c+1);
+      iframe.style.gridRow = String(2*r+1);
+      grid.appendChild(iframe);
+      iframeEls.push(iframe);
+    }
+  }
+
+  // Cada panel es un iframe = un browsing context aparte. Un mousemove del
+  // usuario, apenas el cursor entra en el área de un iframe durante el
+  // drag, deja de burbujear al document del padre (son documentos
+  // distintos) — sin esto, el arrastre se cortaba en seco en cuanto la
+  // caía arriba de cualquiera de los dos paneles. La solución estándar:
+  // mientras se arrastra, tapar todo con una capa transparente por encima
+  // de los iframes que capture ella sola el mousemove/mouseup, y sacarla
+  // al soltar.
+  function startDrag(e, div, axis, idx){
+    e.preventDefault();
+    const isCol = axis==='col';
+    const fr = isCol ? colFr : rowFr;
+    const count = isCol ? cols : rows;
+    const rect = grid.getBoundingClientRect();
+    const sizePx = isCol ? rect.width : rect.height;
+    const totalFr = fr.reduce((a,b)=>a+b,0);
+    const pxPerFr = (sizePx - DIVIDER_PX*(count-1)) / totalFr;
+    const minFr = MIN_PANE_PX / pxPerFr;
+    const startPos = isCol ? e.clientX : e.clientY;
+    const startA = fr[idx], startB = fr[idx+1];
+    const pairFr = startA + startB;
+    div.classList.add('dragging');
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;cursor:${isCol?'col-resize':'row-resize'};`;
+    document.body.appendChild(overlay);
+
+    // mousemove puede disparar muchas más veces por segundo de las que el
+    // navegador llega a pintar — aplicar el grid-template en cada uno
+    // encolaba layouts de sobra (cada uno cascadea a los iframes, que a su
+    // vez redimensionan el chart de lightweight-charts adentro). Guardar
+    // solo la ÚLTIMA posición y aplicar una vez por frame (rAF) le saca
+    // ese trabajo redundante sin perder la sensación de "en vivo".
+    let pendingPos = null, rafId = null;
+    function applyPending(){
+      rafId = null;
+      let a = startA + (pendingPos - startPos) / pxPerFr;
+      a = Math.max(minFr, Math.min(pairFr - minFr, a));
+      fr[idx] = a; fr[idx+1] = pairFr - a;
+      applyTemplate();
+    }
+    function onMove(ev){
+      pendingPos = isCol ? ev.clientX : ev.clientY;
+      if (rafId === null) rafId = requestAnimationFrame(applyPending);
+    }
+    function onUp(){
+      overlay.removeEventListener('mousemove', onMove);
+      overlay.removeEventListener('mouseup', onUp);
+      overlay.remove();
+      div.classList.remove('dragging');
+      if (rafId !== null) { cancelAnimationFrame(rafId); applyPending(); }
+      saveSplit();
+    }
+    overlay.addEventListener('mousemove', onMove);
+    overlay.addEventListener('mouseup', onUp);
+  }
+
+  for (let c=0;c<cols-1;c++){
+    const div = document.createElement('div');
+    div.className = 'grid-divider grid-divider-col';
+    div.style.gridColumn = String(2*c+2);
+    div.style.gridRow = `1 / ${2*rows}`;
+    div.addEventListener('mousedown', e => startDrag(e, div, 'col', c));
+    grid.appendChild(div);
+  }
+  for (let r=0;r<rows-1;r++){
+    const div = document.createElement('div');
+    div.className = 'grid-divider grid-divider-row';
+    div.style.gridRow = String(2*r+2);
+    div.style.gridColumn = `1 / ${2*cols}`;
+    div.addEventListener('mousedown', e => startDrag(e, div, 'row', r));
+    grid.appendChild(div);
+  }
+
   setActivePane(1);
   document.body.appendChild(grid);
 }
