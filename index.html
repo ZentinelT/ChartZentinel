@@ -1419,6 +1419,20 @@ const SNIPER_DEFAULTS = {
   requireHtfFvg:true, reqFvgM15:true, reqFvgH4:true,
   fvgMinPenetration:'deep_or_more', // 'any' | 'deep_or_more' | 'through_only'
 };
+// Port de la parte "Sweeps en TF actual" de "SweepS Fractales HTF + Actual"
+// (Pine v6) — nombres de inputs conservados del original (alcista/bajista).
+// A diferencia del Sniper, acá no hay máquina de estados: cada vela i se
+// compara contra la vela anterior (i-1), igual que el Pine original compara
+// la actual contra high[1]/low[1] — así que un simple scan del historial ya
+// cargado reproduce el mismo resultado que el streaming bar-a-bar.
+const SWEEPS_DEFAULTS = {
+  enabled:false,
+  mostrarAlcista:true, mostrarBajista:true,
+  colorAlcista:'#26a69a', colorBajista:'#ef5350',
+  anchoLinea:1,
+  duracionBarras:3,
+  diasLimite:1, horasLimite:4,
+};
 const STATE = {
   symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
@@ -1431,6 +1445,7 @@ const STATE = {
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
   }, _wtSaved, { kz: _wtKz }),
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
+  sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
   // Los presets NO llevan el sufijo de pane (lsKey): un preset guardado en
@@ -1439,8 +1454,10 @@ const STATE = {
 };
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
+STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
+function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
 function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
 function saveChartSettingsState(){ lsSet(lsKey('td_chart_settings'), JSON.stringify(STATE.chartSettings)); }
@@ -2244,6 +2261,7 @@ function initChart() {
     if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
     renderWatchtower();
     renderSniper();
+    renderSweeps();
     syncOverlayPositions();
   }).observe(container);
 
@@ -2251,6 +2269,7 @@ function initChart() {
     if (range && range.from < 50) loadMoreHistory();
     renderWatchtower();
     renderSniper();
+    renderSweeps();
     syncOverlayPositions();
   });
 
@@ -2268,9 +2287,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -2285,6 +2304,7 @@ function initChart() {
 
   initWatchtowerLayer();
   initSniperLayer();
+  initSweepsLayer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
   // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
@@ -2949,6 +2969,7 @@ const INDICATOR_DEFS = [
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
+  { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -2973,6 +2994,7 @@ function applyIndicators() {
     if(def && def.custom){
       if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
+      else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   });
@@ -2986,6 +3008,7 @@ function addIndicatorSeries(name) {
   if(def.custom){
     if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
+    else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     return;
   }
   if(overlays[name])return;
@@ -3166,6 +3189,36 @@ function openIndicatorSettings(name) {
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (cuántos mostrar)</span><input type="number" id="sn-h4-count" min="1" max="20" step="1" value="${sn.h4Count}" style="width:56px"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-h4-bull-color" value="${snParseRgba(sn.h4BullColor).hex}"><input type="number" id="sn-h4-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BullColor).transparency}" style="width:48px" title="Transparencia %"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-h4-bear-color" value="${snParseRgba(sn.h4BearColor).hex}"><input type="number" id="sn-h4-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BearColor).transparency}" style="width:48px" title="Transparencia %"></div>`;
+  } else if (name === 'Sweeps') {
+    const sw = STATE.sweeps;
+    body.innerHTML = `
+      <label class="wt-set-row"><span>Bullish sweep (prior high swept &amp; rejected down)</span><input type="checkbox" id="sw-mostrar-alcista" ${sw.mostrarAlcista?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="sw-color-alcista" value="${sw.colorAlcista}">
+      </div>
+      <label class="wt-set-row"><span>Bearish sweep (prior low swept &amp; rejected up)</span><input type="checkbox" id="sw-mostrar-bajista" ${sw.mostrarBajista?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="sw-color-bajista" value="${sw.colorBajista}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Line width</span>
+        <input type="number" id="sw-ancho" min="1" max="5" step="1" value="${sw.anchoLinea}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Line length (bars forward)</span>
+        <input type="number" id="sw-duracion" min="1" max="50" step="1" value="${sw.duracionBarras}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Time limit (only show recent sweeps)</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Days</span>
+        <input type="number" id="sw-dias" min="0" max="30" step="1" value="${sw.diasLimite}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Hours</span>
+        <input type="number" id="sw-horas" min="0" max="23" step="1" value="${sw.horasLimite}" style="width:56px">
+      </div>`;
   } else {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     const style = getIndicatorStyle(name, def);
@@ -3242,6 +3295,18 @@ function saveIndicatorSettings() {
     STATE.sniper.h4BearColor = snRgba(g('sn-h4-bear-color').value, Number(g('sn-h4-bear-color-tr').value)||0);
     saveSniperState();
     renderSniper();
+  } else if (_indSettingsTarget === 'Sweeps') {
+    const g = id => document.getElementById(id);
+    STATE.sweeps.mostrarAlcista = g('sw-mostrar-alcista').checked;
+    STATE.sweeps.mostrarBajista = g('sw-mostrar-bajista').checked;
+    STATE.sweeps.colorAlcista = g('sw-color-alcista').value;
+    STATE.sweeps.colorBajista = g('sw-color-bajista').value;
+    STATE.sweeps.anchoLinea = Math.max(1, Math.min(5, Number(g('sw-ancho').value)||1));
+    STATE.sweeps.duracionBarras = Math.max(1, Math.min(50, Number(g('sw-duracion').value)||3));
+    STATE.sweeps.diasLimite = Math.max(0, Math.min(30, Number(g('sw-dias').value)||0));
+    STATE.sweeps.horasLimite = Math.max(0, Math.min(23, Number(g('sw-horas').value)||0));
+    saveSweepsState();
+    renderSweeps();
   } else {
     const colorEl=document.getElementById('ind-style-color');
     const widthEl=document.getElementById('ind-style-width');
@@ -3267,6 +3332,7 @@ function removeIndicator(name){
   if(def && def.custom){
     if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
+    else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
@@ -3759,6 +3825,17 @@ function initSniperLayer() {
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:16;pointer-events:none;overflow:hidden;';
   container.appendChild(svg);
   window._sniperSvg = svg;
+  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  new ResizeObserver(syncSize).observe(container);
+  syncSize();
+}
+
+function initSweepsLayer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:14;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._sweepsSvg = svg;
   function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
   new ResizeObserver(syncSize).observe(container);
   syncSize();
@@ -4307,6 +4384,47 @@ function renderSniper(){
 }
 
 // ══════════════════════════════════════════════════════════
+//  SWEEPS — port de la parte "Sweeps en TF actual" de
+//  "SweepS Fractales HTF + Actual" (Pine v6). Solo ese bloque: sin el
+//  sweep HTF (eso ya lo cubre Sniper) y sin la máquina de estados `var`
+//  del Pine (acá no hace falta — cada vela i se compara solo contra la
+//  i-1, así que un scan del historial ya cargado da el mismo resultado
+//  que el streaming bar-a-bar).
+// ══════════════════════════════════════════════════════════
+function renderSweeps(){
+  if (!window._sweepsSvg) return;
+  const svg = window._sweepsSvg;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sweeps');
+  if (!STATE.sweeps.enabled) return;
+  const candles = window._lastCandles||[];
+  if (candles.length<2) return;
+  const sw = STATE.sweeps;
+  const barStep = candles[1].time - candles[0].time;
+  // "Ahora" para el límite temporal: la última vela cargada, no el reloj
+  // del navegador — candles[].time no es epoch real (vení shifteado a NY,
+  // ver ZentinelBridge.mq5), así que compararlo contra Date.now() daría
+  // un offset de horas. Mismo criterio que ya usan Watchtower/Sniper con
+  // lastTime para "hasta dónde está vigente" un nivel.
+  const lastTime = candles[candles.length-1].time;
+  const limiteTiempo = lastTime - ((sw.diasLimite*24 + sw.horasLimite) * 3600);
+
+  for (let i=1; i<candles.length; i++){
+    const prev = candles[i-1], cur = candles[i];
+    if (cur.time < limiteTiempo) continue;
+    const t1 = prev.time, t2 = prev.time + sw.duracionBarras*barStep;
+    const sweepUp   = cur.high > prev.high && cur.close < prev.high && cur.open < prev.high;
+    const sweepDown = cur.low  < prev.low  && cur.close > prev.low  && cur.open > prev.low;
+    if (sw.mostrarAlcista && sweepUp){
+      wtLine(svg, t1, t2, prev.high, sw.colorAlcista, sw.anchoLinea, null, 'Sweeps');
+    }
+    if (sw.mostrarBajista && sweepDown){
+      wtLine(svg, t1, t2, prev.low, sw.colorBajista, sw.anchoLinea, null, 'Sweeps');
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id).classList.add('open');}
@@ -4409,6 +4527,7 @@ function captureCurrentDesign(){
     indicatorStyles: STATE.indicatorStyles,
     watchtower: STATE.watchtower,
     sniper: STATE.sniper,
+    sweeps: STATE.sweeps,
   };
 }
 
@@ -4452,14 +4571,17 @@ function applyPreset(name){
   STATE.indicatorStyles = JSON.parse(JSON.stringify(p.indicatorStyles || {}));
   STATE.watchtower = JSON.parse(JSON.stringify(p.watchtower || STATE.watchtower));
   STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(p.sniper || {})));
+  STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(p.sweeps || {})));
   STATE.indicators = [...(p.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
+  STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 
   saveChartSettingsState();
   saveIndicatorStylesState();
   saveWatchtowerState();
   saveSniperState();
+  saveSweepsState();
   saveState();
 
   Object.keys(overlays).forEach(n => { try { chart.removeSeries(overlays[n]); } catch(e){} delete overlays[n]; });
@@ -4471,6 +4593,7 @@ function applyPreset(name){
   renderIndList();
   renderWatchtower();
   renderSniper();
+  renderSweeps();
   fillChartSettingsForm(STATE.chartSettings);
 }
 
@@ -4546,6 +4669,7 @@ function renderSeries(timeframe){
   refreshOverlays(candles);
   renderWatchtower();
   renderSniper();
+  renderSweeps();
 }
 
 // Recalcula EMA/SMA/VWAP sobre el set completo de velas cargadas — si no,
