@@ -1894,7 +1894,13 @@ function onDtbPosColorChange(field, val, inputEl) {
   const d = getSelected(); if (!d || (d.type!=='long' && d.type!=='short')) return;
   inputEl.parentElement.style.background = val;
   d[field] = val;
-  redrawDrawing(d);
+  // Solo recolorea lo que ya existe (series + SVG) — NO pasa por
+  // redrawDrawing(), que saca y vuelve a meter las 3 series del chart: ese
+  // ir-y-venir hace que el right price scale (compartido por todos los
+  // dibujos) recalcule su autoScale, y eso se veía como si el gráfico
+  // "saltara" cada vez que se tocaba un color (mismo motivo documentado
+  // arriba de updateDrawingGeometry para el arrastre).
+  restylePositionToolColors(d);
 }
 // Solo para 'rect': apaga/prende el borde o el relleno sin tocar el otro.
 function onDtbToggleRectPart(field) {
@@ -2103,6 +2109,22 @@ function syncRectFill(d) {
   d.fillEl.setAttribute('width', Math.abs(x2-x1)); d.fillEl.setAttribute('height', Math.max(0,y2-y1));
 }
 
+// Recolorea una herramienta de posición ya construida sin tocar las series
+// del chart (ver el comentario en onDtbPosColorChange).
+function restylePositionToolColors(d) {
+  const entryColor = d.entryColor || '#e8e8f0';
+  const profitColor = d.profitColor || '#26a69a';
+  const lossColor = d.lossColor || '#ef5350';
+  if (d.series[0]) d.series[0].applyOptions({ color: entryColor });
+  if (d.series[1]) d.series[1].applyOptions({ color: profitColor });
+  if (d.series[2]) d.series[2].applyOptions({ color: lossColor });
+  if (d.profitFillEl) d.profitFillEl.setAttribute('fill', profitColor);
+  if (d.lossFillEl) d.lossFillEl.setAttribute('fill', lossColor);
+  if (d.entryTextEl) d.entryTextEl.setAttribute('fill', entryColor);
+  if (d.tpTextEl) d.tpTextEl.setAttribute('fill', profitColor);
+  if (d.slTextEl) d.slTextEl.setAttribute('fill', lossColor);
+}
+
 // Reubica los 2 rellenos y las 3 etiquetas de una herramienta de posición
 // (long/short) — igual que syncRectFill, se llama cada vez que cambia el
 // pan/zoom o se arrastra el dibujo.
@@ -2125,11 +2147,11 @@ function syncPositionTool(d) {
 
   const risk = Math.abs(entry-stop), reward = Math.abs(target-entry);
   const rr = risk>0 ? (reward/risk) : 0;
-  d.entryTextEl.setAttribute('x', xR+6); d.entryTextEl.setAttribute('y', yEntry);
-  d.entryTextEl.textContent = `Entry`;
-  d.tpTextEl.setAttribute('x', xR+6); d.tpTextEl.setAttribute('y', yTarget);
+  const xMid = (xL+xR)/2;
+  d.entryTextEl.textContent = '';
+  d.tpTextEl.setAttribute('x', xMid); d.tpTextEl.setAttribute('y', yTarget-3);
   d.tpTextEl.textContent = `TP +${fmt(reward)} pts  ·  R:R 1:${rr.toFixed(2)}`;
-  d.slTextEl.setAttribute('x', xR+6); d.slTextEl.setAttribute('y', yStop);
+  d.slTextEl.setAttribute('x', xMid); d.slTextEl.setAttribute('y', yStop-3);
   d.slTextEl.textContent = `SL -${fmt(risk)} pts`;
 }
 
@@ -2297,7 +2319,8 @@ function buildDrawingOnChart(d) {
         const t = document.createElementNS('http://www.w3.org/2000/svg','text');
         t.setAttribute('font-family', "'DM Mono', monospace");
         t.setAttribute('font-size', '10');
-        t.setAttribute('dominant-baseline', 'middle');
+        t.setAttribute('dominant-baseline', 'auto');
+        t.setAttribute('text-anchor', 'middle');
         window._drawingLayerSvg.appendChild(t);
         d[key] = t;
       }
