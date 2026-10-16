@@ -336,6 +336,12 @@
      (mismo mecanismo de siempre, persistido con el sufijo de cada pane) así
      no come espacio de entrada en una grilla de por sí chica. */
   html.embed-mode #topbar { display: none !important; }
+  /* La barra de herramientas y el watchlist ahora viven UNA sola vez en la
+     grilla de afuera (ver renderLayoutGrid) y controlan el panel activo —
+     igual que en TV — así que cada panel individual ya no muestra la suya. */
+  html.embed-mode #toolbar,
+  html.embed-mode #btn-sidebar-toggle,
+  html.embed-mode #sidebar { display: none !important; }
 
   #api-badge {
     font-family: var(--font-mono);
@@ -722,6 +728,14 @@
     z-index: 300;
     box-shadow: 0 8px 32px rgba(0,0,0,.6);
     user-select: none;
+    /* "fixed" se centra contra el viewport de CADA panel (en la grilla
+       multi-chart cada panel es su propio iframe, con su propio viewport
+       angosto) — sin este tope, en un panel achicado por el usuario el
+       contenido (varios selectores/colores en una sola fila) se salía del
+       ancho del iframe y quedaba recortado/invisible más allá del borde. */
+    max-width: calc(100vw - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
   }
   #draw-toolbar.visible { display: flex; }
 
@@ -1334,6 +1348,7 @@ function renderLayoutGrid(n){
   function setActivePane(idx){
     activePane = idx;
     iframeEls.forEach((el,i) => { el.style.borderColor = (i+1===idx) ? 'var(--gold)' : 'transparent'; });
+    syncShellControls();
   }
   // Aviso explícito de cada panel al clickearlo — más confiable que el
   // 'blur' de abajo, que solo agarra bien el primer salto de foco.
@@ -1418,6 +1433,226 @@ function renderLayoutGrid(n){
   document.body.appendChild(bar);
   document.body.appendChild(gbar);
   applyTheme(lsGet('td_theme') || 'dark'); // repinta el ícono del botón de tema recién creado
+
+  // ─── Barra de herramientas + watchlist COMPARTIDAS ──────────────────
+  // Antes cada panel tenía su propia barra de dibujo y su propio watchlist
+  // (independientes entre sí). Como en TV: una sola barra a la izquierda de
+  // toda la grilla, que dibuja/edita sobre el panel ACTIVO — y un solo
+  // watchlist (global, misma key de storage que la página de 1 gráfico,
+  // sin sufijo de panel) para elegir símbolo ahí también. Reusa los mismos
+  // ids que la página de 1 gráfico (#toolbar, #sidebar, #watchlist...) así
+  // toda la CSS existente aplica tal cual — es un documento aparte (esta
+  // barra vive en el shell, no en ningún iframe), así que no hay colisión.
+  const row = document.createElement('div');
+  row.style.cssText = 'flex:1;display:flex;min-height:0;';
+
+  const shellToolbar = document.createElement('div');
+  shellToolbar.id = 'toolbar';
+  const TOOL_DEFS = [
+    { tool:'cursor', tip:'Cursor', icon:'<path d="M5 3l14 9-7 1-3 7z"/>' },
+    { tool:'cross',  tip:'Crosshair', icon:'<line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="3"/>' },
+    null,
+    { tool:'trendline', tip:'Trend Line', icon:'<line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="2" fill="currentColor"/><circle cx="20" cy="4" r="2" fill="currentColor"/>' },
+    { tool:'hline', tip:'Horizontal Line', icon:'<line x1="2" y1="12" x2="22" y2="12"/><circle cx="2" cy="12" r="2" fill="currentColor"/>' },
+    { tool:'vline', tip:'Vertical Line', icon:'<line x1="12" y1="2" x2="12" y2="22"/><circle cx="12" cy="2" r="2" fill="currentColor"/>' },
+    { tool:'rect', tip:'Rectangle', icon:'<rect x="3" y="6" width="18" height="12" rx="1"/>' },
+    { tool:'fib', tip:'Fibonacci', strokeWidth:'1.6', icon:'<line x1="2" y1="3.5" x2="22" y2="3.5"/><line x1="2" y1="8.3" x2="15" y2="8.3"/><line x1="2" y1="13" x2="20" y2="13"/><line x1="2" y1="17.7" x2="11" y2="17.7"/><line x1="2" y1="22.5" x2="22" y2="22.5"/>' },
+    { tool:'long', tip:'Long Position', icon:'<rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="14" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="10.5" x2="22" y2="10.5"/><polyline points="9 16 12 19 15 16"/>' },
+    { tool:'short', tip:'Short Position', icon:'<rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="3" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="13.5" x2="22" y2="13.5"/><polyline points="9 8 12 5 15 8"/>' },
+    null,
+    { tool:'text', tip:'Text Label', icon:'<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>' },
+  ];
+  shellToolbar.innerHTML = TOOL_DEFS.map(t => t===null ? '<div class="tool-sep"></div>' :
+    `<button class="tool-btn${t.tool==='cursor'?' active':''}" data-tool="${t.tool}" data-tip="${t.tip}" onclick="shellSetTool(this,'${t.tool}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${t.strokeWidth||'2'}">${t.icon}</svg>
+    </button>`
+  ).join('') + `
+    <div class="tool-sep"></div>
+    <button class="tool-btn" id="btn-magnet" data-tip="Magnet: off" onclick="shellToggleMagnet()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 3h4v9a2 2 0 0 0 4 0V3h4v9a6 6 0 0 1-12 0V3z"/>
+        <path d="M6 3v4H2V3h4zM18 3v4h4V3h-4z"/>
+      </svg>
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn" data-tip="Clear All" onclick="shellClearDrawings()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+      </svg>
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn" id="btn-volume" data-tip="Toggle Volume" onclick="shellToggleVolume()" style="margin-top:auto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="14" width="4" height="7" rx="1"/>
+        <rect x="9" y="9" width="4" height="12" rx="1"/>
+        <rect x="16" y="4" width="4" height="17" rx="1"/>
+      </svg>
+    </button>`;
+
+  const shellSidebarToggle = document.createElement('button');
+  shellSidebarToggle.id = 'btn-sidebar-toggle';
+  shellSidebarToggle.title = 'Mostrar/ocultar watchlist';
+  shellSidebarToggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>';
+  shellSidebarToggle.onclick = shellToggleSidebarPanel;
+
+  const shellSidebar = document.createElement('div');
+  shellSidebar.id = 'sidebar';
+  shellSidebar.innerHTML = `
+    <div class="sidebar-inner">
+      <div class="sidebar-header">
+        Watchlist
+        <button class="sidebar-add-btn" onclick="shellToggleAddSym()" title="Add symbol">+</button>
+      </div>
+      <div id="add-sym-form">
+        <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20">
+        <button id="add-sym-ok" onclick="shellAddSymbol()">→</button>
+      </div>
+      <div id="watchlist"></div>
+    </div>
+  `;
+  shellSidebar.querySelector('#add-sym-inp').addEventListener('keydown', e => {
+    if (e.key==='Enter') shellAddSymbol();
+    if (e.key==='Escape') shellSidebar.querySelector('#add-sym-form').classList.remove('open');
+  });
+
+  const SHELL_SIDEBAR_KEY = 'td_shell_sidebar_collapsed';
+  if (lsGet(SHELL_SIDEBAR_KEY) === '1') {
+    shellSidebar.classList.add('collapsed');
+    shellSidebarToggle.classList.add('collapsed');
+  }
+  function shellToggleSidebarPanel(){
+    const collapsed = shellSidebar.classList.toggle('collapsed');
+    shellSidebarToggle.classList.toggle('collapsed', collapsed);
+    lsSet(SHELL_SIDEBAR_KEY, collapsed ? '1' : '0');
+  }
+
+  // Watchlist global (STATE acá en el shell no tiene pane, así que su
+  // storage ya es compartido sin sufijo — mismo mecanismo que td_theme).
+  if (!Array.isArray(STATE.watchlist) || !STATE.watchlist.length) {
+    STATE.watchlist = ['NAS100.fs','US500','US30','XAUUSD','EURUSD'];
+  }
+  // STATE y volumeVisible de cada panel son `const`/`let` de nivel
+  // superior — a diferencia de las funciones (que sí cuelgan de su propio
+  // window), esas NO quedan como propiedad de contentWindow, así que leerlas
+  // como `f.contentWindow.STATE` da undefined. eval() sí las resuelve,
+  // porque corre en el scope real de ese documento (mismo motivo por el que
+  // ya se usó así para depurar el sync de tema en esta misma sesión).
+  function paneEval(f, expr){
+    try { return f.contentWindow.eval(expr); } catch(e){ return undefined; }
+  }
+  function renderShellWatchlist(){
+    const el = shellSidebar.querySelector('#watchlist');
+    if (!el) return;
+    const f = iframeEls[activePane-1];
+    const activeSym = f ? paneEval(f, 'STATE.symbol') : null;
+    el.innerHTML = '';
+    STATE.watchlist.forEach(sym => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'wl-item' + (sym===activeSym ? ' active' : '');
+      rowEl.innerHTML = `
+        <div class="wl-sym">${sym}</div>
+        <div class="wl-price">—</div>
+        <div class="wl-chg">—</div>
+        <button class="wl-remove" onclick="shellRemoveSymbol('${sym}',event)">×</button>`;
+      rowEl.addEventListener('click', () => shellSelectSymbol(sym));
+      el.appendChild(rowEl);
+    });
+    lsSet('td_watchlist', JSON.stringify(STATE.watchlist));
+  }
+  window.shellSelectSymbol = function(sym){
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.selectSymbol(sym); } catch(e){} }
+    renderShellWatchlist();
+  };
+  window.shellAddSymbol = function(){
+    const inp = shellSidebar.querySelector('#add-sym-inp');
+    const sym = inp.value.trim();
+    inp.value = '';
+    shellSidebar.querySelector('#add-sym-form').classList.remove('open');
+    if (!sym || STATE.watchlist.includes(sym)) return;
+    STATE.watchlist.push(sym);
+    renderShellWatchlist();
+  };
+  window.shellRemoveSymbol = function(sym, e){
+    e.stopPropagation();
+    STATE.watchlist = STATE.watchlist.filter(s=>s!==sym);
+    renderShellWatchlist();
+  };
+  window.shellToggleAddSym = function(){
+    const f = shellSidebar.querySelector('#add-sym-form');
+    f.classList.toggle('open');
+    if (f.classList.contains('open')) shellSidebar.querySelector('#add-sym-inp').focus();
+  };
+
+  // Herramientas de dibujo: todas actúan SIEMPRE sobre el panel activo
+  // (no sobre "Activo/Todos" — un dibujo o una herramienta no tiene sentido
+  // replicada en varios paneles a la vez, a diferencia del símbolo/TF).
+  window.shellSetTool = function(btn, name){
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet') b.classList.remove('active'); });
+    btn.classList.add('active');
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.setTool(null, name); } catch(e){} }
+  };
+  window.shellToggleMagnet = function(){
+    const f = iframeEls[activePane-1];
+    if (!f) return;
+    try { f.contentWindow.toggleMagnet(); syncMagnetBtn(f); } catch(e){}
+  };
+  window.shellClearDrawings = function(){
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.clearDrawings(); } catch(e){} }
+  };
+  window.shellToggleVolume = function(){
+    const f = iframeEls[activePane-1];
+    if (!f) return;
+    try {
+      f.contentWindow.toggleVolume();
+      shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
+    } catch(e){}
+  };
+  function syncMagnetBtn(f){
+    const btn = shellToolbar.querySelector('#btn-magnet');
+    const mode = paneEval(f, 'STATE.magnetMode') || 'off';
+    const TIPS = { off:'Magnet: off', weak:'Magnet: weak (ajusta solo si el mouse está cerca)', strong:'Magnet: strong (ajusta siempre a la vela)' };
+    btn.classList.toggle('active', mode==='strong');
+    btn.classList.toggle('weak-active', mode==='weak');
+    btn.dataset.tip = TIPS[mode] || TIPS.off;
+  }
+  // Notificado por cada panel cuando SU PROPIA herramienta cambia sola
+  // (p.ej. vuelve a "cursor" automáticamente después de terminar un
+  // dibujo) — sin esto, la barra de afuera se quedaba mostrando la
+  // herramienta vieja marcada aunque el panel ya hubiese vuelto al cursor.
+  window.zentinelToolSync = function(paneId, name){
+    if (Number(paneId) !== activePane) return;
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet') b.classList.remove('active'); });
+    const btn = shellToolbar.querySelector(`[data-tool="${name}"]`);
+    if (btn) btn.classList.add('active');
+  };
+  // Clickear el chart de un panel con el watchlist compartido abierto lo
+  // cierra — igual que pasaba (por panel) antes de compartir uno solo acá.
+  window.zentinelChartClicked = function(){
+    if (!shellSidebar.classList.contains('collapsed')) shellToggleSidebarPanel();
+  };
+  // Al cambiar de panel activo, la barra de herramientas y el watchlist
+  // tienen que reflejar lo que YA tenía ese panel (pudo haber quedado en
+  // otra herramienta, con el magnet prendido, volumen visible, etc.).
+  function syncShellControls(){
+    const f = iframeEls[activePane-1];
+    if (!f) return;
+    renderShellWatchlist();
+    const tool = paneEval(f, 'STATE.activeTool');
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet') b.classList.remove('active'); });
+    const btn = tool ? shellToolbar.querySelector(`[data-tool="${tool}"]`) : null;
+    if (btn) btn.classList.add('active');
+    syncMagnetBtn(f);
+    shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
+  }
+
+  row.appendChild(shellToolbar);
+  row.appendChild(shellSidebarToggle);
+  row.appendChild(shellSidebar);
+  document.body.appendChild(row);
 
   // El cambio de tema desde ACÁ (la barra global) se veía en dos tiempos
   // si cada panel se enteraba solo por el 'storage' event (asíncrono,
@@ -1538,6 +1773,12 @@ function renderLayoutGrid(n){
       iframe.style.cssText = 'width:100%;height:100%;box-sizing:border-box;display:block;border:1px solid transparent;transition:border-color .15s;';
       iframe.style.gridColumn = String(2*c+1);
       iframe.style.gridRow = String(2*r+1);
+      // Al terminar de cargar, si ya es (o llega a ser) el panel activo, la
+      // barra de herramientas/watchlist de afuera todavía no tenía de dónde
+      // leer su estado real (el iframe recién estaba cargando) — reintentar
+      // acá una vez que el script de adentro ya corrió deja todo sincronizado
+      // desde el primer momento, no recién al cambiar de panel.
+      iframe.addEventListener('load', () => { if (i === activePane) syncShellControls(); });
       grid.appendChild(iframe);
       iframeEls.push(iframe);
     }
@@ -1548,10 +1789,31 @@ function renderLayoutGrid(n){
   // replica en los demás vía llamada directa (mismo origin, sin
   // postMessage — mismo motivo que el sync de tema: instantáneo, sin
   // el delay de un mensaje async).
-  window.zentinelCrosshairBroadcast = function(time, sourceWindow){
-    iframeEls.forEach(el => {
-      if (el.contentWindow === sourceWindow) return;
+  // Identifica el panel de origen por PANE_ID (string), no por referencia
+  // de window — iframeEls[i].contentWindow === sourceWindow DEBERÍA ser
+  // sólido, pero si por lo que sea no lo es (recarga del iframe, timing),
+  // el panel termina recibiendo su PROPIO broadcast de vuelta como si
+  // viniera de otro: el precio se le resetea al valor recién sincronizado
+  // (level snap a la vela más cercana) mientras el mouse real lo sigue
+  // moviendo a upa, y el resultado visual es el precio saltando entre dos
+  // valores todo el tiempo. Comparar por ID es inequívoco.
+  window.zentinelCrosshairBroadcast = function(time, sourcePaneId){
+    iframeEls.forEach((el, i) => {
+      if (String(i+1) === String(sourcePaneId)) return;
       try { el.contentWindow.setExternalCrosshair(time); } catch(e){}
+    });
+  };
+
+  // Dibujos sincronizados entre paneles con el MISMO símbolo (cualquier
+  // TF — un nivel marcado en 1H tiene sentido seguir viéndolo en 15m del
+  // mismo instrumento). sourcePaneId como string: así lo manda cada panel
+  // (PANE_ID), sin forzar conversión de tipos en ningún lado.
+  window.zentinelDrawingsSync = function(sourcePaneId, symbol, list){
+    iframeEls.forEach((el, i) => {
+      if (String(i+1) === String(sourcePaneId)) return;
+      const otherSymbol = paneEval(el, 'STATE.symbol');
+      if (otherSymbol !== symbol) return;
+      try { el.contentWindow.applyExternalDrawings(JSON.parse(JSON.stringify(list))); } catch(e){}
     });
   };
 
@@ -1630,7 +1892,7 @@ function renderLayoutGrid(n){
   }
 
   setActivePane(1);
-  document.body.appendChild(grid);
+  row.appendChild(grid);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1799,6 +2061,79 @@ const toolDefaults = {
 
 function genId() { return 'drw_' + Math.random().toString(36).slice(2,9); }
 
+// ─── Sync de dibujos entre paneles del mismo símbolo ────────────────────
+// A diferencia del crosshair (una posición efímera), acá hay que replicar
+// altas/bajas/ediciones de objetos con estado — en vez de enganchar cada
+// acción del usuario una por una (crear, borrar, mover, cambiar color,
+// extender, lock...), se marca "sucio" en los puntos de bajo nivel por
+// los que YA pasan todas esas acciones (buildDrawingOnChart,
+// removeDrawingById, fin de un arrastre) y se manda el array COMPLETO
+// serializado, debounced, al resto de paneles con el mismo símbolo. Más
+// simple y más difícil de dejar un caso sin cubrir que cablear cada botón.
+let _suppressDrawingBroadcast = false;
+let _drawingsSyncTimer = null;
+function markDrawingsDirty(){
+  if (_suppressDrawingBroadcast || _drawingsSyncTimer) return;
+  _drawingsSyncTimer = setTimeout(() => {
+    _drawingsSyncTimer = null;
+    if (!EMBED_MODE || window.top === window || !window.top.zentinelDrawingsSync) return;
+    try { window.top.zentinelDrawingsSync(PANE_ID, STATE.symbol, serializeDrawings()); } catch(e){}
+  }, 120);
+}
+// Solo datos planos — nada de series del chart, elementos SVG/HTML ni
+// referencias circulares. 'text' es el único tipo sin representación en
+// buildDrawingOnChart (es un <div> editable aparte), así que guarda su
+// contenido a mano.
+function serializeDrawings(){
+  return drawings.map(d => {
+    const plain = JSON.parse(JSON.stringify({
+      ...d, series:undefined, svgEls:undefined, label:undefined, vLineEl:undefined,
+      fillEl:undefined, profitFillEl:undefined, lossFillEl:undefined,
+      entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
+    }));
+    if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
+    return plain;
+  });
+}
+// Reemplaza TODOS los dibujos de este panel por la lista que llegó de otro
+// panel con el mismo símbolo. _suppressDrawingBroadcast evita que esto
+// mismo dispare un nuevo broadcast de vuelta (eco infinito entre paneles).
+window.applyExternalDrawings = function(list){
+  _suppressDrawingBroadcast = true;
+  try {
+    [...drawings].forEach(d => removeDrawingById(d.id));
+    deselectDrawing();
+    (list || []).forEach(data => {
+      const d = { ...data, series:[], svgEls:[], label:null };
+      drawings.push(d);
+      if (d.type === 'text') {
+        const label = document.createElement('div');
+        label.contentEditable = 'false';
+        label.textContent = data.text || '';
+        label.style.cssText = `position:absolute;color:${d.color};font-family:var(--font-mono);font-size:${11+d.width}px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;outline:1px solid ${d.color}88;min-width:10px;`;
+        document.getElementById('chart-container').appendChild(label);
+        d.label = label;
+        syncTextLabelPos(d);
+      } else {
+        buildDrawingOnChart(d);
+      }
+    });
+  } finally {
+    setTimeout(() => { _suppressDrawingBroadcast = false; }, 150);
+  }
+};
+// Posiciona el <div> de un dibujo 'text' sincronizado (igual que el drag
+// de texto hace al revés: acá partimos de p1.price/time, no al revés).
+function syncTextLabelPos(d){
+  if (!(d.label instanceof Element)) return;
+  const x = chart.timeScale().timeToCoordinate(d.p1.time);
+  const y = candleSeries.priceToCoordinate(d.p1.price);
+  if (x === null || y === null) { d.label.style.display = 'none'; return; }
+  d.label.style.display = '';
+  d.label.style.left = (x + 6) + 'px';
+  d.label.style.top = (y - 10) + 'px';
+}
+
 // Niveles de Fibonacci por defecto para cada retroceso nuevo — editables
 // por dibujo (se pueden agregar, sacar o cambiar) desde el botón "Levels".
 const DEFAULT_FIB_LEVELS = [
@@ -1894,6 +2229,7 @@ function onDtbLock() {
   const d = getSelected(); if (!d) return;
   d.locked = !d.locked;
   document.getElementById('dtb-lock').classList.toggle('active', d.locked);
+  markDrawingsDirty();
 }
 // La herramienta de posición no tiene un solo "color" como el resto de los
 // dibujos — tiene 3 (entrada/TP/SL). `field` es cuál de los 3 tocar.
@@ -2088,6 +2424,7 @@ function removeDrawingById(id) {
   if (d.tpTextEl instanceof Element) d.tpTextEl.remove();
   if (d.slTextEl instanceof Element) d.slTextEl.remove();
   drawings.splice(idx,1);
+  markDrawingsDirty();
 }
 
 // Vuelve a ubicar la línea vertical de un dibujo (se llama cada frame y
@@ -2339,6 +2676,7 @@ function buildDrawingOnChart(d) {
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
+  markDrawingsDirty();
 }
 
 function highlightSelectedSvg(id) {
@@ -2534,14 +2872,25 @@ function initWatchtowerLayer() {
   // Solo SETEA el cursor cuando hay match — nunca lo limpia, así no pisa el
   // cursor que ya maneja el sistema de dibujo (move/crosshair) en el mismo
   // elemento.
+  // Igual que el crosshair: barrer _indicatorHitRegions (que puede tener
+  // cientos de líneas con Watchtower+Sniper+Sweeps activos) en CADA
+  // mousemove sin límite de frecuencia es trabajo de sobra — acotado a una
+  // vez por frame, mismo patrón que el resto de estos listeners.
+  let _hitTestPending = null, _hitTestRaf = null;
+  function _applyHitTest(){
+    _hitTestRaf = null;
+    const p = _hitTestPending; _hitTestPending = null;
+    if (!p || window._dragSession) return;
+    const plotW = cc.clientWidth - chart.priceScale('right').width();
+    const plotH = cc.clientHeight - chart.timeScale().height();
+    if (p.mx > plotW || p.my > plotH) return;
+    if (hitTestIndicatorRegions(p.mx, p.my)) cc.style.cursor = 'pointer';
+  }
   cc.addEventListener('mousemove', (e) => {
     if (window._dragSession) return;
     const rect = cc.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const plotW = cc.clientWidth - chart.priceScale('right').width();
-    const plotH = cc.clientHeight - chart.timeScale().height();
-    if (mx > plotW || my > plotH) return;
-    if (hitTestIndicatorRegions(mx, my)) cc.style.cursor = 'pointer';
+    _hitTestPending = { mx: e.clientX - rect.left, my: e.clientY - rect.top };
+    if (_hitTestRaf === null) _hitTestRaf = requestAnimationFrame(_applyHitTest);
   });
 
   // Mecanismo 1 (el del comentario de arriba): elementos HTML normales
@@ -2584,11 +2933,16 @@ function initChart() {
   chart.priceScale('vol').applyOptions({ scaleMargins:{top:0.82,bottom:0} });
 
   let _suppressCrosshairBroadcast = false;
+  let _lastExternalCandleTime = undefined;
   window.setExternalCrosshair = function(time){
     if (!STATE.chartSettings.syncCrosshair) return;
-    _suppressCrosshairBroadcast = true;
     try {
       if (time == null) {
+        // Si ya estaba limpio, no hay nada que hacer — ver el comentario
+        // de más abajo sobre por qué una llamada redundante es un problema.
+        if (_lastExternalCandleTime === null) return;
+        _lastExternalCandleTime = null;
+        _suppressCrosshairBroadcast = true;
         chart.clearCrosshairPosition();
         // clearCrosshairPosition() no dispara subscribeCrosshairMove (solo
         // los "move" lo hacen), así que el cuadro de OHLC no se actualiza
@@ -2597,12 +2951,32 @@ function initChart() {
         if (info) info.style.display = 'none';
         return;
       }
+      // Búsqueda binaria (las velas vienen ordenadas) en vez de barrer todo
+      // el array — con Watchtower activo puede haber miles cargadas, y esto
+      // corre en cada movimiento del mouse del panel que SÍ se está
+      // moviendo, para cada uno de los demás paneles.
       const candles = window._lastCandles || [];
-      let candle = null, bestDiff = Infinity;
-      for (const c of candles) {
-        const diff = Math.abs(c.time - time);
-        if (diff < bestDiff) { bestDiff = diff; candle = c; }
+      let candle = null;
+      if (candles.length) {
+        let lo = 0, hi = candles.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (candles[mid].time < time) lo = mid + 1; else hi = mid;
+        }
+        candle = candles[lo];
+        if (lo > 0 && Math.abs(candles[lo-1].time - time) < Math.abs(candle.time - time)) candle = candles[lo-1];
       }
+      const resolvedTime = candle ? candle.time : null;
+      // Dos tiempos "crudos" distintos (p.ej. de dos TF distintos) pueden
+      // resolver a la MISMA vela acá — si ya está aplicada esa vela, salir
+      // sin tocar nada. Reaplicar setCrosshairPosition aunque sea con el
+      // mismo valor puede disparar otro subscribeCrosshairMove en ESTE
+      // panel, que viaja de vuelta al de origen si el timing no da justo
+      // con la bandera de supresión — eso es lo que se veía como el precio
+      // prendiéndose y apagándose entre dos valores sin tocar el mouse.
+      if (resolvedTime === _lastExternalCandleTime) return;
+      _lastExternalCandleTime = resolvedTime;
+      _suppressCrosshairBroadcast = true;
       if (candle) chart.setCrosshairPosition(candle.close, candle.time, candleSeries);
       else chart.clearCrosshairPosition();
     } finally {
@@ -2610,7 +2984,32 @@ function initChart() {
     }
   };
 
-  chart.subscribeCrosshairMove(param => {
+  // subscribeCrosshairMove dispara en CADA mousemove sobre el chart, sin
+  // límite de frecuencia — con el mouse quieto sobre una vela real (donde
+  // sí hay trabajo: formatear OHLC, pisar textContent del topbar, y en la
+  // grilla multi-chart además transmitir a los demás paneles) eso puede
+  // llegar a varias decenas de veces por segundo, muy por encima de los
+  // ~60/seg que la pantalla puede pintar — se sentía como que el cursor
+  // "se trababa" cuando pasaba por encima de las velas (y no en el espacio
+  // vacío después de la última, donde no hay vela y este trabajo ni corre).
+  // Igual que en el resize de los paneles y el scroll-fade del TF bar: se
+  // guarda solo el ÚLTIMO param y se aplica una vez por frame.
+  // Si el mouse REAL no está físicamente encima de ESTE chart, cualquier
+  // 'crosshair move' que llegue es un eco — del refresco de precio en vivo
+  // (cada 1s) reescribiendo la vela en formación bajo una posición de
+  // crosshair que quedó puesta por sync externo, no por el usuario — y
+  // jamás debe retransmitirse. Sin esto, un panel que SOLO está mirando
+  // (no el que el usuario está moviendo) podía reenviar ese eco de vuelta
+  // al panel activo, empujando SU crosshair a otro nivel sin que nadie lo
+  // tocara — "como buscando un nivel cercano, se sale del puntero".
+  let _realMouseOverChart = false;
+  container.addEventListener('mousemove', () => { _realMouseOverChart = true; }, { passive:true, capture:true });
+  container.addEventListener('mouseleave', () => { _realMouseOverChart = false; }, { passive:true, capture:true });
+  let _chmPending = null, _chmRaf = null, _lastBroadcastTime = undefined;
+  function _applyChmLocal(){
+    _chmRaf = null;
+    const param = _chmPending; _chmPending = null;
+    if (!param) return;
     const info = document.getElementById('crosshair-info');
     if (!param.time || !param.seriesData) { info.style.display='none'; }
     else {
@@ -2622,11 +3021,38 @@ function initChart() {
         updateTopbarOHLCV(d);
       }
     }
-    // Replicar a los demás paneles del grid — pero no cuando este mismo
-    // movimiento YA vino de afuera (setExternalCrosshair), o entraríamos
-    // en un loop infinito de paneles avisándose entre sí.
+  }
+  chart.subscribeCrosshairMove(param => {
+    // Solo lo visual (texto OHLC/topbar) se acota a 1 vez por frame — eso
+    // es puro DOM local, no le importa a nadie más el orden exacto.
+    _chmPending = param;
+    if (_chmRaf === null) _chmRaf = requestAnimationFrame(_applyChmLocal);
+    // El broadcast a los demás paneles, en cambio, tiene que seguir
+    // disparando SÍNCRONO, en el mismo tick que el evento nativo — de eso
+    // depende que _suppressCrosshairBroadcast (que se resetea en SU PROPIO
+    // rAF, adentro de setExternalCrosshair) vea el valor correcto cuando
+    // haga falta frenar el eco de vuelta. Diferirlo acá un frame rompía
+    // ese orden y era lo que hacía que el cursor se "pegara" en la línea
+    // de precio al pasar por una vela con el sync prendido.
     if (_suppressCrosshairBroadcast || !EMBED_MODE || !STATE.chartSettings.syncCrosshair || !window.top.zentinelCrosshairBroadcast) return;
-    window.top.zentinelCrosshairBroadcast(param.point ? param.time : null, window);
+    const nextTime = param.point ? param.time : null;
+    // El "se fue" (null) siempre se deja pasar — recién al dejar el chart
+    // es cuando más importa que el eco llegue y limpie el synced de los
+    // demás paneles. El bloqueo de abajo es solo para un nivel CONCRETO
+    // (eco con tiempo real pero sin mouse físicamente acá).
+    if (nextTime !== null && !_realMouseOverChart) return;
+    // subscribeCrosshairMove puede refirear con el MISMO punto (mouse
+    // quieto) cuando los datos de abajo cambian — p.ej. el refresco de
+    // precio en vivo cada 1s pisa la vela en formación y la librería
+    // vuelve a notificar el crosshair aunque nadie lo haya movido. Sin
+    // este chequeo, eso reenviaba el mismo valor una y otra vez; si otro
+    // panel estaba en un TF distinto y el "más cercano" le resolvía a una
+    // vela vecina distinta a la que tenía antes por un pelo, el precio de
+    // ESE panel terminaba prendiéndose/apagándose entre dos velas al
+    // compás del refresco de 1s, sin que nadie tocara el mouse.
+    if (nextTime === _lastBroadcastTime) return;
+    _lastBroadcastTime = nextTime;
+    window.top.zentinelCrosshairBroadcast(nextTime, PANE_ID);
   });
 
   new ResizeObserver(() => {
@@ -2793,6 +3219,13 @@ function initDrawingLayer() {
   window.setTool = function(btn, name) {
     _origSetTool(btn, name);
     updateSvgCapture();
+    // Si la herramienta cambió SOLA (p.ej. backToCursor() después de
+    // terminar un dibujo), la barra de herramientas compartida de la
+    // grilla multi-chart no se entera por su cuenta — avisarle acá es lo
+    // único que la mantiene sincronizada con el panel activo.
+    if (EMBED_MODE && window.parent !== window && window.parent.zentinelToolSync) {
+      try { window.parent.zentinelToolSync(PANE_ID, name); } catch(e){}
+    }
   };
 
   function priceToY(p) { return candleSeries.priceToCoordinate(p); }
@@ -2985,7 +3418,7 @@ function initDrawingLayer() {
       d.p1.price = candleSeries.coordinateToPrice(y) ?? d.p1.price;
       d.p1.time  = chart.timeScale().coordinateToTime(x) ?? d.p1.time;
     }
-    if (window._dragSession) highlightSelectedSvg(selectedDrawingId);
+    if (window._dragSession) { highlightSelectedSvg(selectedDrawingId); markDrawingsDirty(); }
     window._dragSession = null;
   }, { capture:true });
 
@@ -3017,6 +3450,7 @@ function initDrawingLayer() {
         label.style.outline = 'none';
         label.style.cursor = '';
         if (!label.textContent.trim()) { removeDrawingById(d.id); deselectDrawing(); }
+        else markDrawingsDirty();
       };
       label.addEventListener('blur', commitText, { once:true });
       label.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); label.blur(); } });
@@ -3269,6 +3703,12 @@ function toggleSidebar() {
 document.getElementById('chart-container').addEventListener('mousedown', () => {
   const sidebar = document.getElementById('sidebar');
   if (sidebar && !sidebar.classList.contains('collapsed')) toggleSidebar();
+  // En la grilla multi-chart el watchlist real que se ve ya no es ESTE
+  // (el de este panel está oculto) sino el compartido que vive en el shell
+  // de afuera — avisarle para que también se cierre con el mismo gesto.
+  if (EMBED_MODE && window.parent !== window && window.parent.zentinelChartClicked) {
+    try { window.parent.zentinelChartClicked(); } catch(e){}
+  }
 });
 // En un panel embebido (grilla 2×/4⊞) arranca colapsado la primera vez
 // (sin preferencia guardada todavía) — un watchlist completo abierto por
@@ -3308,8 +3748,12 @@ document.querySelectorAll('.layout-btn').forEach(btn=>{
 });
 
 function setTool(btn, name) {
+  // btn es opcional: cuando la grilla multi-chart maneja el panel activo
+  // desde la barra de herramientas compartida de afuera, no hay ningún
+  // botón DE ESTE panel que marcar (está oculto) — solo hace falta que
+  // STATE.activeTool cambie.
   document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet')b.classList.remove('active'); });
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   STATE.activeTool = name;
   if (name !== 'cursor') deselectDrawing();
 }
@@ -5530,6 +5974,16 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     if(!Array.isArray(candles)||candles.length===0)throw new Error('sin datos para '+symbol);
 
     window._lastCandles=candles;
+    // Números enteros en el eje de precio (sin decimales) para símbolos
+    // tipo índice (NAS100, US30, US500...) donde el centavo no aporta nada
+    // y solo ensucia la lectura — pero sin forzarlo en pares con precio
+    // chico (forex), donde si hace falta el decimal. Se decide por el
+    // precio real de la última vela, no por el símbolo (no hay forma
+    // confiable de adivinar el instrumento por el nombre solo).
+    const _lastClose = candles[candles.length-1].close;
+    candleSeries.applyOptions({ priceFormat: _lastClose>=1000
+      ? { type:'price', precision:0, minMove:1 }
+      : { type:'price', precision:2, minMove:0.01 } });
     // Resincroniza el tamaño del chart con el contenedor real antes de
     // acomodar la vista — si el ResizeObserver no llegó a correr a tiempo
     // (p.ej. justo después de un refresh/reload), el chart queda con una
@@ -5614,6 +6068,15 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
 const TF_SECONDS = {
   '1min':60,'2min':120,'3min':180,'4min':240,'5min':300,'6min':360,'10min':600,'12min':720,'15min':900,'20min':1200,'30min':1800,
   '1h':3600,'2h':7200,'3h':10800,'4h':14400,'6h':21600,'8h':28800,'12h':43200,
+  // 1day: NO es medianoche UTC — las velas D1 de este bróker abren siempre
+  // a las 17:00 NY (verificado contra datos reales: 6 velas D1 seguidas,
+  // todas con open en :17:00:00Z), así que el próximo cierre es, como en
+  // cualquier TF de intervalo fijo, simplemente +24h desde la apertura.
+  // La cuenta regresiva usaba antes setUTCHours(24,0,0,0) (próxima
+  // medianoche UTC), que para una vela abierta a las 17:00 caía ANTES de
+  // que la vela realmente cerrara — contador mostrando un resto ya
+  // negativo (pisado a 0) la mayor parte del día.
+  '1day': 86400,
 };
 let _countdownTimer=null;
 
@@ -5633,7 +6096,6 @@ function futureWhitespace(lastTime, timeframe, count){
 function nextCloseTime(timeframe, lastBarTime){
   if(TF_SECONDS[timeframe]) return lastBarTime + TF_SECONDS[timeframe];
   const d=new Date(lastBarTime*1000);
-  if(timeframe==='1day'){ d.setUTCHours(24,0,0,0); return Math.floor(d.getTime()/1000); }
   if(timeframe==='1week'){
     d.setUTCHours(0,0,0,0);
     const addDays=((8-d.getUTCDay())%7)||7;
@@ -5740,8 +6202,12 @@ function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
       let remain=Math.max(0, Math.round(close-nowServer));
       if(remain<=0){ clearInterval(_countdownTimer); appendNewBar(STATE.symbol, STATE.timeframe); return; }
       const h=Math.floor(remain/3600), m=Math.floor((remain%3600)/60), s=remain%60;
+      // Con horas de por medio (TF grandes: D/W/M) se corta el segundero —
+      // mostrar hh:mm:ss ahí desbordaba el cartel (pensado para el ancho
+      // angosto de mm:ss) y los dígitos de las puntas quedaban recortados.
+      // A esa escala el segundo exacto tampoco aporta nada.
       badge.textContent = h>0
-        ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+        ? `${h}:${String(m).padStart(2,'0')}`
         : `${m}:${String(s).padStart(2,'0')}`;
       badge.classList.toggle('soon', remain<=10);
     }
