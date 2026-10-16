@@ -1175,6 +1175,7 @@
         <option value="4">Sparse dotted</option>
       </select>
     </div>
+    <label style="margin-top:10px;"><input type="checkbox" id="cs-crosshair-sync-on" style="width:auto;margin-right:6px;">Sync crosshair across panels (multi-chart grid)</label>
     <label style="margin-top:10px;">Timeframes shown in the bar</label>
     <div id="cs-tf-list" class="cs-tf-list"></div>
     <div class="modal-btns">
@@ -1540,6 +1541,18 @@ function renderLayoutGrid(n){
     }
   }
 
+  // Crosshair sincronizado entre paneles: cada panel (iframe) avisa acá
+  // afuera cuando el usuario mueve el mouse sobre SU chart, y esto lo
+  // replica en los demás vía llamada directa (mismo origin, sin
+  // postMessage — mismo motivo que el sync de tema: instantáneo, sin
+  // el delay de un mensaje async).
+  window.zentinelCrosshairBroadcast = function(time, sourceWindow){
+    iframeEls.forEach(el => {
+      if (el.contentWindow === sourceWindow) return;
+      try { el.contentWindow.setExternalCrosshair(time); } catch(e){}
+    });
+  };
+
   // Cada panel es un iframe = un browsing context aparte. Un mousemove del
   // usuario, apenas el cursor entra en el área de un iframe durante el
   // drag, deja de burbujear al document del padre (son documentos
@@ -1655,7 +1668,7 @@ const CHART_SETTINGS_DEFAULTS = {
   borderUpColor:'#26a69a', borderDownColor:'#909090',
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
-  crosshairColor:'#c9a84c', crosshairStyle:2,
+  crosshairColor:'#c9a84c', crosshairStyle:2, syncCrosshair:true,
   visibleTFs: ALL_TIMEFRAMES.map(t=>t.tf),
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
@@ -2534,14 +2547,50 @@ function initChart() {
   });
   chart.priceScale('vol').applyOptions({ scaleMargins:{top:0.82,bottom:0} });
 
+  let _suppressCrosshairBroadcast = false;
+  window.setExternalCrosshair = function(time){
+    if (!STATE.chartSettings.syncCrosshair) return;
+    _suppressCrosshairBroadcast = true;
+    try {
+      if (time == null) {
+        chart.clearCrosshairPosition();
+        // clearCrosshairPosition() no dispara subscribeCrosshairMove (solo
+        // los "move" lo hacen), así que el cuadro de OHLC no se actualiza
+        // solo — hay que ocultarlo a mano acá.
+        const info = document.getElementById('crosshair-info');
+        if (info) info.style.display = 'none';
+        return;
+      }
+      const candles = window._lastCandles || [];
+      let candle = null, bestDiff = Infinity;
+      for (const c of candles) {
+        const diff = Math.abs(c.time - time);
+        if (diff < bestDiff) { bestDiff = diff; candle = c; }
+      }
+      if (candle) chart.setCrosshairPosition(candle.close, candle.time, candleSeries);
+      else chart.clearCrosshairPosition();
+    } finally {
+      requestAnimationFrame(() => { _suppressCrosshairBroadcast = false; });
+    }
+  };
+
   chart.subscribeCrosshairMove(param => {
     const info = document.getElementById('crosshair-info');
-    if (!param.time || !param.seriesData) { info.style.display='none'; return; }
-    const d = param.seriesData.get(candleSeries);
-    if (!d) { info.style.display='none'; return; }
-    info.style.display='block';
-    info.innerHTML = `O <span>${fmt(d.open)}</span>  H <span>${fmt(d.high)}</span>  L <span>${fmt(d.low)}</span>  C <span>${fmt(d.close)}</span>`;
-    updateTopbarOHLCV(d);
+    if (!param.time || !param.seriesData) { info.style.display='none'; }
+    else {
+      const d = param.seriesData.get(candleSeries);
+      if (!d) { info.style.display='none'; }
+      else {
+        info.style.display='block';
+        info.innerHTML = `O <span>${fmt(d.open)}</span>  H <span>${fmt(d.high)}</span>  L <span>${fmt(d.low)}</span>  C <span>${fmt(d.close)}</span>`;
+        updateTopbarOHLCV(d);
+      }
+    }
+    // Replicar a los demás paneles del grid — pero no cuando este mismo
+    // movimiento YA vino de afuera (setExternalCrosshair), o entraríamos
+    // en un loop infinito de paneles avisándose entre sí.
+    if (_suppressCrosshairBroadcast || !EMBED_MODE || !STATE.chartSettings.syncCrosshair || !window.top.zentinelCrosshairBroadcast) return;
+    window.top.zentinelCrosshairBroadcast(param.point ? param.time : null, window);
   });
 
   new ResizeObserver(() => {
@@ -4901,6 +4950,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-priceline-style').value=String(cs.priceLineStyle);
   document.getElementById('cs-crosshair-color').value=cs.crosshairColor;
   document.getElementById('cs-crosshair-style').value=String(cs.crosshairStyle);
+  document.getElementById('cs-crosshair-sync-on').checked=cs.syncCrosshair;
   renderCsTfList(cs.visibleTFs);
 }
 function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); openModal('modal-chart-settings'); }
@@ -4921,6 +4971,7 @@ function commitChartSettingsForm(){
     priceLineStyle: Number(document.getElementById('cs-priceline-style').value),
     crosshairColor: document.getElementById('cs-crosshair-color').value,
     crosshairStyle: Number(document.getElementById('cs-crosshair-style').value),
+    syncCrosshair: document.getElementById('cs-crosshair-sync-on').checked,
     visibleTFs,
   };
   saveChartSettingsState();
