@@ -1691,6 +1691,12 @@ const SNIPER_DEFAULTS = {
   colorCisdBear:'rgba(242,54,69,1)', // 0% transparencia
   anchoCisd:2, largoCisd:14,
   maxSetupAge:20, maxHtfVisibles:1,
+  // Sweeps "intra-HTF": además del sweep del extremo HTF anterior (arriba),
+  // el Pine original TAMBIÉN detecta sweeps de pivots swing locales que se
+  // forman DENTRO de la vela HTF que se está armando — esto faltaba en el
+  // port (Paso 1 solo hacía el HTF-cross) y es lo que hacía que el
+  // indicador local se quedara sin marcar CISDs que sí aparecen en TV.
+  detectIntraHtf:true, intraPivotStrength:1, maxIntraVisibles:1,
   // Paso 2: FVG en M15 y H4 únicamente (el Pine original tiene 7 TF, acá
   // se portan solo los dos que el filtro de confluencia va a usar).
   hideFilledBull:true, hideFilledBear:true,
@@ -3522,6 +3528,16 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Confirmed HTF-cross setups to keep visible</span>
         <input type="number" id="sn-max-htf-visibles" min="1" max="200" step="1" value="${sn.maxHtfVisibles}" style="width:56px">
       </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🔎 Intra-HTF Sweeps</div>
+      <label class="wt-set-row"><span>Detect sweeps of local swing pivots (not just prev HTF extreme)</span><input type="checkbox" id="sn-detect-intra" ${sn.detectIntraHtf?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Intra-HTF pivot strength (bars each side)</span>
+        <input type="number" id="sn-intra-pivot-strength" min="1" max="5" step="1" value="${sn.intraPivotStrength}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Confirmed intra-HTF setups to keep visible</span>
+        <input type="number" id="sn-max-intra-visibles" min="1" max="200" step="1" value="${sn.maxIntraVisibles}" style="width:56px">
+      </div>
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🎯 Detection Filters</div>
       <label class="wt-set-row"><span>Require entry level inside active HTF FVG</span><input type="checkbox" id="sn-require-fvg" ${sn.requireHtfFvg?'checked':''}></label>
       <label class="wt-set-row"><span>&nbsp;&nbsp;· use M15 FVG</span><input type="checkbox" id="sn-req-fvg-m15" ${sn.reqFvgM15?'checked':''}></label>
@@ -3637,6 +3653,9 @@ function saveIndicatorSettings() {
     STATE.sniper.largoCisd      = Math.max(1, Math.min(200, Number(g('sn-largo-cisd').value)||14));
     STATE.sniper.maxSetupAge    = Math.max(10, Math.min(1000, Number(g('sn-max-setup-age').value)||20));
     STATE.sniper.maxHtfVisibles = Math.max(1, Math.min(200, Number(g('sn-max-htf-visibles').value)||1));
+    STATE.sniper.detectIntraHtf = g('sn-detect-intra').checked;
+    STATE.sniper.intraPivotStrength = Math.max(1, Math.min(5, Number(g('sn-intra-pivot-strength').value)||1));
+    STATE.sniper.maxIntraVisibles = Math.max(1, Math.min(200, Number(g('sn-max-intra-visibles').value)||1));
     STATE.sniper.requireHtfFvg = g('sn-require-fvg').checked;
     STATE.sniper.reqFvgM15 = g('sn-req-fvg-m15').checked;
     STATE.sniper.reqFvgH4 = g('sn-req-fvg-h4').checked;
@@ -4087,7 +4106,16 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   // 9:30 pero seguir cubriendo ese horario (p.ej. una vela de 8H que
   // arranca a las 9:00 llega hasta las 17:00) — comparar solo contra el
   // horario de apertura de esa vela decía "todavía no abrió" por error.
-  if (todayStartTime > lastTime + barStep) return; // la sesión de hoy todavía no abrió
+  // Pero ese mismo razonamiento se vuelve un problema al revés (1H, 30m,
+  // 15m): mientras la vela que CUBRE las 9:30 todavía se está formando
+  // (p.ej. son las 9:10 y la vela de 1H 9:00-10:00 recién arrancó), esta
+  // comparación decía "ya abrió" aunque en la hora real todavía no — y
+  // terminaba dibujando la caja anclada a esa vela de 9:00, antes de la
+  // apertura real. Si tenemos la hora real del servidor (wtApproxNow),
+  // usarla en vez de los bordes de vela saca la ambigüedad del todo.
+  const approxNow = wtApproxNow();
+  const sessionStarted = approxNow!=null ? (approxNow >= todayStartTime) : (todayStartTime <= lastTime + barStep);
+  if (!sessionStarted) return; // la sesión de hoy todavía no abrió
 
   const cacheKey = `${STATE.symbol}|${todayKey}`;
   let cached = _wtOrgCache[cacheKey];
@@ -4351,7 +4379,8 @@ function snReplayCached(candles, cfg, p, fvgFetchedAt){
   const key = candles.length + '|' + (candles.length?candles[0].time:0) + '|' + (candles.length?candles[candles.length-1].time:0)
     + '|' + STATE.symbol + '|' + STATE.timeframe + '|' + fvgFetchedAt
     + '|' + p.mostrarAlcista + p.mostrarBajista + p.margenReclamo + p.maxSetupAge + p.maxHtfVisibles
-    + p.requireHtfFvg + p.reqFvgM15 + p.reqFvgH4 + p.fvgMinPenetration;
+    + p.requireHtfFvg + p.reqFvgM15 + p.reqFvgH4 + p.fvgMinPenetration
+    + p.detectIntraHtf + p.intraPivotStrength + p.maxIntraVisibles;
   if (_snReplayCache && _snReplayCache.key === key) return _snReplayCache.result;
   const result = snReplay(candles, cfg, p);
   _snReplayCache = { key, result };
@@ -4411,11 +4440,26 @@ function snReplay(candles, cfg, p){
     return { start:i, end:i+velasPorHtf };
   }
 
-  function pruneConfirmed(){
+  // Sweep intra-HTF: línea corta desde la vela que barrió el pivot hasta la
+  // vela del trigger (a diferencia del sweep HTF-cross, que se extiende por
+  // toda la ventana del período HTF anterior).
+  function findSweepLineIntra(i, nivel){
+    for (let k=0; k<=500; k++){
+      const idx=i-k;
+      if (idx<0) break;
+      if (candles[idx].low<=nivel) return { start:idx, end:i };
+    }
+    return { start:i, end:i };
+  }
+
+  // Igual que el Pine: el cupo de "confirmados visibles" es independiente
+  // por tipo (HTF-cross vs intra-HTF) — cada uno con su propio límite —
+  // en vez de un solo pozo combinado.
+  function pruneByType(wantIntra, maxOfType){
     for (let guard=0; guard<200; guard++){
       const all = bullSetups.map(s=>({s,arr:bullSetups})).concat(bearSetups.map(s=>({s,arr:bearSetups})))
-        .filter(x=>x.s.cisdLevel!=null);
-      if (all.length <= p.maxHtfVisibles) break;
+        .filter(x=>x.s.cisdLevel!=null && !!x.s.isIntra===wantIntra);
+      if (all.length <= maxOfType) break;
       all.sort((a,b)=>a.s.confirmBar-b.s.confirmBar);
       const oldest = all[0];
       const idx = oldest.arr.indexOf(oldest.s);
@@ -4423,42 +4467,113 @@ function snReplay(candles, cfg, p){
       oldest.arr.splice(idx,1);
     }
   }
+  function pruneConfirmed(){
+    pruneByType(false, p.maxHtfVisibles);
+    pruneByType(true, p.maxIntraVisibles);
+  }
+
+  // Pivots swing locales activos dentro de la vela HTF que se está armando
+  // (se reinician cada vez que arranca un período HTF nuevo) — alimentan el
+  // sweep intra-HTF de más abajo.
+  const intraPhIdx=[], intraPhPrice=[], intraPlIdx=[], intraPlPrice=[];
+  let curHtfBarStart = 0;
+  const strength = Math.max(1, p.intraPivotStrength||1);
 
   for (let i=0;i<n;i++){
     const c=candles[i];
+    if (R.newHtfBar[i]) curHtfBarStart = i;
 
-    // DISPARO BULL
-    if (p.mostrarAlcista && sweepDownNow[i] && !(i>0 && sweepDownNow[i-1]) && !R.newHtfBar[i]){
-      const nivel = R.prevLow[i];
-      removeBySameLevel(bullSetups, nivel);
-      const r = snRun(candles, i, true, 1);
-      if (r.cnt>=0 && (i-r.cnt)>=0){
-        const ob = snComputeOB(candles, i, r.foundK, r.cnt, true);
-        const sweepLn = findSweepLine(i, nivel, true);
-        bullSetups.push({
-          trig:i, sweepStart:sweepLn.start, sweepEnd:sweepLn.end, setNivel:nivel,
-          level:candles[i-r.cnt].open, extreme:r.extreme, anchor:i-r.cnt,
-          obClose:candles[i-r.foundK].close, obWidth:r.cnt-r.foundK+1,
-          obExtreme2:ob.obExtreme, bodyExt:ob.bodyext,
-          pendingHtf:true, confirmBar:-1, cisdLevel:null,
-        });
+    // --- INTRA-HTF: confirmar pivots locales + detectar su sweep ---
+    if (R.newHtfBar[i]){ intraPhIdx.length=0; intraPhPrice.length=0; intraPlIdx.length=0; intraPlPrice.length=0; }
+    let intraBullNow=false, intraBearNow=false, intraBullLevel=null, intraBearLevel=null;
+    if (p.detectIntraHtf && i>=strength*2){
+      const pcIdx = i-strength, pcHigh = candles[pcIdx].high, pcLow = candles[pcIdx].low;
+      let isPhLocal=true, isPlLocal=true;
+      for (let j=1; j<=strength; j++){
+        const idxA=i-strength-j, idxB=i-strength+j; // idxA siempre >=0 porque i>=strength*2
+        if (candles[idxA].high>=pcHigh || candles[idxB].high>=pcHigh) isPhLocal=false;
+        if (candles[idxA].low<=pcLow   || candles[idxB].low<=pcLow)   isPlLocal=false;
+      }
+      if (isPhLocal){ intraPhIdx.push(pcIdx); intraPhPrice.push(pcHigh); }
+      if (isPlLocal){ intraPlIdx.push(pcIdx); intraPlPrice.push(pcLow); }
+      if (p.mostrarAlcista && !R.newHtfBar[i]){
+        for (let k=intraPlPrice.length-1; k>=0; k--){
+          const plP = intraPlPrice[k];
+          if (c.low<=plP && c.close>plP){ intraBullNow=true; intraBullLevel=plP; intraPlIdx.splice(k,1); intraPlPrice.splice(k,1); break; }
+        }
+      }
+      if (p.mostrarBajista && !R.newHtfBar[i]){
+        for (let k=intraPhPrice.length-1; k>=0; k--){
+          const phP = intraPhPrice[k];
+          if (c.high>=phP && c.close<phP){ intraBearNow=true; intraBearLevel=phP; intraPhIdx.splice(k,1); intraPhPrice.splice(k,1); break; }
+        }
       }
     }
-    // DISPARO BEAR
-    if (p.mostrarBajista && sweepUpNow[i] && !(i>0 && sweepUpNow[i-1]) && !R.newHtfBar[i]){
-      const nivel2 = R.prevHigh[i];
+
+    const htfBullTrigger = p.mostrarAlcista && sweepDownNow[i] && !(i>0 && sweepDownNow[i-1]) && !R.newHtfBar[i];
+    const htfBearTrigger = p.mostrarBajista && sweepUpNow[i]   && !(i>0 && sweepUpNow[i-1])   && !R.newHtfBar[i];
+    const isIntraBullTrigger = intraBullNow && !htfBullTrigger;
+    const isIntraBearTrigger = intraBearNow && !htfBearTrigger;
+
+    // DISPARO BULL (HTF-cross o intra-HTF)
+    if (htfBullTrigger || intraBullNow){
+      const nivel = htfBullTrigger ? R.prevLow[i] : intraBullLevel;
+      removeBySameLevel(bullSetups, nivel);
+      // Prioridad HTF-cross > intra-HTF dentro del mismo período HTF: un
+      // trigger intra no crea setup si ya hay uno HTF-cross pendiente de
+      // validar en este período; un trigger HTF-cross, en cambio, reemplaza
+      // cualquier setup ya resuelto (no pendiente) que quedara de este
+      // período (típicamente uno intra que ya había confirmado).
+      let skipBull = false;
+      if (isIntraBullTrigger){
+        if (bullSetups.some(s=>s.pendingHtf && s.trig>=curHtfBarStart)) skipBull = true;
+      } else {
+        for (let j=bullSetups.length-1;j>=0;j--){
+          const s=bullSetups[j];
+          if (!s.pendingHtf && s.trig>=curHtfBarStart) bullSetups.splice(j,1);
+        }
+      }
+      if (!skipBull){
+        const r = snRun(candles, i, true, 1);
+        if (r.cnt>=0 && (i-r.cnt)>=0){
+          const ob = snComputeOB(candles, i, r.foundK, r.cnt, true);
+          const sweepLn = isIntraBullTrigger ? findSweepLineIntra(i, nivel) : findSweepLine(i, nivel, true);
+          bullSetups.push({
+            trig:i, sweepStart:sweepLn.start, sweepEnd:sweepLn.end, setNivel:nivel,
+            level:candles[i-r.cnt].open, extreme:r.extreme, anchor:i-r.cnt,
+            obClose:candles[i-r.foundK].close, obWidth:r.cnt-r.foundK+1,
+            obExtreme2:ob.obExtreme, bodyExt:ob.bodyext,
+            pendingHtf:true, confirmBar:-1, cisdLevel:null, isIntra:isIntraBullTrigger,
+          });
+        }
+      }
+    }
+    // DISPARO BEAR (HTF-cross o intra-HTF)
+    if (htfBearTrigger || intraBearNow){
+      const nivel2 = htfBearTrigger ? R.prevHigh[i] : intraBearLevel;
       removeBySameLevel(bearSetups, nivel2);
-      const r = snRun(candles, i, false, 1);
-      if (r.cnt>=0 && (i-r.cnt)>=0){
-        const ob = snComputeOB(candles, i, r.foundK, r.cnt, false);
-        const sweepLn = findSweepLine(i, nivel2, false);
-        bearSetups.push({
-          trig:i, sweepStart:sweepLn.start, sweepEnd:sweepLn.end, setNivel:nivel2,
-          level:candles[i-r.cnt].open, extreme:r.extreme, anchor:i-r.cnt,
-          obClose:candles[i-r.foundK].close, obWidth:r.cnt-r.foundK+1,
-          obExtreme2:ob.obExtreme, bodyExt:ob.bodyext,
-          pendingHtf:true, confirmBar:-1, cisdLevel:null,
-        });
+      let skipBear = false;
+      if (isIntraBearTrigger){
+        if (bearSetups.some(s=>s.pendingHtf && s.trig>=curHtfBarStart)) skipBear = true;
+      } else {
+        for (let j=bearSetups.length-1;j>=0;j--){
+          const s=bearSetups[j];
+          if (!s.pendingHtf && s.trig>=curHtfBarStart) bearSetups.splice(j,1);
+        }
+      }
+      if (!skipBear){
+        const r = snRun(candles, i, false, 1);
+        if (r.cnt>=0 && (i-r.cnt)>=0){
+          const ob = snComputeOB(candles, i, r.foundK, r.cnt, false);
+          const sweepLn = isIntraBearTrigger ? findSweepLineIntra(i, nivel2) : findSweepLine(i, nivel2, false);
+          bearSetups.push({
+            trig:i, sweepStart:sweepLn.start, sweepEnd:sweepLn.end, setNivel:nivel2,
+            level:candles[i-r.cnt].open, extreme:r.extreme, anchor:i-r.cnt,
+            obClose:candles[i-r.foundK].close, obWidth:r.cnt-r.foundK+1,
+            obExtreme2:ob.obExtreme, bodyExt:ob.bodyext,
+            pendingHtf:true, confirmBar:-1, cisdLevel:null, isIntra:isIntraBearTrigger,
+          });
+        }
       }
     }
 
@@ -4727,6 +4842,7 @@ function renderSniper(){
     mostrarAlcista: sn.mostrarAlcista, mostrarBajista: sn.mostrarBajista,
     margenReclamo: sn.margenReclamo, maxSetupAge: sn.maxSetupAge,
     maxHtfVisibles: sn.maxHtfVisibles, largoCisd: sn.largoCisd,
+    detectIntraHtf: sn.detectIntraHtf, intraPivotStrength: sn.intraPivotStrength, maxIntraVisibles: sn.maxIntraVisibles,
     requireHtfFvg: sn.requireHtfFvg, reqFvgM15: sn.reqFvgM15, reqFvgH4: sn.reqFvgH4,
     fvgMinPenetration: sn.fvgMinPenetration,
     fvgM15: fvgData.m15, fvgH4: fvgData.h4, m15Fvgs, h4Fvgs,
@@ -5549,11 +5665,23 @@ async function refreshFormingCandle(symbol, timeframe){
   }
 }
 
+// Reloj aproximado del servidor/bróker (hora NY real, no la del candle que
+// está en formación) — lo guarda cada vez que arranca el countdown, para que
+// renderWtORG pueda saber si la sesión YA abrió de verdad (9:30) en vez de
+// adivinarlo solo por los bordes de las velas (ver uso más abajo).
+let _wtNowAnchorServerTime = null, _wtNowAnchorPerfMs = null;
+function wtApproxNow(){
+  if (_wtNowAnchorServerTime == null) return null;
+  return _wtNowAnchorServerTime + (performance.now() - _wtNowAnchorPerfMs) / 1000;
+}
+
 function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
   clearInterval(_countdownTimer);
   const badge=document.getElementById('price-countdown-badge');
   const close=nextCloseTime(timeframe, lastBarTime);
   const loadedAtMs=performance.now();
+  _wtNowAnchorServerTime = serverTimeAtLoad;
+  _wtNowAnchorPerfMs = loadedAtMs;
 
   function tick(){
     const elapsed=(performance.now()-loadedAtMs)/1000;
