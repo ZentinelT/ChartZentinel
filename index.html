@@ -450,6 +450,7 @@
   }
   .tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .tool-btn.active { background: var(--gold-glow); color: var(--gold); }
+  .tool-btn.weak-active { background: var(--gold-glow); color: var(--gold); opacity: .55; }
   .tool-btn svg { width: 15px; height: 15px; }
   .tool-sep { width: 20px; height: 1px; background: var(--border); margin: 4px 0; }
 
@@ -927,7 +928,7 @@
       </svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn" id="btn-magnet" data-tip="Magnet (ajustar a vela)" onclick="toggleMagnet()">
+    <button class="tool-btn" id="btn-magnet" data-tip="Magnet: off" onclick="toggleMagnet()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M6 3h4v9a2 2 0 0 0 4 0V3h4v9a6 6 0 0 1-12 0V3z"/>
         <path d="M6 3v4H2V3h4zM18 3v4h4V3h-4z"/>
@@ -1730,7 +1731,12 @@ const STATE = {
   watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
   indicators: JSON.parse(lsGet(lsKey('td_indicators')) || '[]'),
   activeTool: 'cursor',
-  magnet: lsGet(lsKey('td_magnet')) === '1',
+  // 'off' | 'weak' (solo ajusta si el mouse ya está cerca de un punto de la
+  // vela — como el magnet "suave" de TV) | 'strong' (ajusta siempre, como
+  // estaba antes). 'td_magnet'==='1' es el valor viejo (antes esto era un
+  // simple on/off) — se mapea a 'strong' para no perder la preferencia
+  // guardada de quien ya lo tenía prendido.
+  magnetMode: (() => { const v = lsGet(lsKey('td_magnet')); return (v==='strong'||v==='1') ? 'strong' : v==='weak' ? 'weak' : 'off'; })(),
   watchtower: Object.assign({
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
@@ -2744,13 +2750,20 @@ function initDrawingLayer() {
         time = (x <= (firstX||0)) ? candles[0].time : candles[candles.length-1].time;
       }
     }
-    if (STATE.magnet && price !== null && time !== null) {
+    if (STATE.magnetMode !== 'off' && price !== null && time !== null) {
       const snapped = magnetSnapPoint(candles, time, price);
       if (snapped) {
-        price = snapped.price; time = snapped.time;
         const sx = timeToX(snapped.time), sy = priceToY(snapped.price);
-        if (sx !== null) x = sx;
-        if (sy !== null) y = sy;
+        // "weak": como en TV, solo ajusta si el mouse YA cayó cerca de un
+        // punto real de la vela — si no, sigue al cursor sin forzar nada.
+        // "strong" (el comportamiento de antes) ajusta siempre, sin importar
+        // la distancia.
+        const closeEnough = sx===null || sy===null ? false : Math.hypot(sx-x, sy-y) <= MAGNET_WEAK_PX;
+        if (STATE.magnetMode === 'strong' || closeEnough) {
+          price = snapped.price; time = snapped.time;
+          if (sx !== null) x = sx;
+          if (sy !== null) y = sy;
+        }
       }
     }
     return { x, y, price, time };
@@ -3301,14 +3314,27 @@ function setTool(btn, name) {
   if (name !== 'cursor') deselectDrawing();
 }
 
-// Magnet: mientras está activo, los puntos de los dibujos nuevos (y los
-// que se arrastran) se ajustan al candle más cercano — igual que en TV.
-function toggleMagnet() {
-  STATE.magnet = !STATE.magnet;
-  lsSet(lsKey('td_magnet'), STATE.magnet ? '1' : '0');
-  document.getElementById('btn-magnet').classList.toggle('active', STATE.magnet);
+// Magnet: ciclo de 3 estados, como en TV — off, weak (solo ajusta si el
+// mouse ya cayó cerca de un punto de la vela) y strong (ajusta siempre al
+// punto más cercano, sin importar la distancia).
+const MAGNET_CYCLE = ['off','weak','strong'];
+const MAGNET_TIPS = { off:'Magnet: off', weak:'Magnet: weak (ajusta solo si el mouse está cerca)', strong:'Magnet: strong (ajusta siempre a la vela)' };
+function renderMagnetBtn() {
+  const btn = document.getElementById('btn-magnet');
+  btn.classList.toggle('active', STATE.magnetMode === 'strong');
+  btn.classList.toggle('weak-active', STATE.magnetMode === 'weak');
+  btn.dataset.tip = MAGNET_TIPS[STATE.magnetMode];
 }
-document.getElementById('btn-magnet').classList.toggle('active', STATE.magnet);
+function toggleMagnet() {
+  STATE.magnetMode = MAGNET_CYCLE[(MAGNET_CYCLE.indexOf(STATE.magnetMode) + 1) % MAGNET_CYCLE.length];
+  lsSet(lsKey('td_magnet'), STATE.magnetMode);
+  renderMagnetBtn();
+}
+renderMagnetBtn();
+
+// Radio (en px de pantalla) dentro del cual el magnet "weak" considera que
+// el mouse ya está "cerca" de un punto como para ajustarlo.
+const MAGNET_WEAK_PX = 15;
 
 // Dado un precio/tiempo "crudo" del mouse, devuelve el punto {price,time}
 // ajustado al OHLC más cercano del candle más cercano en el tiempo — o el
