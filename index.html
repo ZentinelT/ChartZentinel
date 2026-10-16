@@ -822,6 +822,7 @@
   <div id="layout-picker" title="Cantidad de gráficos">
     <button class="layout-btn active" data-layout="1">1</button>
     <button class="layout-btn" data-layout="2">2 ×</button>
+    <button class="layout-btn" data-layout="3">3 ×</button>
     <button class="layout-btn" data-layout="4">4 ⊞</button>
   </div>
 
@@ -1377,7 +1378,7 @@ function renderLayoutGrid(n){
     <input id="gc-symbol" class="topbar-input" type="text" placeholder="Símbolo…" autocomplete="off" title="Símbolo para el panel activo o todos — Enter para aplicar" style="width:120px;">
     <div class="topbar-spacer"></div>
     <div id="layout-picker" title="Cantidad de gráficos">
-      ${[1,2,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':'4 ⊞'}</button>`).join('')}
+      ${[1,2,3,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':v===3?'3 ×':'4 ⊞'}</button>`).join('')}
     </div>
     <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
     <button class="topbar-btn" id="gc-refresh" title="Refrescar">
