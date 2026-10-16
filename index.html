@@ -2126,11 +2126,11 @@ function syncPositionTool(d) {
   const risk = Math.abs(entry-stop), reward = Math.abs(target-entry);
   const rr = risk>0 ? (reward/risk) : 0;
   d.entryTextEl.setAttribute('x', xR+6); d.entryTextEl.setAttribute('y', yEntry);
-  d.entryTextEl.textContent = `Entry ${fmt(entry)}`;
+  d.entryTextEl.textContent = `Entry`;
   d.tpTextEl.setAttribute('x', xR+6); d.tpTextEl.setAttribute('y', yTarget);
-  d.tpTextEl.textContent = `TP ${fmt(target)}  ·  R:R 1:${rr.toFixed(2)}`;
+  d.tpTextEl.textContent = `TP +${fmt(reward)} pts  ·  R:R 1:${rr.toFixed(2)}`;
   d.slTextEl.setAttribute('x', xR+6); d.slTextEl.setAttribute('y', yStop);
-  d.slTextEl.textContent = `SL ${fmt(stop)}`;
+  d.slTextEl.textContent = `SL -${fmt(risk)} pts`;
 }
 
 function clearDrawings() {
