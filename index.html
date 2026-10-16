@@ -361,7 +361,8 @@
   /* Mismo criterio para los TF: un solo selector arriba de toda la
      grilla (ver gbar en renderLayoutGrid), no uno recortado por panel. */
   html.embed-mode #tf-bar-tfs-wrap,
-  html.embed-mode #tf-bar .tf-sep { display: none !important; }
+  html.embed-mode #tf-bar .tf-sep,
+  html.embed-mode #tf-fav-wrap { display: none !important; }
   /* Picker de layout + tema/refresh/settings/badge: ya tienen su propio
      equivalente una sola vez en la barra del shell (ver renderLayoutGrid)
      — cada panel individual no los repite. */
@@ -462,6 +463,41 @@
   .tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .tf-btn.active { background: var(--gold-glow); color: var(--gold); font-weight: 600; }
   .tf-sep { width: 1px; height: 16px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+
+  /* ─── Favoritos de TF (popup tipo TV, lista completa + estrella) ─ */
+  #tf-fav-wrap { position: relative; flex-shrink: 0; }
+  #tf-fav-trigger {
+    background: none; border: none; color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px;
+    cursor: pointer; transition: background .15s, color .15s;
+  }
+  #tf-fav-trigger:hover, #tf-fav-trigger.active { background: var(--bg-hover); color: var(--gold); }
+  #tf-fav-trigger svg { width: 13px; height: 13px; }
+  .tf-fav-popup {
+    position: absolute; top: calc(100% + 6px); left: 0;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    padding: 6px; z-index: 200; display: none;
+    max-height: 340px; overflow-y: auto; min-width: 150px;
+  }
+  .tf-fav-popup.open { display: block; }
+  .tf-fav-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: 5px; cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .tf-fav-row:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .tf-fav-row.active-tf { color: var(--gold); font-weight: 600; }
+  .tf-fav-star {
+    flex-shrink: 0; width: 15px; height: 15px; display: flex;
+    align-items: center; justify-content: center; color: var(--text-dim); cursor: pointer;
+  }
+  .tf-fav-star:hover { color: var(--gold); }
+  .tf-fav-star.on { color: var(--gold); }
+  .tf-fav-star svg { width: 14px; height: 14px; }
+  .tf-fav-label { font-family: var(--font-ui); font-size: 12.5px; flex: 1; white-space: nowrap; }
+  .tf-fav-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
   /* ─── MAIN AREA ───────────────────────────────────────── */
   #main { display: flex; flex: 1; overflow: hidden; }
@@ -718,15 +754,6 @@
     border-radius: 6px; cursor: pointer; padding: 2px; margin-bottom: 14px;
   }
   .cs-row .cs-color-inp { margin-bottom: 0; flex: 1; }
-  .cs-tf-list {
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 10px;
-    margin-bottom: 14px; max-height: 140px; overflow-y: auto; scrollbar-width: thin;
-  }
-  .cs-tf-list label {
-    display: flex; align-items: center; gap: 5px; margin-bottom: 0;
-    font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); cursor: pointer;
-  }
-  .cs-tf-list input[type=checkbox] { width: auto; margin: 0; }
 
   .btn-primary {
     background: var(--gold-dim); border: 1px solid var(--gold); color: var(--gold-bright);
@@ -880,6 +907,12 @@
     <div id="tf-bar-tfs"></div>
     <div class="tf-scroll-fade tf-scroll-fade-l"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></div>
     <div class="tf-scroll-fade tf-scroll-fade-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+  </div>
+  <div id="tf-fav-wrap">
+    <button id="tf-fav-trigger" title="Más timeframes / favoritos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div id="tf-fav-popup" class="tf-fav-popup"></div>
   </div>
   <div class="tf-sep"></div>
   <button class="topbar-btn" id="btn-indicators" onclick="openIndicatorModal()">
@@ -1246,8 +1279,6 @@
       </select>
     </div>
     <label style="margin-top:10px;"><input type="checkbox" id="cs-crosshair-sync-on" style="width:auto;margin-right:6px;">Sync crosshair across panels (multi-chart grid)</label>
-    <label style="margin-top:10px;">Timeframes shown in the bar</label>
-    <div id="cs-tf-list" class="cs-tf-list"></div>
     <div class="modal-btns">
       <button class="btn-ghost" onclick="resetChartSettings()">Reset to default</button>
       <button class="btn-primary" onclick="saveChartSettings()">Save</button>
@@ -1377,6 +1408,27 @@ applyTheme(lsGet('td_theme') || 'dark');
 // panel y la barra global son documentos separados), el evento 'storage'
 // avisa acá para que este documento también se actualice al toque.
 window.addEventListener('storage', e => { if (e.key === 'td_theme') applyTheme(e.newValue || 'dark'); });
+// Favoritos de TF: UNA sola lista para toda la app (no por panel/pestaña
+// — antes vivía adentro de STATE.chartSettings, que sí es por panel, y
+// eso hacía que cada ventana de la grilla mostrara una barra de TF
+// distinta según lo que ESA ventana tuviera guardado de antes; lo que se
+// pidió es una sola lista compartida, como en TV). Sin sufijo de pane,
+// igual que td_theme/td_watchlist — y mismo mecanismo de 'storage' para
+// que un cambio hecho en un panel/pestaña se refleje al toque en el resto.
+function getTfFavorites(){
+  try {
+    const list = JSON.parse(lsGet('td_tf_favorites') || 'null');
+    if (Array.isArray(list) && list.length) return list;
+  } catch(e){}
+  return ALL_TIMEFRAMES.map(t=>t.tf);
+}
+function setTfFavorites(list){ lsSet('td_tf_favorites', JSON.stringify(list)); }
+window.addEventListener('storage', e => {
+  if (e.key !== 'td_tf_favorites') return;
+  if (typeof renderTfBar === 'function') { renderTfBar(); setActiveTF(STATE.timeframe); }
+  const popup = document.getElementById('tf-fav-popup');
+  if (popup && popup.classList.contains('open') && typeof renderTfFavPopup === 'function') renderTfFavPopup();
+});
 // Vía rápida (mismo tick) para los paneles embebidos: ver el postMessage
 // que manda la barra global en renderLayoutGrid — el 'storage' de arriba
 // queda como respaldo (por si este panel se abre después del cambio, o
@@ -1468,6 +1520,12 @@ function renderLayoutGrid(n){
       <div id="tf-bar-tfs"></div>
       <div class="tf-scroll-fade tf-scroll-fade-l"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></div>
       <div class="tf-scroll-fade tf-scroll-fade-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
+    </div>
+    <div id="tf-fav-wrap">
+      <button id="tf-fav-trigger" title="Más timeframes / favoritos (panel activo)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="tf-fav-popup" class="tf-fav-popup"></div>
     </div>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
@@ -1712,8 +1770,8 @@ function renderLayoutGrid(n){
     if (btn) btn.classList.add('active');
     syncMagnetBtn(f);
     shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
-    const tf = paneEval(f, 'STATE.timeframe');
-    tfWrap.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active', b.dataset.tf===tf));
+    renderShellTfQuick();
+    closeTfFavPopupShell();
   }
 
   row.appendChild(shellToolbar);
@@ -1757,26 +1815,96 @@ function renderLayoutGrid(n){
     symbolInp.value='';
   });
 
-  // Un solo selector de TF para toda la grilla (ya no uno por panel,
-  // chico/recortado en cada ventana) — la lista completa, igual que la
-  // de un panel individual, aplicada al panel activo (o a todos, según
-  // el selector Activo/Todos de esta misma barra).
+  // Un solo selector de TF para toda la grilla — muestra la lista de
+  // favoritos GLOBAL (getTfFavorites/setTfFavorites, misma que usa cada
+  // panel individual: una sola lista compartida en toda la app, no una
+  // por panel/pestaña), resaltando el TF del panel ACTIVO. Al clickear
+  // un TF rápido se aplica al panel activo (o a todos, según el selector
+  // Activo/Todos de esta misma barra). Delegado en el padre para no
+  // tener que re-atar listeners cada vez que se re-renderiza.
   const tfWrap = gbar.querySelector('#tf-bar-tfs');
-  let tfHtml = '', tfLastGroup = null;
-  ALL_TIMEFRAMES.forEach(t => {
-    if (tfLastGroup !== null && tfLastGroup !== t.group) tfHtml += '<div class="tf-sep"></div>';
-    tfHtml += `<button class="tf-btn" data-tf="${t.tf}">${t.label}</button>`;
-    tfLastGroup = t.group;
-  });
-  tfWrap.innerHTML = tfHtml;
-  tfWrap.querySelectorAll('[data-tf]').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      tfWrap.querySelectorAll('.tf-btn').forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      broadcast({ type:'zentinel:setTimeframe', tf:b.dataset.tf });
+  function renderShellTfQuick(){
+    const f = iframeEls[activePane-1];
+    const tf = f ? paneEval(f, 'STATE.timeframe') : null;
+    const visible = new Set(getTfFavorites());
+    let html = '', lastGroup = null;
+    ALL_TIMEFRAMES.forEach(t => {
+      if (!visible.has(t.tf)) return;
+      if (lastGroup !== null && lastGroup !== t.group) html += '<div class="tf-sep"></div>';
+      html += `<button class="tf-btn${t.tf===tf?' active':''}" data-tf="${t.tf}">${t.label}</button>`;
+      lastGroup = t.group;
     });
+    tfWrap.innerHTML = html;
+  }
+  tfWrap.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tf-btn');
+    if (!btn) return;
+    tfWrap.querySelectorAll('.tf-btn').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    broadcast({ type:'zentinel:setTimeframe', tf:btn.dataset.tf });
   });
+  renderShellTfQuick();
   initTfBarScrollFade(tfWrap, gbar.querySelector('#tf-bar-tfs-wrap'));
+  window.addEventListener('storage', e => { if (e.key === 'td_tf_favorites') { renderShellTfQuick(); if (tfFavPopup.classList.contains('open')) renderTfFavPopupShell(); } });
+
+  // Popup de favoritos (estrella) de la barra de TF — misma lista GLOBAL
+  // de arriba; solo el resaltado del TF activo depende del panel activo.
+  const tfFavPopup = gbar.querySelector('#tf-fav-popup');
+  const tfFavTrigger = gbar.querySelector('#tf-fav-trigger');
+  function renderTfFavPopupShell(){
+    const f = iframeEls[activePane-1];
+    const tf = f ? paneEval(f, 'STATE.timeframe') : null;
+    const visible = new Set(getTfFavorites());
+    let html = '', lastGroup = null;
+    ALL_TIMEFRAMES.forEach(t => {
+      if (lastGroup !== null && lastGroup !== t.group) html += '<div class="tf-fav-sep"></div>';
+      const on = visible.has(t.tf);
+      html += `<div class="tf-fav-row${t.tf===tf?' active-tf':''}" data-tf="${t.tf}">
+        <span class="tf-fav-star${on?' on':''}" data-star="${t.tf}" title="Favorito">
+          <svg viewBox="0 0 24 24" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </span>
+        <span class="tf-fav-label">${t.label}</span>
+      </div>`;
+      lastGroup = t.group;
+    });
+    tfFavPopup.innerHTML = html;
+  }
+  function toggleTfFavShell(tf){
+    let list = getTfFavorites().slice();
+    if (list.includes(tf)) {
+      if (list.length <= 1) return;
+      list = list.filter(x=>x!==tf);
+    } else {
+      list.push(tf);
+    }
+    setTfFavorites(list);
+    renderShellTfQuick();
+    renderTfFavPopupShell();
+  }
+  function closeTfFavPopupShell(){
+    tfFavPopup.classList.remove('open');
+    tfFavTrigger.classList.remove('active');
+  }
+  tfFavTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (tfFavPopup.classList.contains('open')) { closeTfFavPopupShell(); return; }
+    renderTfFavPopupShell();
+    tfFavPopup.classList.add('open');
+    tfFavTrigger.classList.add('active');
+  });
+  tfFavPopup.addEventListener('click', (e) => {
+    const star = e.target.closest('[data-star]');
+    if (star) { e.stopPropagation(); toggleTfFavShell(star.dataset.star); return; }
+    const row = e.target.closest('.tf-fav-row');
+    if (row) {
+      broadcast({ type:'zentinel:setTimeframe', tf:row.dataset.tf });
+      tfWrap.querySelectorAll('.tf-btn').forEach(x=>x.classList.toggle('active', x.dataset.tf===row.dataset.tf));
+      closeTfFavPopupShell();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!gbar.querySelector('#tf-fav-wrap').contains(e.target)) closeTfFavPopupShell();
+  });
 
   // Presets ya guardados (mismo storage que usan los paneles — sin sufijo
   // de pane, por eso se puede leer directo acá afuera). Guardar uno nuevo
@@ -2011,7 +2139,6 @@ const CHART_SETTINGS_DEFAULTS = {
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
   crosshairColor:'#c9a84c', crosshairStyle:2, syncCrosshair:true,
-  visibleTFs: ALL_TIMEFRAMES.map(t=>t.tf),
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
 // CISD. Los nombres de los inputs son los mismos que en el Pine original
@@ -3718,7 +3845,7 @@ document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==
 // ══════════════════════════════════════════════════════════
 function renderTfBar() {
   const bar = document.getElementById('tf-bar-tfs');
-  const visible = new Set(STATE.chartSettings.visibleTFs);
+  const visible = new Set(getTfFavorites());
   let html = '';
   let lastGroup = null;
   ALL_TIMEFRAMES.forEach(t => {
@@ -3760,6 +3887,74 @@ document.getElementById('tf-bar-tfs').addEventListener('click', (e) => {
   loadChart(STATE.symbol,STATE.timeframe);
 });
 function setActiveTF(tf) { document.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf)); }
+
+// ─── Popup de favoritos de TF (como en TV: lista completa, estrella
+// marca cuáles aparecen como accesos rápidos en la barra) ──────────
+function renderTfFavPopup(){
+  const popup = document.getElementById('tf-fav-popup');
+  if (!popup) return;
+  const visible = new Set(getTfFavorites());
+  let html = '', lastGroup = null;
+  ALL_TIMEFRAMES.forEach(t => {
+    if (lastGroup !== null && lastGroup !== t.group) html += '<div class="tf-fav-sep"></div>';
+    const on = visible.has(t.tf);
+    html += `<div class="tf-fav-row${t.tf===STATE.timeframe?' active-tf':''}" data-tf="${t.tf}">
+      <span class="tf-fav-star${on?' on':''}" data-star="${t.tf}" title="Favorito">
+        <svg viewBox="0 0 24 24" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </span>
+      <span class="tf-fav-label">${t.label}</span>
+    </div>`;
+    lastGroup = t.group;
+  });
+  popup.innerHTML = html;
+}
+function toggleTfFav(tf){
+  let list = getTfFavorites().slice();
+  if (list.includes(tf)) {
+    if (list.length <= 1) return;
+    list = list.filter(x=>x!==tf);
+  } else {
+    list.push(tf);
+  }
+  setTfFavorites(list);
+  renderTfBar();
+  setActiveTF(STATE.timeframe);
+  renderTfFavPopup();
+}
+function openTfFavPopup(){
+  renderTfFavPopup();
+  document.getElementById('tf-fav-popup').classList.add('open');
+  document.getElementById('tf-fav-trigger').classList.add('active');
+}
+function closeTfFavPopup(){
+  const popup = document.getElementById('tf-fav-popup');
+  if (popup) popup.classList.remove('open');
+  const trigger = document.getElementById('tf-fav-trigger');
+  if (trigger) trigger.classList.remove('active');
+}
+(function initTfFavPopup(){
+  const trigger = document.getElementById('tf-fav-trigger');
+  const popup = document.getElementById('tf-fav-popup');
+  if (!trigger || !popup) return;
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popup.classList.contains('open') ? closeTfFavPopup() : openTfFavPopup();
+  });
+  popup.addEventListener('click', (e) => {
+    const star = e.target.closest('[data-star]');
+    if (star) { e.stopPropagation(); toggleTfFav(star.dataset.star); return; }
+    const row = e.target.closest('.tf-fav-row');
+    if (row) {
+      STATE.timeframe = row.dataset.tf;
+      saveState();
+      loadChart(STATE.symbol, STATE.timeframe);
+      closeTfFavPopup();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('tf-fav-wrap').contains(e.target)) closeTfFavPopup();
+  });
+})();
 
 // ══════════════════════════════════════════════════════════
 //  TOOLS
@@ -5617,14 +5812,6 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);});});
 
-function renderCsTfList(visibleTFs){
-  const visible = new Set(visibleTFs);
-  const html = ALL_TIMEFRAMES.map(t =>
-    `<label><input type="checkbox" data-cs-tf="${t.tf}" ${visible.has(t.tf)?'checked':''}>${t.label}</label>`
-  ).join('');
-  document.getElementById('cs-tf-list').innerHTML = html;
-}
-
 function fillChartSettingsForm(cs){
   document.getElementById('cs-bg').value=cs.bgColor;
   document.getElementById('cs-up').value=cs.upColor;
@@ -5639,13 +5826,10 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-crosshair-color').value=cs.crosshairColor;
   document.getElementById('cs-crosshair-style').value=String(cs.crosshairStyle);
   document.getElementById('cs-crosshair-sync-on').checked=cs.syncCrosshair;
-  renderCsTfList(cs.visibleTFs);
 }
 function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); openModal('modal-chart-settings'); }
 
 function commitChartSettingsForm(){
-  let visibleTFs = Array.from(document.querySelectorAll('#cs-tf-list input[data-cs-tf]:checked')).map(el=>el.dataset.csTf);
-  if (visibleTFs.length === 0) visibleTFs = [STATE.timeframe];
   STATE.chartSettings = {
     bgColor: document.getElementById('cs-bg').value,
     upColor: document.getElementById('cs-up').value,
@@ -5660,7 +5844,6 @@ function commitChartSettingsForm(){
     crosshairColor: document.getElementById('cs-crosshair-color').value,
     crosshairStyle: Number(document.getElementById('cs-crosshair-style').value),
     syncCrosshair: document.getElementById('cs-crosshair-sync-on').checked,
-    visibleTFs,
   };
   saveChartSettingsState();
   applyChartSettings();
