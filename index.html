@@ -32,8 +32,8 @@
     --font-display: 'Orbitron', sans-serif;
     --sidebar-w:    220px;
     --toolbar-h:    44px;
-    --topbar-h:     52px;
-    --tf-bar-h:     36px;
+    --topbar-h:     44px;
+    --tf-bar-h:     44px;
   }
 
   /* Ver applyTheme(): corta en seco cualquier transition justo alrededor
@@ -83,14 +83,22 @@
   }
 
   /* ─── TOP BAR ─────────────────────────────────────────── */
-  #topbar {
-    height: var(--topbar-h);
+  /* topbar + tf-bar van lado a lado DENTRO de esta fila — una sola barra
+     arriba del chart, como TV, en vez de dos apiladas. El ancho de topbar
+     queda fijo a su contenido (flex-shrink:0) y tf-bar ocupa el resto. */
+  #header-row {
+    display: flex;
+    align-items: stretch;
+    flex-shrink: 0;
     background: var(--bg-panel);
     border-bottom: 1px solid var(--border);
+  }
+  #topbar {
+    height: var(--topbar-h);
     display: flex;
     align-items: center;
-    padding: 0 16px;
-    gap: 16px;
+    padding: 0 14px;
+    gap: 12px;
     flex-shrink: 0;
     z-index: 100;
   }
@@ -117,16 +125,15 @@
   .topbar-input {
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--text-primary);
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     padding: 6px 12px;
     width: 130px;
     outline: none;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    letter-spacing: 0;
     transition: border-color .2s, box-shadow .2s;
   }
   .topbar-input:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 2px var(--gold-glow); }
@@ -136,9 +143,6 @@
   #price-change { font-family: var(--font-mono); font-size: 12px; }
   #price-change.up { color: var(--green); }
   #price-change.dn { color: var(--red); }
-
-  #ohlcv-bar { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
-  #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
 
   /* ─── COUNTDOWN BADGE (pegado al precio actual, como TV) ────
      Posición/ancho/alto se fijan por JS (positionCountdownBadge), medidos
@@ -197,7 +201,7 @@
      ni de tener el sidebar abierto. */
   #chart-indicator-chips {
     position: absolute;
-    top: 34px;
+    top: 40px;
     left: 8px;
     z-index: 17;
     display: flex;
@@ -301,29 +305,41 @@
   .topbar-btn {
     background: none;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: 6px;
     color: var(--text-secondary);
     font-family: var(--font-ui);
     font-size: 12px;
-    padding: 5px 10px;
+    font-weight: 500;
+    padding: 6px 10px;
     cursor: pointer;
-    display: flex; align-items: center; gap: 5px;
-    transition: background .15s, color .15s, border-color .15s;
+    display: flex; align-items: center; gap: 6px;
+    transition: background .15s, color .15s;
   }
-  .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-light); }
+  /* Como en TV: el hover es solo un relleno redondeado, sin borde — el
+     borde quedaba viéndose "a cuadros" al lado de los demás íconos que
+     no lo tienen. */
+  .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .topbar-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
-  .topbar-btn svg { width: 14px; height: 14px; }
+  .topbar-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+  /* Flechita de "esto abre un menú/panel" — mismo lenguaje visual que el
+     caret de los botones de TF/Indicadores/etc. en TV. */
+  .topbar-btn .tb-caret { width: 9px; height: 9px; margin-left: -1px; opacity: .6; flex-shrink: 0; }
   @keyframes zentinel-spin { to { transform: rotate(360deg); } }
   #btn-refresh.spinning svg { animation: zentinel-spin .6s linear infinite; }
 
-  #layout-picker { display: flex; gap: 2px; margin-right: 4px; }
+  /* Grupo segmentado sin bordes individuales — mismo lenguaje que el
+     selector de TF de TV, no una fila de botones sueltos. */
+  #layout-picker {
+    display: flex; gap: 1px; margin-right: 4px;
+    background: var(--bg-secondary); border-radius: 7px; padding: 2px;
+  }
   .layout-btn {
-    background: none; border: 1px solid var(--border-light); border-radius: 4px;
-    color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px;
-    padding: 4px 8px; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+    background: none; border: none; border-radius: 5px;
+    color: var(--text-secondary); font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+    padding: 4px 8px; cursor: pointer; transition: background .15s, color .15s;
   }
   .layout-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .layout-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
+  .layout-btn.active { background: var(--gold-glow); color: var(--gold); font-weight: 600; }
 
   /* ─── Modo embed (panel dentro de una grilla multi-chart) ──────
      Cada panel del grid 2×/4⊞ no necesita repetir el header completo
@@ -342,6 +358,16 @@
   html.embed-mode #toolbar,
   html.embed-mode #btn-sidebar-toggle,
   html.embed-mode #sidebar { display: none !important; }
+  /* Mismo criterio para los TF: un solo selector arriba de toda la
+     grilla (ver gbar en renderLayoutGrid), no uno recortado por panel. */
+  html.embed-mode #tf-bar-tfs-wrap,
+  html.embed-mode #tf-bar .tf-sep { display: none !important; }
+  /* Picker de layout + tema/refresh/settings/badge: ya tienen su propio
+     equivalente una sola vez en la barra del shell (ver renderLayoutGrid)
+     — cada panel individual no los repite. */
+  html.embed-mode #tf-bar > .topbar-spacer,
+  html.embed-mode #tf-bar-tools { display: none !important; }
+  #tf-bar-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
   #api-badge {
     font-family: var(--font-mono);
@@ -360,14 +386,17 @@
   /* ─── TIMEFRAME BAR ───────────────────────────────────── */
   #tf-bar {
     height: var(--tf-bar-h);
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     padding: 0 8px;
     gap: 10px;
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    min-width: 0;
   }
+  /* Solo hace falta mostrar el símbolo acá cuando ESTE es el único
+     renglón visible (panel embebido, con el topbar propio oculto) — en
+     modo 1 gráfico o en el shell multi-chart, el símbolo ya se ve en el
+     buscador de al lado, repetirlo acá sería redundante. */
   #tf-bar-symbol {
     font-family: var(--font-display);
     font-size: 12px;
@@ -376,12 +405,20 @@
     color: var(--text-primary);
     white-space: nowrap;
     flex-shrink: 0;
+    display: none;
   }
+  html.embed-mode #tf-bar-symbol { display: block; }
   #tf-bar-tfs-wrap {
     position: relative;
     display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
+    /* NO crece (eso lo hace el spacer de más allá, para empujar los
+       íconos de utilidad al borde derecho) — solo se achica y scrollea
+       con las flechitas si no entran todos los TF. El piso de ancho evita
+       que en una ventana angosta termine colapsando a 0 (invisible) antes
+       de que el spacer ceda el espacio — siempre se ve al menos un puñado
+       de TF, con las flechitas para desplazar el resto. */
+    flex: 0 1 auto;
+    min-width: 90px;
   }
   #tf-bar-tfs {
     display: flex;
@@ -413,18 +450,18 @@
     background: none;
     border: none;
     color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-family: var(--font-ui);
+    font-size: 12px;
     font-weight: 500;
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 5px 7px;
+    border-radius: 6px;
     cursor: pointer;
-    letter-spacing: .5px;
+    letter-spacing: 0;
     transition: background .15s, color .15s;
   }
   .tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .tf-btn.active { background: var(--gold-glow); color: var(--gold); }
-  .tf-sep { width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
+  .tf-btn.active { background: var(--gold-glow); color: var(--gold); font-weight: 600; }
+  .tf-sep { width: 1px; height: 16px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
 
   /* ─── MAIN AREA ───────────────────────────────────────── */
   #main { display: flex; flex: 1; overflow: hidden; }
@@ -610,12 +647,22 @@
   @keyframes loaderAnim { 0%{width:0%;margin-left:0} 50%{width:70%;margin-left:15%} 100%{width:0%;margin-left:100%} }
   .loader-msg { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
 
-  #crosshair-info {
-    position: absolute; top: 10px; left: 10px;
+  /* Reemplazado por #ohlcv-bar (siempre visible arriba a la izq. del
+     chart, no solo al pasar el mouse) — el JS lo sigue actualizando
+     (inofensivo, no se ve) así no hace falta tocar esas rutas. */
+  #crosshair-info { display: none !important; }
+
+  /* ─── OHLCV (encima del chart, no en la barra — libera espacio para
+     que topbar+tf-bar entren en una sola fila, como TV) ──────────── */
+  #ohlcv-bar {
+    position: absolute; top: 8px; left: 8px;
+    display: flex; gap: 10px;
     font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
-    pointer-events: none; line-height: 1.7; z-index: 5; display: none;
+    background: rgba(10,10,12,.55);
+    padding: 3px 8px; border-radius: 4px;
+    pointer-events: none; z-index: 6;
   }
-  #crosshair-info span { color: var(--text-primary); }
+  #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
 
   /* ─── STATUS BAR ──────────────────────────────────────── */
   #statusbar {
@@ -810,7 +857,8 @@
 </head>
 <body>
 
-<!-- ══ TOP BAR ══════════════════════════════════════════ -->
+<!-- ══ HEADER (topbar + tf-bar en UNA sola fila, como TV) ═ -->
+<div id="header-row">
 <div id="topbar">
   <div class="logo">ZENTINEL</div>
   <div class="logo-sep"></div>
@@ -823,42 +871,9 @@
     <span id="price-last">—</span>
     <span id="price-change" class="">—</span>
   </div>
-
-  <div id="ohlcv-bar">
-    <span><b>O</b><span id="ohlc-o">—</span></span>
-    <span><b>H</b><span id="ohlc-h">—</span></span>
-    <span><b>L</b><span id="ohlc-l">—</span></span>
-    <span><b>C</b><span id="ohlc-c">—</span></span>
-    <span><b>V</b><span id="ohlc-v">—</span></span>
-  </div>
-
-  <div class="topbar-spacer"></div>
-
-  <div id="layout-picker" title="Cantidad de gráficos">
-    <button class="layout-btn active" data-layout="1">1</button>
-    <button class="layout-btn" data-layout="2">2 ×</button>
-    <button class="layout-btn" data-layout="3">3 ×</button>
-    <button class="layout-btn" data-layout="4">4 ⊞</button>
-  </div>
-
-  <button class="topbar-btn theme-toggle-btn" title="Cambiar a modo claro" onclick="toggleTheme()"></button>
-
-  <button class="topbar-btn" id="btn-refresh" title="Refresh chart" onclick="refreshChart()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-  </button>
-
-  <button class="topbar-btn" id="btn-settings" onclick="openChartSettingsModal()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="3"/>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-    </svg>
-    Settings
-  </button>
-
-  <div id="api-badge" onclick="openChartSettingsModal()">BRIDGE…</div>
 </div>
 
-<!-- ══ TIMEFRAME BAR ═════════════════════════════════════ -->
+<!-- ══ TIMEFRAME BAR (+ utilidades, misma fila que topbar) ═ -->
 <div id="tf-bar">
   <div id="tf-bar-symbol"></div>
   <div id="tf-bar-tfs-wrap">
@@ -866,15 +881,47 @@
     <div class="tf-scroll-fade tf-scroll-fade-l"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></div>
     <div class="tf-scroll-fade tf-scroll-fade-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
   </div>
+  <div class="tf-sep"></div>
   <button class="topbar-btn" id="btn-indicators" onclick="openIndicatorModal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     Indicators
+    <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
   </button>
   <button class="topbar-btn" id="btn-replay" title="Replay: click a candle to start" onclick="toggleReplayPicker()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
     Replay
   </button>
+
+  <!-- Picker de layout + utilidades: solo tienen sentido en modo 1
+       gráfico (en la grilla multi-chart ya existen sus propios
+       equivalentes en la barra del shell), por eso se ocultan en
+       html.embed-mode con #tf-bar-tools de abajo. -->
+  <div class="topbar-spacer"></div>
+  <div id="tf-bar-tools">
+    <div id="layout-picker" title="Cantidad de gráficos">
+      <button class="layout-btn active" data-layout="1">1</button>
+      <button class="layout-btn" data-layout="2">2 ×</button>
+      <button class="layout-btn" data-layout="3">3 ×</button>
+      <button class="layout-btn" data-layout="4">4 ⊞</button>
+    </div>
+
+    <button class="topbar-btn theme-toggle-btn" title="Cambiar a modo claro" onclick="toggleTheme()"></button>
+
+    <button class="topbar-btn" id="btn-refresh" title="Refresh chart" onclick="refreshChart()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+
+    <button class="topbar-btn" id="btn-settings" title="Settings" onclick="openChartSettingsModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+
+    <div id="api-badge" onclick="openChartSettingsModal()">BRIDGE…</div>
+  </div>
 </div>
+</div><!-- /header-row -->
 
 <!-- ══ MAIN ══════════════════════════════════════════════ -->
 <div id="main">
@@ -996,6 +1043,13 @@
   <div id="chart-wrap">
     <div id="chart-container">
       <div id="price-countdown-badge">—</div>
+      <div id="ohlcv-bar">
+        <span><b>O</b><span id="ohlc-o">—</span></span>
+        <span><b>H</b><span id="ohlc-h">—</span></span>
+        <span><b>L</b><span id="ohlc-l">—</span></span>
+        <span><b>C</b><span id="ohlc-c">—</span></span>
+        <span><b>V</b><span id="ohlc-v">—</span></span>
+      </div>
       <div id="watchtower-bias-badge"></div>
       <div id="chart-indicator-chips"></div>
       <div id="replay-pick-hint" class="hidden">Click a candle to start replay (Esc to cancel)</div>
@@ -1385,6 +1439,14 @@ function renderLayoutGrid(n){
   // uno distinto por panel), así que donde #topbar pone el symbol-input +
   // precio + OHLCV, acá va el selector "Aplicar a" + el símbolo GLOBAL; y
   // donde #tf-bar pone el nombre de símbolo, acá va el selector de preset.
+  // Como en el modo 1 gráfico: topbar + tf-bar van lado a lado en una
+  // sola fila (#header-row), no apiladas — acá además es donde vive el
+  // único selector de TF de toda la grilla (gbar), con el picker de
+  // layout y las utilidades al final de ESA fila (no de la de arriba),
+  // para que el ancho de "bar" quede chico y "gbar" se lleve el resto.
+  const headerRow = document.createElement('div');
+  headerRow.id = 'header-row';
+
   const bar = document.createElement('div');
   bar.id = 'topbar';
   bar.innerHTML = `
@@ -1392,29 +1454,7 @@ function renderLayoutGrid(n){
     <div class="logo-sep"></div>
     <div id="gc-scope" style="display:flex;gap:2px;"></div>
     <input id="gc-symbol" class="topbar-input" type="text" placeholder="Símbolo…" autocomplete="off" title="Símbolo para el panel activo o todos — Enter para aplicar" style="width:120px;">
-    <div class="topbar-spacer"></div>
-    <div id="layout-picker" title="Cantidad de gráficos">
-      ${[1,2,3,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':v===3?'3 ×':'4 ⊞'}</button>`).join('')}
-    </div>
-    <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
-    <button class="topbar-btn" id="gc-refresh" title="Refrescar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-    </button>
-    <button class="topbar-btn" id="gc-settings" title="Configuración del panel activo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-      Settings
-    </button>
-    <div id="api-badge" style="pointer-events:none;">MULTI</div>
   `;
-  bar.querySelectorAll('[data-layout]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const v = btn.dataset.layout;
-      location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
-    });
-  });
 
   const gbar = document.createElement('div');
   gbar.id = 'tf-bar';
@@ -1429,9 +1469,34 @@ function renderLayoutGrid(n){
       <div class="tf-scroll-fade tf-scroll-fade-l"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></div>
       <div class="tf-scroll-fade tf-scroll-fade-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>
+    <div class="topbar-spacer"></div>
+    <div id="tf-bar-tools">
+      <div id="layout-picker" title="Cantidad de gráficos">
+        ${[1,2,3,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':v===3?'3 ×':'4 ⊞'}</button>`).join('')}
+      </div>
+      <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
+      <button class="topbar-btn" id="gc-refresh" title="Refrescar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button class="topbar-btn" id="gc-settings" title="Configuración del panel activo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <div id="api-badge" style="pointer-events:none;">MULTI</div>
+    </div>
   `;
-  document.body.appendChild(bar);
-  document.body.appendChild(gbar);
+  gbar.querySelectorAll('[data-layout]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const v = btn.dataset.layout;
+      location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
+    });
+  });
+
+  headerRow.appendChild(bar);
+  headerRow.appendChild(gbar);
+  document.body.appendChild(headerRow);
   applyTheme(lsGet('td_theme') || 'dark'); // repinta el ícono del botón de tema recién creado
 
   // ─── Barra de herramientas + watchlist COMPARTIDAS ──────────────────
@@ -1647,6 +1712,8 @@ function renderLayoutGrid(n){
     if (btn) btn.classList.add('active');
     syncMagnetBtn(f);
     shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
+    const tf = paneEval(f, 'STATE.timeframe');
+    tfWrap.querySelectorAll('.tf-btn').forEach(b=>b.classList.toggle('active', b.dataset.tf===tf));
   }
 
   row.appendChild(shellToolbar);
@@ -1662,7 +1729,7 @@ function renderLayoutGrid(n){
   // origin (todo sirve desde http://localhost:8787), así que no hace
   // falta mensajería para esto: se llama applyTheme() DIRECTO sobre el
   // contentWindow de cada iframe, síncrono, en el mismo tick que acá.
-  bar.querySelector('#gc-theme-toggle').addEventListener('click', () => {
+  gbar.querySelector('#gc-theme-toggle').addEventListener('click', () => {
     toggleTheme();
     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
     iframeEls.forEach(el => { try { el.contentWindow.applyTheme(theme); } catch(e){} });
@@ -1690,13 +1757,24 @@ function renderLayoutGrid(n){
     symbolInp.value='';
   });
 
-  // Timeframes más comunes (acceso rápido global — cada panel sigue
-  // teniendo su propia barra completa de TF para ajustes finos).
-  const QUICK_TFS = [ ['1min','1m'], ['5min','5m'], ['15min','15m'], ['1h','1H'], ['4h','4H'], ['1day','D'] ];
+  // Un solo selector de TF para toda la grilla (ya no uno por panel,
+  // chico/recortado en cada ventana) — la lista completa, igual que la
+  // de un panel individual, aplicada al panel activo (o a todos, según
+  // el selector Activo/Todos de esta misma barra).
   const tfWrap = gbar.querySelector('#tf-bar-tfs');
-  tfWrap.innerHTML = QUICK_TFS.map(([tf,label]) => `<button class="tf-btn" data-tf="${tf}">${label}</button>`).join('');
+  let tfHtml = '', tfLastGroup = null;
+  ALL_TIMEFRAMES.forEach(t => {
+    if (tfLastGroup !== null && tfLastGroup !== t.group) tfHtml += '<div class="tf-sep"></div>';
+    tfHtml += `<button class="tf-btn" data-tf="${t.tf}">${t.label}</button>`;
+    tfLastGroup = t.group;
+  });
+  tfWrap.innerHTML = tfHtml;
   tfWrap.querySelectorAll('[data-tf]').forEach(b=>{
-    b.addEventListener('click', ()=>broadcast({ type:'zentinel:setTimeframe', tf:b.dataset.tf }));
+    b.addEventListener('click', ()=>{
+      tfWrap.querySelectorAll('.tf-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      broadcast({ type:'zentinel:setTimeframe', tf:b.dataset.tf });
+    });
   });
   initTfBarScrollFade(tfWrap, gbar.querySelector('#tf-bar-tfs-wrap'));
 
@@ -1728,13 +1806,13 @@ function renderLayoutGrid(n){
     broadcast({ type:'zentinel:applyPreset', name });
   });
 
-  bar.querySelector('#gc-refresh').addEventListener('click', ()=>{
+  gbar.querySelector('#gc-refresh').addEventListener('click', ()=>{
     broadcast({ type:'zentinel:refresh' });
   });
   // Settings abre un modal — no tiene sentido "a todos" (solo se puede
   // mirar uno a la vez), así que siempre apunta al panel activo sin
   // importar lo que diga el selector de alcance.
-  bar.querySelector('#gc-settings').addEventListener('click', ()=>{
+  gbar.querySelector('#gc-settings').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
   });
 
