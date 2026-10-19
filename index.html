@@ -1240,7 +1240,14 @@
     </div>
     <div style="border-top:1px solid var(--border);margin-bottom:14px;"></div>
     <label>Background</label>
-    <input type="color" id="cs-bg" class="cs-color-inp">
+    <div class="cs-row" style="align-items:center;">
+      <input type="color" id="cs-bg" class="cs-color-inp">
+      <input type="color" id="cs-bg2" class="cs-color-inp" style="display:none;">
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;">
+        <input type="checkbox" id="cs-bg-gradient" onchange="document.getElementById('cs-bg2').style.display=this.checked?'':'none';">
+        Degradé
+      </label>
+    </div>
     <label>Candle up / down</label>
     <div class="cs-row">
       <input type="color" id="cs-up" class="cs-color-inp">
@@ -2134,6 +2141,7 @@ const ALL_TIMEFRAMES = [
 ];
 const CHART_SETTINGS_DEFAULTS = {
   bgColor:'#0a0a0c',
+  bgGradient:false, bgColor2:'#1a1a28',
   upColor:'#26a69a', downColor:'#909090',
   borderUpColor:'#26a69a', borderDownColor:'#909090',
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
@@ -3100,7 +3108,7 @@ function initWatchtowerLayer() {
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
-    layout: { background:{ color: STATE.chartSettings.bgColor }, textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
+    layout: { background: buildChartBackground(STATE.chartSettings), textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
     grid:   { vertLines:{visible:false}, horzLines:{visible:false} },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
@@ -5814,6 +5822,9 @@ document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('cl
 
 function fillChartSettingsForm(cs){
   document.getElementById('cs-bg').value=cs.bgColor;
+  document.getElementById('cs-bg2').value=cs.bgColor2;
+  document.getElementById('cs-bg-gradient').checked=!!cs.bgGradient;
+  document.getElementById('cs-bg2').style.display=cs.bgGradient?'':'none';
   document.getElementById('cs-up').value=cs.upColor;
   document.getElementById('cs-down').value=cs.downColor;
   document.getElementById('cs-border-up').value=cs.borderUpColor;
@@ -5832,6 +5843,8 @@ function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); r
 function commitChartSettingsForm(){
   STATE.chartSettings = {
     bgColor: document.getElementById('cs-bg').value,
+    bgColor2: document.getElementById('cs-bg2').value,
+    bgGradient: document.getElementById('cs-bg-gradient').checked,
     upColor: document.getElementById('cs-up').value,
     downColor: document.getElementById('cs-down').value,
     borderUpColor: document.getElementById('cs-border-up').value,
@@ -5865,11 +5878,17 @@ function resetChartSettings(){
   setActiveTF(STATE.timeframe);
 }
 
+function buildChartBackground(cs){
+  // Degradé vertical: lightweight-charts lo soporta nativo (type:'gradient',
+  // topColor/bottomColor) desde v4 — no hace falta simularlo con CSS.
+  if (cs.bgGradient) return { type:'gradient', topColor: cs.bgColor, bottomColor: cs.bgColor2 };
+  return { type:'solid', color: cs.bgColor };
+}
 function applyChartSettings(){
   if(!chart || !candleSeries) return;
   const cs = STATE.chartSettings;
   chart.applyOptions({
-    layout: { background: { color: cs.bgColor } },
+    layout: { background: buildChartBackground(cs) },
     crosshair: {
       vertLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
       horzLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
