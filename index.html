@@ -3072,31 +3072,14 @@ function initWatchtowerLayer() {
     }
   }, { capture: true });
 
-  // Feedback visual: cursor "pointer" al pasar sobre cualquier dibujo de un
-  // indicador, para que se note dónde hay que hacer doble click.
-  // Solo SETEA el cursor cuando hay match — nunca lo limpia, así no pisa el
-  // cursor que ya maneja el sistema de dibujo (move/crosshair) en el mismo
-  // elemento.
-  // Igual que el crosshair: barrer _indicatorHitRegions (que puede tener
-  // cientos de líneas con Watchtower+Sniper+Sweeps activos) en CADA
-  // mousemove sin límite de frecuencia es trabajo de sobra — acotado a una
-  // vez por frame, mismo patrón que el resto de estos listeners.
-  let _hitTestPending = null, _hitTestRaf = null;
-  function _applyHitTest(){
-    _hitTestRaf = null;
-    const p = _hitTestPending; _hitTestPending = null;
-    if (!p || window._dragSession) return;
-    const plotW = cc.clientWidth - chart.priceScale('right').width();
-    const plotH = cc.clientHeight - chart.timeScale().height();
-    if (p.mx > plotW || p.my > plotH) return;
-    if (hitTestIndicatorRegions(p.mx, p.my)) cc.style.cursor = 'pointer';
-  }
-  cc.addEventListener('mousemove', (e) => {
-    if (window._dragSession) return;
-    const rect = cc.getBoundingClientRect();
-    _hitTestPending = { mx: e.clientX - rect.left, my: e.clientY - rect.top };
-    if (_hitTestRaf === null) _hitTestRaf = requestAnimationFrame(_applyHitTest);
-  });
+  // El feedback de cursor "pointer" sobre un dibujo de indicador se decide
+  // en el handler de mousemove del sistema de dibujo (más abajo, buscar
+  // "Sin arrastre activo") — antes vivía en un listener separado acá que
+  // solo seteaba 'pointer' una vez por frame (vía requestAnimationFrame)
+  // mientras el otro handler reseteaba a '' en CADA mousemove de forma
+  // síncrona: los dos listeners peleaban por el mismo style.cursor del
+  // mismo elemento y el resultado era que titilaba entre manito y flecha
+  // sin quedarse fijo. Unificar la decisión en un solo lugar lo resuelve.
 
   // Mecanismo 1 (el del comentario de arriba): elementos HTML normales
   // tageados con data-indicator-name (hoy solo el badge de bias de
@@ -3607,13 +3590,30 @@ function initDrawingLayer() {
       return;
     }
 
-    // Sin arrastre activo: feedback de cursor al pasar por encima
+    // Sin arrastre activo: feedback de cursor al pasar por encima.
+    // hitTestHandle/isClickOnDrawing son baratos (recorren solo los
+    // dibujos propios del usuario) y se evalúan en cada mousemove sin
+    // problema. hitTestIndicatorRegions puede tener cientos de líneas con
+    // Watchtower+Sniper+Sweeps activos a la vez, así que esa parte sí se
+    // acota a una vez por frame — pero la DECISIÓN final del cursor queda
+    // toda en este único handler para que no compita con otro listener
+    // por el mismo style.cursor (eso era lo que causaba el titileo).
     if (STATE.activeTool === 'cursor') {
       if (hitTestHandle(mx, my)) { container.style.cursor = 'crosshair'; return; }
       const over = drawings.some(d => !d.locked && isClickOnDrawing(d, mx, my));
-      container.style.cursor = over ? 'move' : '';
+      if (over) { container.style.cursor = 'move'; return; }
+      _cursorHitTestPending = { mx, my };
+      if (_cursorHitTestRaf === null) _cursorHitTestRaf = requestAnimationFrame(_applyIndicatorCursor);
     }
   }, { capture:true });
+
+  let _cursorHitTestPending = null, _cursorHitTestRaf = null;
+  function _applyIndicatorCursor(){
+    _cursorHitTestRaf = null;
+    const p = _cursorHitTestPending; _cursorHitTestPending = null;
+    if (!p || window._dragSession || STATE.activeTool !== 'cursor') return;
+    container.style.cursor = hitTestIndicatorRegions(p.mx, p.my) ? 'pointer' : '';
+  }
 
   window.addEventListener('mouseup', e => {
     if (window._dragSession) { e.preventDefault(); e.stopPropagation(); }
