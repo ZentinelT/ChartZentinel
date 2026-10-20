@@ -208,24 +208,27 @@
     flex-direction: column;
     gap: 4px;
     pointer-events: none;
+    color: var(--text-dim); /* default hasta que applyChartSettings() lo pise con cs.textColor */
   }
   .ind-chip {
     pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 5px;
-    background: rgba(20,20,28,0.88);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 3px 8px;
+    /* Sin recuadro/fondo detrás — como en TV: el texto y los íconos flotan
+       solos sobre el chart. La sombra de texto (en vez de un fondo sólido)
+       es lo que mantiene el nombre legible sin importar qué haya dibujado
+       atrás (velas claras, zonas de color de Watchtower, etc). */
+    padding: 3px 2px;
     font-family: var(--font-mono);
     font-size: 10px;
-    color: var(--text-dim);
+    color: inherit; /* lo pone #chart-indicator-chips, desde cs.textColor — ver applyChartSettings */
     cursor: pointer;
     white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.6);
   }
-  .ind-chip:hover { color: var(--gold); border-color: var(--gold); }
-  .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; }
+  .ind-chip:hover { color: var(--gold); }
+  .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
   .ind-chip-hidden { opacity: .45; }
   .ind-eye-btn {
     background: none; border: none; padding: 0; margin: 0; display: flex;
@@ -1043,6 +1046,9 @@
         <rect x="16" y="4" width="4" height="17" rx="1"/>
       </svg>
     </button>
+    <button class="tool-btn" id="btn-ind-legend" data-tip="Toggle Indicator Legend" onclick="toggleIndicatorLegend()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
   </div>
 
   <!-- ── SIDEBAR TOGGLE ─────────────────────────────────── -->
@@ -1248,6 +1254,8 @@
         Degradé
       </label>
     </div>
+    <label>Text color (price scale, time axis, watermark)</label>
+    <input type="color" id="cs-text-color" class="cs-color-inp">
     <label>Candle up / down</label>
     <div class="cs-row">
       <input type="color" id="cs-up" class="cs-color-inp">
@@ -1263,6 +1271,7 @@
       <input type="color" id="cs-wick-up" class="cs-color-inp">
       <input type="color" id="cs-wick-down" class="cs-color-inp">
     </div>
+    <label><input type="checkbox" id="cs-show-ohlcv" style="width:auto;margin-right:6px;">Show OHLCV values</label>
     <label><input type="checkbox" id="cs-priceline-on" style="width:auto;margin-right:6px;">Show real-time price line</label>
     <div class="cs-row">
       <input type="color" id="cs-priceline-color" class="cs-color-inp">
@@ -1415,6 +1424,28 @@ applyTheme(lsGet('td_theme') || 'dark');
 // panel y la barra global son documentos separados), el evento 'storage'
 // avisa acá para que este documento también se actualice al toque.
 window.addEventListener('storage', e => { if (e.key === 'td_theme') applyTheme(e.newValue || 'dark'); });
+// Leyenda de indicadores (los nombres arriba a la izquierda del chart, con
+// el ojito al lado): UNA sola preferencia para TODA la app, no por panel —
+// como pidió el usuario, "que oculte todos los indicadores de todos los
+// gráficos" de un solo toque. Mismo mecanismo que td_theme/td_tf_favorites:
+// sin sufijo de pane, con 'storage' para que un toggle en un panel (o en la
+// barra del shell) se refleje al toque en el resto.
+function getIndicatorLegendVisible(){
+  const v = lsGet('td_ind_legend');
+  return v === null ? true : v === '1';
+}
+function setIndicatorLegendVisible(visible){ lsSet('td_ind_legend', visible ? '1' : '0'); }
+function applyIndicatorLegendVisibility(){
+  const visible = getIndicatorLegendVisible();
+  const indChips = document.getElementById('chart-indicator-chips');
+  if (indChips) indChips.style.display = visible ? '' : 'none';
+  document.getElementById('btn-ind-legend')?.classList.toggle('active', visible);
+}
+function toggleIndicatorLegend(){
+  setIndicatorLegendVisible(!getIndicatorLegendVisible());
+  applyIndicatorLegendVisibility();
+}
+window.addEventListener('storage', e => { if (e.key === 'td_ind_legend') applyIndicatorLegendVisibility(); });
 // Favoritos de TF: UNA sola lista para toda la app (no por panel/pestaña
 // — antes vivía adentro de STATE.chartSettings, que sí es por panel, y
 // eso hacía que cada ventana de la grilla mostrara una barra de TF
@@ -1487,6 +1518,54 @@ function renderLayoutGrid(n){
     targetFrames().forEach(el => el.contentWindow.postMessage(msg, '*'));
   }
 
+  // ─── Replay sincronizado entre paneles (mismo símbolo, cualquier TF) ──
+  // El motor del replay (picking, play/step/pause, velocidad) vive ENTERO
+  // adentro del panel que lo arrancó — ver startReplay/_applyReplayFrame/
+  // _notifyReplayTick en el script de cada panel, que avisan acá en cada
+  // paso. Este bloque solo hace de relay: reenvía el "reloj" del panel
+  // maestro a TODOS los paneles del mismo símbolo (sea cual sea su TF),
+  // y reenvía los clicks de la mini-barra de acá hacia el panel maestro.
+  // No tira directo a `broadcast()` de arriba porque esto SIEMPRE va a
+  // TODOS los paneles del símbolo, sin importar el selector Activo/Todos
+  // (ese selector es para símbolo/TF/preset, otra cosa).
+  let replayMasterPane = null; // índice (1-based) del panel que arrancó el replay
+  let replaySymbol = null, replayTF = null, replayPlaying = false;
+
+  function renderReplayBar(){
+    const wrap = gbar.querySelector('#gc-replay-bar');
+    const btn = gbar.querySelector('#gc-replay-btn');
+    if (replayMasterPane) {
+      wrap.style.display = 'flex';
+      btn.classList.add('active');
+      gbar.querySelector('#gc-replay-play').innerHTML = replayPlaying
+        ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+    } else {
+      wrap.style.display = 'none';
+      btn.classList.remove('active');
+    }
+  }
+
+  window.addEventListener('message', (e) => {
+    const msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'zentinel:replayStarted') {
+      replayMasterPane = Number(msg.pane);
+      replaySymbol = msg.symbol; replayTF = msg.tf; replayPlaying = false;
+      renderReplayBar();
+    } else if (msg.type === 'zentinel:replayTick' && Number(msg.pane) === replayMasterPane) {
+      replayPlaying = !!msg.playing;
+      renderReplayBar();
+      const lbl = gbar.querySelector('#gc-replay-label');
+      if (lbl) lbl.textContent = fmtReplayTime(msg.time);
+      iframeEls.forEach(el => el.contentWindow.postMessage({ type:'zentinel:replaySync', symbol:replaySymbol, masterTF:replayTF, time:msg.time }, '*'));
+    } else if (msg.type === 'zentinel:replayExited' && Number(msg.pane) === replayMasterPane) {
+      iframeEls.forEach(el => el.contentWindow.postMessage({ type:'zentinel:replaySync', symbol:replaySymbol, exited:true }, '*'));
+      replayMasterPane = null; replaySymbol = null; replayTF = null; replayPlaying = false;
+      renderReplayBar();
+    }
+  });
+
   // ─── Barra 1 y 2: MISMA estructura/orden que #topbar y #tf-bar en modo
   // 1 gráfico (no solo mismas clases/colores — el motivo de que antes "no
   // se vieran iguales" pese a compartir CSS es que el contenido estaba
@@ -1536,6 +1615,28 @@ function renderLayoutGrid(n){
     </div>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
+      <div id="gc-replay-wrap" style="display:flex;align-items:center;gap:4px;margin-right:4px;">
+        <button class="topbar-btn" id="gc-replay-btn" title="Replay sincronizado: click en una vela del panel activo para arrancar — los demás paneles del mismo símbolo lo siguen, aunque estén en otro TF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Replay
+        </button>
+        <div id="gc-replay-bar" style="display:none;align-items:center;gap:4px;">
+          <button class="topbar-btn" id="gc-replay-play" title="Play / Pause">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+          </button>
+          <button class="topbar-btn" id="gc-replay-step" title="Avanzar una vela">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 5 20 12 13 19"/><line x1="4" y1="5" x2="4" y2="19"/></svg>
+          </button>
+          <select id="gc-replay-speed" class="topbar-input" style="width:auto;padding:4px 6px;font-size:11px;">
+            <option value="1200">0.5×</option>
+            <option value="600" selected>1×</option>
+            <option value="300">2×</option>
+            <option value="120">4×</option>
+          </select>
+          <span id="gc-replay-label" style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap;min-width:80px;text-align:center;"></span>
+          <button class="topbar-btn" id="gc-replay-exit" title="Salir del replay" style="color:var(--red);">✕</button>
+        </div>
+      </div>
       <div id="layout-picker" title="Cantidad de gráficos">
         ${[1,2,3,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':v===3?'3 ×':'4 ⊞'}</button>`).join('')}
       </div>
@@ -1618,6 +1719,9 @@ function renderLayoutGrid(n){
         <rect x="9" y="9" width="4" height="12" rx="1"/>
         <rect x="16" y="4" width="4" height="17" rx="1"/>
       </svg>
+    </button>
+    <button class="tool-btn" id="btn-ind-legend" data-tip="Toggle Indicator Legend" onclick="shellToggleIndicatorLegend()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>`;
 
   const shellSidebarToggle = document.createElement('button');
@@ -1719,7 +1823,7 @@ function renderLayoutGrid(n){
   // (no sobre "Activo/Todos" — un dibujo o una herramienta no tiene sentido
   // replicada en varios paneles a la vez, a diferencia del símbolo/TF).
   window.shellSetTool = function(btn, name){
-    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet') b.classList.remove('active'); });
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend') b.classList.remove('active'); });
     btn.classList.add('active');
     const f = iframeEls[activePane-1];
     if (f) { try { f.contentWindow.setTool(null, name); } catch(e){} }
@@ -1741,6 +1845,12 @@ function renderLayoutGrid(n){
       shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
     } catch(e){}
   };
+  // Global de toda la app (no por panel) — el shell corre en el mismo
+  // script que cada panel, así que llama DIRECTO a la misma función
+  // (nada de contentWindow/paneEval): cambia la única preferencia
+  // compartida y cada panel se entera solo por el 'storage' que ya
+  // escuchan (ver toggleIndicatorLegend, cerca de td_theme).
+  window.shellToggleIndicatorLegend = toggleIndicatorLegend;
   function syncMagnetBtn(f){
     const btn = shellToolbar.querySelector('#btn-magnet');
     const mode = paneEval(f, 'STATE.magnetMode') || 'off';
@@ -1755,7 +1865,7 @@ function renderLayoutGrid(n){
   // herramienta vieja marcada aunque el panel ya hubiese vuelto al cursor.
   window.zentinelToolSync = function(paneId, name){
     if (Number(paneId) !== activePane) return;
-    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet') b.classList.remove('active'); });
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend') b.classList.remove('active'); });
     const btn = shellToolbar.querySelector(`[data-tool="${name}"]`);
     if (btn) btn.classList.add('active');
   };
@@ -1772,11 +1882,13 @@ function renderLayoutGrid(n){
     if (!f) return;
     renderShellWatchlist();
     const tool = paneEval(f, 'STATE.activeTool');
-    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet') b.classList.remove('active'); });
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend') b.classList.remove('active'); });
     const btn = tool ? shellToolbar.querySelector(`[data-tool="${tool}"]`) : null;
     if (btn) btn.classList.add('active');
     syncMagnetBtn(f);
     shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
+    // btn-ind-legend NO se resincroniza acá: es una preferencia global
+    // (ver toggleIndicatorLegend), no cambia según qué panel esté activo.
     renderShellTfQuick();
     closeTfFavPopupShell();
   }
@@ -1785,6 +1897,7 @@ function renderLayoutGrid(n){
   row.appendChild(shellSidebarToggle);
   row.appendChild(shellSidebar);
   document.body.appendChild(row);
+  applyIndicatorLegendVisibility(); // repinta el botón recién creado con el estado global actual
 
   // El cambio de tema desde ACÁ (la barra global) se veía en dos tiempos
   // si cada panel se enteraba solo por el 'storage' event (asíncrono,
@@ -1949,6 +2062,35 @@ function renderLayoutGrid(n){
   // importar lo que diga el selector de alcance.
   gbar.querySelector('#gc-settings').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
+  });
+
+  // Replay — como Settings, siempre apunta a un panel puntual (el activo
+  // para arrancar, el maestro una vez arrancado) sin importar el selector
+  // Activo/Todos: no tiene sentido "a todos", solo puede haber un replay
+  // sincronizado corriendo a la vez.
+  gbar.querySelector('#gc-replay-btn').addEventListener('click', ()=>{
+    if (replayMasterPane) {
+      iframeEls[replayMasterPane-1].contentWindow.postMessage({ type:'zentinel:replayControl', action:'exit' }, '*');
+      return;
+    }
+    const f = iframeEls[activePane-1];
+    if (f) f.contentWindow.postMessage({ type:'zentinel:startReplayPick' }, '*');
+  });
+  gbar.querySelector('#gc-replay-play').addEventListener('click', ()=>{
+    if (!replayMasterPane) return;
+    iframeEls[replayMasterPane-1].contentWindow.postMessage({ type:'zentinel:replayControl', action: replayPlaying?'pause':'play' }, '*');
+  });
+  gbar.querySelector('#gc-replay-step').addEventListener('click', ()=>{
+    if (!replayMasterPane) return;
+    iframeEls[replayMasterPane-1].contentWindow.postMessage({ type:'zentinel:replayControl', action:'step' }, '*');
+  });
+  gbar.querySelector('#gc-replay-speed').addEventListener('change', (e)=>{
+    if (!replayMasterPane) return;
+    iframeEls[replayMasterPane-1].contentWindow.postMessage({ type:'zentinel:replayControl', action:'speed', speedMs:Number(e.target.value) }, '*');
+  });
+  gbar.querySelector('#gc-replay-exit').addEventListener('click', ()=>{
+    if (!replayMasterPane) return;
+    iframeEls[replayMasterPane-1].contentWindow.postMessage({ type:'zentinel:replayControl', action:'exit' }, '*');
   });
 
   // ─── Grilla de paneles ─────────────────────────────────────
@@ -2139,14 +2281,51 @@ const ALL_TIMEFRAMES = [
   { tf:'1week',  label:'W', group:'d' },
   { tf:'1month', label:'M', group:'d' },
 ];
+// Duración nominal en segundos de un TF — usada por el replay sincronizado
+// multi-panel (ver "REPLAY — SYNC MULTI-PANEL" más abajo) para ubicar en
+// qué vela propia de un panel "sigue" cae el instante simulado del panel
+// maestro. Nominal porque un día calendario real puede no ser exactamente
+// 86400s en el borde de un fin de semana/feriado — no importa para el uso
+// que le damos (encontrar en qué vela cae un timestamp), solo importa que
+// sea aproximadamente correcta para no quedar mirando la vela de al lado.
+function tfToSeconds(tf){
+  const m = /^(\d+)(min|h|day|week|month)$/.exec(tf);
+  if (!m) return 300;
+  const n = Number(m[1]);
+  switch(m[2]){
+    case 'min': return n*60;
+    case 'h': return n*3600;
+    case 'day': return n*86400;
+    case 'week': return n*7*86400;
+    case 'month': return n*30*86400;
+  }
+  return 300;
+}
+// Formatea un timestamp de vela para mostrar en la barra de replay — en
+// UTC, NO en la hora local del navegador. El resto del gráfico (ORG,
+// killzones, PDH/PDL/PWH/PWL...) ya trata la hora cruda del dato como si
+// fuera la hora de la sesión (NY) usando getUTCHours()/getUTCDate() — es
+// el bróker el que entrega los timestamps corridos para que eso dé bien.
+// Si acá se usa toLocaleDateString/toLocaleTimeString SIN forzar UTC, el
+// navegador los pasa a la zona horaria de la máquina del usuario y el
+// reloj del replay deja de coincidir con la hora que se ve en el resto
+// del gráfico (ORG, ejes, killzones).
+function fmtReplayTime(epochSeconds){
+  const d = new Date(epochSeconds * 1000);
+  const date = d.toLocaleDateString([], { timeZone:'UTC' });
+  const time = d.toLocaleTimeString([], { timeZone:'UTC', hour:'2-digit', minute:'2-digit' });
+  return `${date} ${time}`;
+}
 const CHART_SETTINGS_DEFAULTS = {
   bgColor:'#0a0a0c',
   bgGradient:false, bgColor2:'#1a1a28',
+  textColor:'#8888a8',
   upColor:'#26a69a', downColor:'#909090',
   borderUpColor:'#26a69a', borderDownColor:'#909090',
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
   crosshairColor:'#c9a84c', crosshairStyle:2, syncCrosshair:true,
+  showOhlcv:true,
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
 // CISD. Los nombres de los inputs son los mismos que en el Pine original
@@ -3108,7 +3287,7 @@ function initWatchtowerLayer() {
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
-    layout: { background: buildChartBackground(STATE.chartSettings), textColor:'#8888a8', fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
+    layout: { background: buildChartBackground(STATE.chartSettings), textColor:STATE.chartSettings.textColor, fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
     grid:   { vertLines:{visible:false}, horzLines:{visible:false} },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
@@ -3969,6 +4148,8 @@ function closeTfFavPopup(){
 // ══════════════════════════════════════════════════════════
 let volumeVisible = false;
 function toggleVolume() { volumeVisible=!volumeVisible; volumeSeries.applyOptions({visible:volumeVisible}); document.getElementById('btn-volume').classList.toggle('active',volumeVisible); }
+// (toggleIndicatorLegend vive arriba, cerca de td_theme — es una
+// preferencia GLOBAL de toda la app, no por panel; ver ahí el porqué.)
 
 // ══════════════════════════════════════════════════════════
 //  SIDEBAR (watchlist) toggle
@@ -4033,7 +4214,7 @@ function setTool(btn, name) {
   // desde la barra de herramientas compartida de afuera, no hay ningún
   // botón DE ESTE panel que marcar (está oculto) — solo hace falta que
   // STATE.activeTool cambie.
-  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet')b.classList.remove('active'); });
+  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend')b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   STATE.activeTool = name;
   if (name !== 'cursor') deselectDrawing();
@@ -4175,7 +4356,7 @@ function renderIndicatorChips() {
     const chip = document.createElement('div');
     chip.className = 'ind-chip' + (hidden ? ' ind-chip-hidden' : '');
     chip.title = name + ' settings';
-    chip.innerHTML = `<button class="ind-eye-btn" title="${hidden ? 'Mostrar' : 'Ocultar'} ${name}">${hidden ? IND_EYE_OFF_SVG : IND_EYE_SVG}</button>${IND_GEAR_SVG}<span>${name}</span>`;
+    chip.innerHTML = `<span>${name}</span><button class="ind-eye-btn" title="${hidden ? 'Mostrar' : 'Ocultar'} ${name}">${hidden ? IND_EYE_OFF_SVG : IND_EYE_SVG}</button>${IND_GEAR_SVG}`;
     chip.querySelector('.ind-eye-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleIndicatorVisibility(name); });
     chip.addEventListener('click', () => openIndicatorSettings(name));
     el.appendChild(chip);
@@ -4888,7 +5069,15 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
   // terminaba dibujando la caja anclada a esa vela de 9:00, antes de la
   // apertura real. Si tenemos la hora real del servidor (wtApproxNow),
   // usarla en vez de los bordes de vela saca la ambigüedad del todo.
-  const approxNow = wtApproxNow();
+  // wtApproxNow() es el reloj REAL (extrapolado desde que cargó la página),
+  // no el instante simulado del replay — usarlo acá sin más hacía que, en
+  // medio de un replay, el ORG de HOY se dibujara apenas la sesión real ya
+  // había abierto, sin importar en qué punto del pasado estuviera parado
+  // el replay (que puede ser bien antes de las 9:30). Durante cualquier
+  // replay (el panel maestro, o un panel que lo sigue — ver "REPLAY — SYNC
+  // MULTI-PANEL") la única noción de "ahora" válida es lastTime.
+  const inReplay = !!(window._replay || window._replayFollow);
+  const approxNow = inReplay ? null : wtApproxNow();
   const sessionStarted = approxNow!=null ? (approxNow >= todayStartTime) : (todayStartTime <= lastTime + barStep);
   if (!sessionStarted) return; // la sesión de hoy todavía no abrió
 
@@ -5751,10 +5940,30 @@ function startReplay(idx){
   clearInterval(_countdownTimer);
   const badge = document.getElementById('price-countdown-badge');
   if (badge) badge.style.display = 'none';
-  window._replay = { full, idx, playing:false, timer:null, speedMs:600 };
+  window._replay = { full, idx, playing:false, timer:null, speedMs:600, isMaster:true };
   document.getElementById('btn-replay').classList.add('active');
   document.getElementById('replay-bar').classList.remove('hidden');
+  // Si este panel vive adentro de la grilla multi-chart, avisale al shell
+  // que arrancó un replay acá — así puede ofrecer sincronizarlo con los
+  // demás paneles (mismo símbolo, otro TF). Ver "REPLAY — SYNC MULTI-PANEL".
+  // Tiene que mandarse ANTES de _applyReplayFrame(): esa llamada ya dispara
+  // el primer 'zentinel:replayTick' (ver más abajo), y el shell lo ignora
+  // si todavía no sabe quién es el maestro — el aviso de arranque tiene
+  // que llegar primero o ese primer tick se pierde y los demás paneles
+  // nunca reciben su primera sincronización (se quedan "sin avanzar" hasta
+  // el próximo step, que ahí sí ya pasa el filtro).
+  if (EMBED_MODE && PANE_ID) {
+    window.parent.postMessage({ type:'zentinel:replayStarted', pane:PANE_ID, symbol:STATE.symbol, tf:STATE.timeframe, speedMs:window._replay.speedMs }, '*');
+  }
   _applyReplayFrame();
+  // Al cortar, window._lastCandles pasa de 500 velas a solo idx+1 — el
+  // rango visible que tenía el chart (típicamente mirando el tramo más
+  // reciente) deja de tener velas reales atrás de qué apuntar en el array
+  // nuevo, mucho más corto. Sin este scroll explícito, la librería lo
+  // manda al principio del historial en vez de dejarlo en la última vela
+  // (justo donde se clickeó para cortar) — que es lo que se espera: seguir
+  // viendo "el presente" del replay, no saltar atrás en el tiempo.
+  try { chart.timeScale().scrollToPosition(0, false); } catch(e){}
 }
 
 function _applyReplayFrame(){
@@ -5765,10 +5974,15 @@ function _applyReplayFrame(){
   const prev = window._lastCandles[window._lastCandles.length - 2];
   updateTopbarPrice(last, prev);
   updateTopbarOHLCV(last);
-  const d = new Date(last.time * 1000);
   document.getElementById('replay-label').textContent =
-    `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}  ·  ${r.idx+1}/${r.full.length}`;
+    `${fmtReplayTime(last.time)}  ·  ${r.idx+1}/${r.full.length}`;
   if (r.idx >= r.full.length - 1) replayPause();
+  // El "ahora" simulado para los paneles que siguen a este: todo lo de
+  // esta vela ya se conoce (cerró en el replay), así que el instante
+  // sincronizado es su cierre, no su apertura.
+  if (EMBED_MODE && PANE_ID && r.isMaster) {
+    window.parent.postMessage({ type:'zentinel:replayTick', pane:PANE_ID, symbol:STATE.symbol, time: last.time + tfToSeconds(STATE.timeframe), playing: r.playing }, '*');
+  }
 }
 
 function replayStep(){
@@ -5778,11 +5992,20 @@ function replayStep(){
   _applyReplayFrame();
 }
 
+function _notifyReplayTick(){
+  const r = window._replay;
+  if (!r || !r.isMaster || !EMBED_MODE || !PANE_ID) return;
+  const last = window._lastCandles[window._lastCandles.length - 1];
+  if (!last) return;
+  window.parent.postMessage({ type:'zentinel:replayTick', pane:PANE_ID, symbol:STATE.symbol, time: last.time + tfToSeconds(STATE.timeframe), playing: r.playing }, '*');
+}
+
 function replayPlay(){
   const r = window._replay; if (!r || r.playing || r.idx >= r.full.length - 1) return;
   r.playing = true;
   document.getElementById('replay-play-btn').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/></svg>';
   r.timer = setInterval(replayStep, r.speedMs);
+  _notifyReplayTick();
 }
 
 function replayPause(){
@@ -5791,6 +6014,7 @@ function replayPause(){
   if (r.timer) { clearInterval(r.timer); r.timer = null; }
   const btn = document.getElementById('replay-play-btn');
   if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+  _notifyReplayTick();
 }
 
 function toggleReplayPlay(){
@@ -5814,6 +6038,140 @@ function exitReplay(){
 }
 
 // ══════════════════════════════════════════════════════════
+//  REPLAY — SYNC MULTI-PANEL (lado "follower")
+//  Cuando este panel NO es el que arrancó el replay (ver startReplay /
+//  _applyReplayFrame / _notifyReplayTick más arriba, que le avisan al
+//  shell en cada paso) pero vive en la misma grilla con el mismo símbolo,
+//  el shell le reenvía acá el "reloj" del panel maestro como mensaje
+//  'zentinel:replaySync' (ver el handler de mensajes más abajo).
+//
+//  Regla: toda vela PROPIA de este panel que ya cerró para el instante
+//  sincronizado es real (ya la tenemos, no hay nada que inventar). La
+//  vela en la que cae justo ese instante todavía no cerró — mostrarla
+//  completa sería mostrar el futuro — así que se arma a mano con las
+//  velas del TF del maestro (más fino) que caen dentro de su rango,
+//  igual que TV arma la vela en formación de un TF alto a partir de uno
+//  más bajo.
+// ══════════════════════════════════════════════════════════
+window._replayFollow = null; // { ownFull, masterTF, masterCandles, fetchingMasterTF, pendingTime }
+
+function _startFollowReplay(masterTF){
+  if (window._replayFollow) return; // ya veníamos siguiendo este mismo replay
+  // Sin esto, el reloj de "vela en vivo" de ESTE panel (el que arrancó
+  // startCountdown() en su loadChart() normal) sigue corriendo de fondo
+  // cada 1s pidiendo el precio ACTUAL y pisando window._lastCandles con
+  // eso (ver refreshFormingCandle) — compite con la vela sintetizada del
+  // replay y puede pisarla justo cuando coincide el timestamp. Al salir
+  // del follow, loadChart() (que es como siempre se vuelve a "vivo") ya
+  // arranca un countdown nuevo solo, así que no hace falta rearmarlo acá.
+  clearInterval(_countdownTimer);
+  window._replayFollow = {
+    ownFull: (window._lastCandles || []).slice(),
+    masterTF, masterCandles: null, fetchingMasterTF: false, pendingTime: null,
+  };
+}
+
+async function _ensureFollowMasterCandles(){
+  const f = window._replayFollow;
+  if (!f || f.masterCandles || f.fetchingMasterTF) return;
+  f.fetchingMasterTF = true;
+  try {
+    // 5000 velas del TF del maestro (a M5 son ~17 días) — de sobra para
+    // la mayoría de los replays. Si el replay arranca más atrás que eso,
+    // esa porción vieja simplemente se queda sin vela parcial (se ve como
+    // si todavía no hubiese cerrado) hasta que el reloj la alcance.
+    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${f.masterTF}&bars=5000`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.error && Array.isArray(json.bars)) f.masterCandles = json.bars;
+  } catch(e){
+    // sin red/MT5 un instante: el próximo tick de sync vuelve a intentar.
+  } finally {
+    f.fetchingMasterTF = false;
+    if (f.pendingTime != null) { const t = f.pendingTime; f.pendingTime = null; _applyFollowSync(f.masterTF, t); }
+  }
+}
+
+// Repinta como corresponde después de aplicar una sync: no alcanza con
+// renderSeries (eso ya lo llama todo el pipeline de indicadores) — igual
+// que hace _applyReplayFrame() del lado maestro, hay que refrescar el
+// precio/OHLC de arriba (si no, se ve "vivo" el precio de hace rato aunque
+// la vela de abajo sí esté cambiando) y, la primera vez que este panel
+// entra en modo follow, llevar la vista a donde está pasando el replay —
+// si no, un panel que el usuario nunca scrolleó hasta ahí puede estar
+// mostrando una parte vieja del gráfico mientras la vela que cambia queda
+// "fuera de cámara" y parece que no avanza nada.
+function _finishFollowApply(f){
+  renderSeries(STATE.timeframe);
+  const candles = window._lastCandles;
+  const last = candles[candles.length - 1];
+  if (last) {
+    updateTopbarPrice(last, candles[candles.length - 2]);
+    updateTopbarOHLCV(last);
+  }
+  if (!f.scrolledOnce) {
+    f.scrolledOnce = true;
+    try { chart.timeScale().scrollToPosition(0, false); } catch(e){}
+  }
+}
+
+function _applyFollowSync(masterTF, time){
+  if (window._replay && window._replay.isMaster) return; // eco del propio broadcast — ya estamos donde corresponde
+  if (!window._replayFollow) _startFollowReplay(masterTF);
+  const f = window._replayFollow;
+  const ownFull = f.ownFull;
+  if (!ownFull.length) return;
+
+  let idx = -1;
+  for (let i=0; i<ownFull.length; i++){ if (ownFull[i].time <= time) idx = i; else break; }
+  if (idx < 0) { window._lastCandles = []; _finishFollowApply(f); return; }
+
+  const ownDur = tfToSeconds(STATE.timeframe);
+  const curBar = ownFull[idx];
+  if (curBar.time + ownDur <= time) {
+    // La vela en la que cae "time" ya cerró del todo: real, sin inventar nada.
+    window._lastCandles = ownFull.slice(0, idx + 1);
+    _finishFollowApply(f);
+    return;
+  }
+
+  if (masterTF === STATE.timeframe) {
+    // Mismo TF que el maestro: no hay nada que sintetizar, esa vela
+    // todavía no existe en nuestros datos reales — se omite sin más.
+    window._lastCandles = ownFull.slice(0, idx);
+    _finishFollowApply(f);
+    return;
+  }
+
+  if (!f.masterCandles) {
+    f.pendingTime = time;
+    _ensureFollowMasterCandles();
+    window._lastCandles = ownFull.slice(0, idx); // mientras llega: solo lo que sabemos seguro
+    _finishFollowApply(f);
+    return;
+  }
+
+  const within = f.masterCandles.filter(c => c.time >= curBar.time && c.time < time);
+  let synth = null;
+  if (within.length) {
+    synth = {
+      time: curBar.time,
+      open: within[0].open,
+      high: Math.max(...within.map(c=>c.high)),
+      low: Math.min(...within.map(c=>c.low)),
+      close: within[within.length-1].close,
+      volume: within.reduce((s,c)=>s+(c.volume||0), 0),
+    };
+  }
+  window._lastCandles = synth ? ownFull.slice(0, idx).concat([synth]) : ownFull.slice(0, idx);
+  _finishFollowApply(f);
+}
+
+function _exitFollowReplay(){
+  window._replayFollow = null;
+}
+
+// ══════════════════════════════════════════════════════════
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id).classList.add('open');}
@@ -5825,12 +6183,14 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-bg2').value=cs.bgColor2;
   document.getElementById('cs-bg-gradient').checked=!!cs.bgGradient;
   document.getElementById('cs-bg2').style.display=cs.bgGradient?'':'none';
+  document.getElementById('cs-text-color').value=cs.textColor;
   document.getElementById('cs-up').value=cs.upColor;
   document.getElementById('cs-down').value=cs.downColor;
   document.getElementById('cs-border-up').value=cs.borderUpColor;
   document.getElementById('cs-border-down').value=cs.borderDownColor;
   document.getElementById('cs-wick-up').value=cs.wickUpColor;
   document.getElementById('cs-wick-down').value=cs.wickDownColor;
+  document.getElementById('cs-show-ohlcv').checked=cs.showOhlcv;
   document.getElementById('cs-priceline-on').checked=cs.priceLineVisible;
   document.getElementById('cs-priceline-color').value=cs.priceLineColor||cs.upColor;
   document.getElementById('cs-priceline-style').value=String(cs.priceLineStyle);
@@ -5845,12 +6205,14 @@ function commitChartSettingsForm(){
     bgColor: document.getElementById('cs-bg').value,
     bgColor2: document.getElementById('cs-bg2').value,
     bgGradient: document.getElementById('cs-bg-gradient').checked,
+    textColor: document.getElementById('cs-text-color').value,
     upColor: document.getElementById('cs-up').value,
     downColor: document.getElementById('cs-down').value,
     borderUpColor: document.getElementById('cs-border-up').value,
     borderDownColor: document.getElementById('cs-border-down').value,
     wickUpColor: document.getElementById('cs-wick-up').value,
     wickDownColor: document.getElementById('cs-wick-down').value,
+    showOhlcv: document.getElementById('cs-show-ohlcv').checked,
     priceLineVisible: document.getElementById('cs-priceline-on').checked,
     priceLineColor: document.getElementById('cs-priceline-color').value,
     priceLineStyle: Number(document.getElementById('cs-priceline-style').value),
@@ -5887,8 +6249,13 @@ function buildChartBackground(cs){
 function applyChartSettings(){
   if(!chart || !candleSeries) return;
   const cs = STATE.chartSettings;
+  const ohlcvBar = document.getElementById('ohlcv-bar');
+  if (ohlcvBar) ohlcvBar.style.display = cs.showOhlcv===false ? 'none' : '';
+  const indChips = document.getElementById('chart-indicator-chips');
+  if (indChips) indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
+  applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
   chart.applyOptions({
-    layout: { background: buildChartBackground(cs) },
+    layout: { background: buildChartBackground(cs), textColor: cs.textColor },
     crosshair: {
       vertLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
       horzLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
@@ -6230,13 +6597,18 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
   // llamando a loadChart (buscador, watchlist, TF bar, Refresh, exitReplay)
   // deja todo limpio sin tener que acordarse de hacerlo en cada uno.
   if (window._replay) {
+    const wasMaster = window._replay.isMaster;
     replayPause();
     window._replay = null;
     document.getElementById('replay-bar')?.classList.add('hidden');
     document.getElementById('btn-replay')?.classList.remove('active');
     const badge = document.getElementById('price-countdown-badge');
     if (badge) badge.style.display = '';
+    if (wasMaster && EMBED_MODE && PANE_ID) {
+      window.parent.postMessage({ type:'zentinel:replayExited', pane:PANE_ID, symbol }, '*');
+    }
   }
+  _exitFollowReplay();
   setLoaderMsg(`Loading ${symbol} ${timeframe}…`);showOverlay(true);setStatus('loading','● loading…');
 
   // Siempre 500 acá — es lo que ya suele tener MT5 cacheado, responde rápido
@@ -6519,6 +6891,30 @@ window.addEventListener('message', (e) => {
     refreshChart();
   } else if (msg.type === 'zentinel:openSettings') {
     openChartSettingsModal();
+  } else if (msg.type === 'zentinel:startReplayPick') {
+    // El botón "Replay" de la grilla vive en el shell (acá adentro no se
+    // ve: #topbar está oculto en modo embed) — esto es lo que hace que
+    // clickearlo arranque la selección de vela en el panel ACTIVO.
+    if (!window._replay && !_replayClickHandler) startReplayPicking();
+  } else if (msg.type === 'zentinel:replayControl' && window._replay && window._replay.isMaster) {
+    // Controles (play/pause/step/velocidad/salir) del replay sincronizado,
+    // reenviados por el shell desde su mini-barra hacia el panel que es
+    // el maestro de este replay — los demás paneles ignoran esto, ellos
+    // solo reciben 'zentinel:replaySync' más abajo.
+    if (msg.action === 'step') replayStep();
+    else if (msg.action === 'play') replayPlay();
+    else if (msg.action === 'pause') replayPause();
+    else if (msg.action === 'speed') setReplaySpeed(msg.speedMs);
+    else if (msg.action === 'exit') exitReplay();
+  } else if (msg.type === 'zentinel:replaySync' && msg.symbol === STATE.symbol) {
+    // El reloj del panel maestro, reenviado por el shell a TODOS los
+    // paneles del mismo símbolo. Si este panel ES el maestro, es el eco
+    // de su propio broadcast — _applyFollowSync lo filtra solo.
+    if (msg.exited) {
+      if (window._replayFollow) loadChart(STATE.symbol, STATE.timeframe);
+    } else {
+      _applyFollowSync(msg.masterTF, msg.time);
+    }
   }
 });
 
