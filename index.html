@@ -1032,6 +1032,13 @@
       </svg>
     </button>
     <div class="tool-sep"></div>
+    <button class="tool-btn" data-tip="Undo (Ctrl+Z)" onclick="undoDrawing()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
+    </button>
+    <button class="tool-btn" data-tip="Redo (Ctrl+Shift+Z)" onclick="redoDrawing()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
+    </button>
+    <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Clear All" onclick="clearDrawings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"/>
@@ -1706,6 +1713,13 @@ function renderLayoutGrid(n){
       </svg>
     </button>
     <div class="tool-sep"></div>
+    <button class="tool-btn" data-tip="Undo (Ctrl+Z)" onclick="shellUndoDrawing()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
+    </button>
+    <button class="tool-btn" data-tip="Redo (Ctrl+Shift+Z)" onclick="shellRedoDrawing()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
+    </button>
+    <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Clear All" onclick="shellClearDrawings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"/>
@@ -1836,6 +1850,17 @@ function renderLayoutGrid(n){
   window.shellClearDrawings = function(){
     const f = iframeEls[activePane-1];
     if (f) { try { f.contentWindow.clearDrawings(); } catch(e){} }
+  };
+  // Undo/redo es por panel (cada uno tiene su propio historial, ver
+  // captureUndoSnapshot) — esto solo reenvía el Ctrl+Z/botón al panel
+  // activo, igual que Clear All de arriba.
+  window.shellUndoDrawing = function(){
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.undoDrawing(); } catch(e){} }
+  };
+  window.shellRedoDrawing = function(){
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.redoDrawing(); } catch(e){} }
   };
   window.shellToggleVolume = function(){
     const f = iframeEls[activePane-1];
@@ -2468,6 +2493,12 @@ function markDrawingsDirty(){
   if (_suppressDrawingBroadcast || _drawingsSyncTimer) return;
   _drawingsSyncTimer = setTimeout(() => {
     _drawingsSyncTimer = null;
+    // Guardado — por pane (lsKey), así un refresh REAL del navegador (F5,
+    // no el botón "Refresh chart" de acá, que no recarga la página) no
+    // borra lo que había dibujado. Esto corre siempre, embed o no — antes
+    // este callback solo existía para el sync entre paneles de la grilla
+    // y no hacía nada en el modo de un solo gráfico.
+    lsSet(lsKey('td_drawings'), JSON.stringify(serializeDrawings()));
     if (!EMBED_MODE || window.top === window || !window.top.zentinelDrawingsSync) return;
     try { window.top.zentinelDrawingsSync(PANE_ID, STATE.symbol, serializeDrawings()); } catch(e){}
   }, 120);
@@ -2514,6 +2545,45 @@ window.applyExternalDrawings = function(list){
     setTimeout(() => { _suppressDrawingBroadcast = false; }, 150);
   }
 };
+
+// ══════════════════════════════════════════════════════════
+//  UNDO / REDO — solo dibujos (crear, borrar, clonar, arrastrar, cambiar
+//  color/width/estilo/niveles de fib, etc). Guarda snapshots completos
+//  con serializeDrawings() (la misma función que ya se usa para
+//  sincronizar entre paneles) en vez de diffs por acción — mucho más
+//  simple, y nadie tiene tantos dibujos como para que clonar el array
+//  entero en cada paso importe. Para restaurar uno, se reusa
+//  applyExternalDrawings() (ya sabe reconstruir TODO desde una lista
+//  plana) en vez de duplicar esa lógica acá.
+//  Vive por panel, como los dibujos mismos — no hay "un" undo global de
+//  la grilla, cada panel tiene el suyo (igual que Ctrl+Z en cada pestaña
+//  de TV si tuvieras varias).
+// ══════════════════════════════════════════════════════════
+let _undoStack = [];
+let _redoStack = [];
+const UNDO_LIMIT = 60;
+// Llamarla SIEMPRE antes de mutar `drawings` o un dibujo existente — NUNCA
+// desde adentro de applyExternalDrawings/removeDrawingById (eso es la
+// reconstrucción de bajo nivel que usan tanto el sync entre paneles como
+// este mismo undo/redo; snapshotear ahí adentro se pisaría con lo que
+// está restaurando).
+function captureUndoSnapshot(){
+  _undoStack.push(serializeDrawings());
+  if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
+  _redoStack = [];
+}
+function undoDrawing(){
+  if (!_undoStack.length) return;
+  const prev = _undoStack.pop();
+  _redoStack.push(serializeDrawings());
+  applyExternalDrawings(prev);
+}
+function redoDrawing(){
+  if (!_redoStack.length) return;
+  const next = _redoStack.pop();
+  _undoStack.push(serializeDrawings());
+  applyExternalDrawings(next);
+}
 // Posiciona el <div> de un dibujo 'text' sincronizado (igual que el drag
 // de texto hace al revés: acá partimos de p1.price/time, no al revés).
 function syncTextLabelPos(d){
@@ -2596,6 +2666,7 @@ function onDtbColorChange(val) {
     // El fibo no tiene "un" color — son los colores por nivel. Este control
     // pinta todos los niveles del mismo color de una (hay que destildar/
     // editar los que se quieran distintos desde "Levels").
+    captureUndoSnapshot();
     d.levels.forEach(lv => { lv.color = val; });
     redrawDrawing(d);
     if (document.getElementById('modal-fib-levels').classList.contains('open')) renderFibLevelsRows();
@@ -2613,12 +2684,14 @@ function onDtbStyleChange(val) {
 }
 function onDtbExtend(dir) {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   if (dir === 'left')  { d.extLeft  = !d.extLeft;  document.getElementById('dtb-ext-left').classList.toggle('active',  d.extLeft); }
   if (dir === 'right') { d.extRight = !d.extRight; document.getElementById('dtb-ext-right').classList.toggle('active', d.extRight); }
   redrawDrawing(d);
 }
 function onDtbLock() {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   d.locked = !d.locked;
   document.getElementById('dtb-lock').classList.toggle('active', d.locked);
   markDrawingsDirty();
@@ -2627,6 +2700,7 @@ function onDtbLock() {
 // dibujos — tiene 3 (entrada/TP/SL). `field` es cuál de los 3 tocar.
 function onDtbPosColorChange(field, val, inputEl) {
   const d = getSelected(); if (!d || (d.type!=='long' && d.type!=='short')) return;
+  captureUndoSnapshot();
   inputEl.parentElement.style.background = val;
   d[field] = val;
   // Solo recolorea lo que ya existe (series + SVG) — NO pasa por
@@ -2640,6 +2714,7 @@ function onDtbPosColorChange(field, val, inputEl) {
 // Solo para 'rect': apaga/prende el borde o el relleno sin tocar el otro.
 function onDtbToggleRectPart(field) {
   const d = getSelected(); if (!d || d.type!=='rect') return;
+  captureUndoSnapshot();
   d[field] = (d[field] === false) ? true : false; // default true -> primer click apaga
   const btnId = field === 'showBorder' ? 'dtb-rect-border' : 'dtb-rect-fill';
   document.getElementById(btnId).classList.toggle('active', d[field] !== false);
@@ -2673,24 +2748,28 @@ function openFibLevelsModal() {
 }
 function updateFibLevel(i, field, val) {
   const d = getSelected(); if (!d || !d.levels[i]) return;
+  captureUndoSnapshot();
   d.levels[i][field] = val;
   renderFibLevelsRows();
   redrawDrawing(d);
 }
 function addFibLevel() {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   d.levels.push({ value:0.5, color:'#c9a84c', on:true });
   renderFibLevelsRows();
   redrawDrawing(d);
 }
 function removeFibLevel(i) {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   d.levels.splice(i,1);
   renderFibLevelsRows();
   redrawDrawing(d);
 }
 function resetFibLevels() {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   d.levels = cloneFibLevels();
   renderFibLevelsRows();
   redrawDrawing(d);
@@ -2698,6 +2777,7 @@ function resetFibLevels() {
 
 function onDtbClone() {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   const clone = JSON.parse(JSON.stringify({ ...d, id: genId(), series:[], svgEls:[], label:null }));
   clone.p1.price += (d.p2?.price ?? d.p1.price) * 0.001;
   if (clone.p2) clone.p2.price += clone.p1.price * 0.001;
@@ -2707,6 +2787,7 @@ function onDtbClone() {
 }
 function onDtbDelete() {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   removeDrawingById(d.id);
   deselectDrawing();
 }
@@ -2715,6 +2796,7 @@ function getSelected() { return drawings.find(x => x.id === selectedDrawingId) |
 
 function applyStyleToSelected(patch) {
   const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
   Object.assign(d, patch);
   redrawDrawing(d);
 }
@@ -2892,6 +2974,7 @@ function syncPositionTool(d) {
 }
 
 function clearDrawings() {
+  if (drawings.length) captureUndoSnapshot();
   [...drawings].forEach(d => removeDrawingById(d.id));
   deselectDrawing();
 }
@@ -3026,7 +3109,7 @@ function buildDrawingOnChart(d) {
     const lossColor = d.lossColor || '#ef5350';
     const mkLvl = (price, color, dashed) => {
       const s = chart.addLineSeries({
-        color, lineWidth:1, lineStyle: dashed?2:0,
+        color, lineWidth:lw, lineStyle: dashed?2:0,
         priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
         autoscaleInfoProvider: () => null,
       });
@@ -3185,7 +3268,15 @@ function applyHandleDrag(d, role, price, time) {
     } else if (role === 'stop') {
       d.p2.price = price;
     } else if (role === 'time2') {
-      d.p2.time = clampPositionToolT2(time);
+      // Nunca puede cruzar (ni tocar) p1.time: las 3 líneas de este dibujo
+      // se pintan con setData([{time:p1.time,...},{time:p2.time,...}]) —
+      // lightweight-charts exige esos puntos en orden ascendente estricto,
+      // así que arrastrar esta manija más allá de p1 (o encima) manda un
+      // punto "para atrás" y rompe el chart entero (las velas desaparecen,
+      // no solo este dibujo). Un mínimo de 1 vela de ancho lo evita del todo.
+      const candles = window._lastCandles || [];
+      const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
+      d.p2.time = clampPositionToolT2(Math.max(time, d.p1.time + barStep));
     }
   }
 }
@@ -3693,6 +3784,7 @@ function initDrawingLayer() {
     const handleHit = hitTestHandle(mx, my);
     if (handleHit) {
       e.preventDefault(); e.stopPropagation();
+      _pendingDragUndoSnapshot = serializeDrawings(); // ver _commitDragUndoSnapshot, al soltar
       window._dragSession = { kind:'handle', drawing:handleHit.drawing, role:handleHit.role };
       return;
     }
@@ -3705,6 +3797,7 @@ function initDrawingLayer() {
     if (hit) {
       e.preventDefault(); e.stopPropagation();
       selectDrawing(hit.id);
+      _pendingDragUndoSnapshot = serializeDrawings(); // ídem
       const { price, time } = getCoords(e);
       window._dragSession = {
         kind:'body', drawing:hit, startPrice:price, startTime:time,
@@ -3811,8 +3904,26 @@ function initDrawingLayer() {
       d.p1.time  = chart.timeScale().coordinateToTime(x) ?? d.p1.time;
     }
     if (window._dragSession) { highlightSelectedSvg(selectedDrawingId); markDrawingsDirty(); }
+    _commitDragUndoSnapshot();
     window._dragSession = null;
   }, { capture:true });
+
+  // El snapshot "de antes" se toma al apretar (mousedown sobre una manija o
+  // el cuerpo), pero recién se mete al historial de undo ACÁ, al soltar —
+  // y solo si algo realmente cambió. Si no, un simple click para
+  // seleccionar un dibujo (sin arrastrar nada) metería un paso de undo que
+  // no deshace nada, y habría que apretar Ctrl+Z de más para llegar al
+  // cambio real anterior.
+  let _pendingDragUndoSnapshot = null;
+  function _commitDragUndoSnapshot(){
+    if (!_pendingDragUndoSnapshot) return;
+    const before = _pendingDragUndoSnapshot;
+    _pendingDragUndoSnapshot = null;
+    if (JSON.stringify(before) === JSON.stringify(serializeDrawings())) return; // no cambió nada
+    _undoStack.push(before);
+    if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
+    _redoStack = [];
+  }
 
   svg.addEventListener('mousedown', e => {
     e.preventDefault();
@@ -3831,6 +3942,7 @@ function initDrawingLayer() {
       container.appendChild(label);
 
       const d = { id:genId(), type:'text', series:[], svgEls:[], label, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price,time}, p2:{price,time} };
+      captureUndoSnapshot();
       drawings.push(d);
       selectDrawing(d.id);
       backToCursor();
@@ -3959,6 +4071,15 @@ function initDrawingLayer() {
       const risk = Math.abs(entry - price2);
       if (risk < 0.0001) { drawStart=null; return; } // clic sin arrastre real
       const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
+      // El borde horizontal de la caja es simplemente el otro extremo del
+      // arrastre — no importa para qué lado se arrastró (como en trendline/
+      // rect, arriba): min/max de los dos puntos, nunca "si fue hacia
+      // adelante uso eso, si no invento 10 velas" (eso era lo que hacía que
+      // arrastrar hacia la izquierda, o apenas hacia la derecha, terminara
+      // en una caja fija de 10 velas — mucho más larga que lo arrastrado).
+      let t1 = Math.min(drawStart.time, time2);
+      let t2 = Math.max(drawStart.time, time2);
+      if (t2 - t1 < barStep) t2 = t1 + barStep; // clic casi sin arrastre horizontal: mínimo 1 vela
       // El borde derecho de la caja no puede pasarse de las velas "fantasma"
       // (whitespace) que tiene cargadas el eje de tiempo (ver futureWhitespace,
       // 15 velas) — si una de las 3 líneas de precio de este dibujo apunta a
@@ -3967,16 +4088,16 @@ function initDrawingLayer() {
       // las cajas de FVG) el time scale termina "corriéndose" solo apenas se
       // arrastra el dibujo y ese punto se actualiza. Por eso se acota a un
       // máximo seguro, bien adentro de esas 15 velas.
-      let t2 = time2 > drawStart.time ? time2 : drawStart.time + barStep*10;
       t2 = clampPositionToolT2(t2);
-      if (t2 <= drawStart.time) t2 = drawStart.time + barStep;
+      if (t2 <= t1) t2 = t1 + barStep;
       const DEFAULT_RR = 2;
       const stop   = tool === 'long' ? entry - risk        : entry + risk;
       const target = tool === 'long' ? entry + risk*DEFAULT_RR : entry - risk*DEFAULT_RR;
-      d = { id:genId(), type:tool, series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:0, extLeft:false, extRight:false, p1:{price:entry,time:drawStart.time}, p2:{price:stop,time:t2}, targetPrice:target };
+      d = { id:genId(), type:tool, series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:0, extLeft:false, extRight:false, p1:{price:entry,time:t1}, p2:{price:stop,time:t2}, targetPrice:target };
     }
 
     if (d) {
+      captureUndoSnapshot();
       drawings.push(d);
       buildDrawingOnChart(d);
       selectDrawing(d.id);
@@ -3995,6 +4116,21 @@ function initDrawingLayer() {
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
       if (document.activeElement.tagName === 'INPUT') return;
       onDtbDelete();
+    }
+    // Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace — como en
+    // cualquier editor. Se ignora con foco en un input, textarea o el
+    // <div contenteditable> de la herramienta de texto: ahí Ctrl+Z tiene
+    // que ser el undo nativo del navegador para ESE texto, no el nuestro.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      const tag = document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+      e.preventDefault();
+      if (e.shiftKey) redoDrawing(); else undoDrawing();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      const tag = document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+      e.preventDefault();
+      redoDrawing();
     }
   });
 }
@@ -6946,7 +7082,19 @@ if (EMBED_MODE && PANE_ID) {
   const badge=document.getElementById('api-badge');
   fetch(`${BRIDGE_URL}/health`).then(r=>r.ok?r.json():Promise.reject()).then(()=>{
     badge.textContent='MT5 BRIDGE ✓';badge.classList.add('connected');
-    loadChart(STATE.symbol,STATE.timeframe);
+    // Los dibujos recién se pueden reconstruir con el chart ya armado y
+    // las velas cargadas (buildDrawingOnChart las necesita) — por eso se
+    // espera a que termine este primer loadChart() antes de restaurarlos,
+    // en vez de precargar `drawings` de entrada. applyExternalDrawings ya
+    // sabe reconstruir TODO desde una lista plana (lo reusa el sync entre
+    // paneles y el undo/redo) — texto incluido, que buildDrawingOnChart
+    // solo no sabe armar.
+    loadChart(STATE.symbol,STATE.timeframe).then(() => {
+      try {
+        const saved = JSON.parse(lsGet(lsKey('td_drawings')) || '[]');
+        if (Array.isArray(saved) && saved.length) applyExternalDrawings(saved);
+      } catch(e){}
+    });
   }).catch(()=>{
     badge.textContent='BRIDGE OFF';badge.classList.remove('connected');
     showLoader('No conecta con el puente MT5 — corré bridge_server.py y abrí MT5 con el Service ZentinelBridge');
