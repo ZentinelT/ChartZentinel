@@ -1862,6 +1862,35 @@ function renderLayoutGrid(n){
     const f = iframeEls[activePane-1];
     if (f) { try { f.contentWindow.redoDrawing(); } catch(e){} }
   };
+  // Delete/Escape/Ctrl+Z/Ctrl+Y de dibujos viven en cada panel (ahí está
+  // selectedDrawingId y el historial de undo) — pero clickear CUALQUIER
+  // botón de esta barra compartida (TF, Indicators, el ícono Cursor...)
+  // deja el foco de TECLADO en este documento (el shell), no en el panel,
+  // aunque después se haya clickeado adentro del gráfico para seleccionar
+  // un dibujo — un click de mouse ahí no necesariamente mueve el foco de
+  // teclado de un iframe a otro. Sin este reenvío, esas teclas no hacían
+  // nada: el shell no tiene su propio dibujo que borrar/deshacer. Un
+  // keydown que SÍ ocurre adentro de un iframe nunca llega hasta acá (los
+  // iframes no burbujean eventos al padre), así que esto no puede
+  // duplicar lo que ya hace el listener propio de cada panel.
+  window.addEventListener('keydown', (e) => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
+    const f = iframeEls[activePane-1];
+    if (!f) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      try { f.contentWindow.onDtbDelete(); } catch(err){}
+    } else if (e.key === 'Escape') {
+      try { f.contentWindow.deselectDrawing(); } catch(err){}
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      try { e.shiftKey ? f.contentWindow.redoDrawing() : f.contentWindow.undoDrawing(); } catch(err){}
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      try { f.contentWindow.redoDrawing(); } catch(err){}
+    }
+  });
   window.shellToggleVolume = function(){
     const f = iframeEls[activePane-1];
     if (!f) return;
@@ -2489,20 +2518,41 @@ function genId() { return 'drw_' + Math.random().toString(36).slice(2,9); }
 // simple y más difícil de dejar un caso sin cubrir que cablear cada botón.
 let _suppressDrawingBroadcast = false;
 let _drawingsSyncTimer = null;
-function markDrawingsDirty(){
-  if (_suppressDrawingBroadcast || _drawingsSyncTimer) return;
-  _drawingsSyncTimer = setTimeout(() => {
-    _drawingsSyncTimer = null;
-    // Guardado — por pane (lsKey), así un refresh REAL del navegador (F5,
-    // no el botón "Refresh chart" de acá, que no recarga la página) no
-    // borra lo que había dibujado. Esto corre siempre, embed o no — antes
-    // este callback solo existía para el sync entre paneles de la grilla
-    // y no hacía nada en el modo de un solo gráfico.
-    lsSet(lsKey('td_drawings'), JSON.stringify(serializeDrawings()));
-    if (!EMBED_MODE || window.top === window || !window.top.zentinelDrawingsSync) return;
-    try { window.top.zentinelDrawingsSync(PANE_ID, STATE.symbol, serializeDrawings()); } catch(e){}
-  }, 120);
+function _flushDrawingsSync(){
+  _drawingsSyncTimer = null;
+  // Guardado — por pane (lsKey), así un refresh REAL del navegador (F5,
+  // no el botón "Refresh chart" de acá, que no recarga la página) no
+  // borra lo que había dibujado. SIEMPRE corre, venga el cambio de este
+  // mismo panel o de un sync recibido de otro — ver el porqué del "return"
+  // de más abajo, que es justo lo contrario (eso si depende de quién lo
+  // originó).
+  lsSet(lsKey('td_drawings'), JSON.stringify(serializeDrawings()));
+  // _suppressDrawingBroadcast evita el ECO infinito entre paneles (que lo
+  // que ACABO de recibir de otro panel no se lo rebote de vuelta) — pero
+  // eso es solo sobre el BROADCAST, no sobre el guardado de arriba. Antes
+  // los dos vivían atrás del mismo guard: un panel que solo RECIBÍA
+  // sincronizaciones (nunca dibujaba nada él mismo) jamás grababa su
+  // propio localStorage — así que al borrar un dibujo desde OTRO panel,
+  // este se quedaba con la versión vieja guardada, y un refresh de la
+  // página la revivía y la volvía a contagiar al resto.
+  if (_suppressDrawingBroadcast) return;
+  if (!EMBED_MODE || window.top === window || !window.top.zentinelDrawingsSync) return;
+  try { window.top.zentinelDrawingsSync(PANE_ID, STATE.symbol, serializeDrawings()); } catch(e){}
 }
+function markDrawingsDirty(){
+  if (_drawingsSyncTimer) return;
+  _drawingsSyncTimer = setTimeout(_flushDrawingsSync, 120);
+}
+// Si la página se refresca/cierra con un guardado todavía pendiente (p.ej.
+// borraste un dibujo y apretaste F5 al toque, antes de que pasaran los
+// 120ms del debounce), ese refresh agarraba el localStorage VIEJO —
+// resultado: el dibujo borrado "volvía" solo después de refrescar. Esto
+// fuerza el guardado pendiente ANTES de que la página se vaya, sin esperar
+// el debounce. 'pagehide' además cubre casos que 'beforeunload' se puede
+// perder (bfcache, algunos navegadores mobile).
+function _flushDrawingsSyncIfPending(){ if (_drawingsSyncTimer) { clearTimeout(_drawingsSyncTimer); _flushDrawingsSync(); } }
+window.addEventListener('beforeunload', _flushDrawingsSyncIfPending);
+window.addEventListener('pagehide', _flushDrawingsSyncIfPending);
 // Solo datos planos — nada de series del chart, elementos SVG/HTML ni
 // referencias circulares. 'text' es el único tipo sin representación en
 // buildDrawingOnChart (es un <div> editable aparte), así que guarda su
@@ -2949,7 +2999,12 @@ function restylePositionToolColors(d) {
 function syncPositionTool(d) {
   if (!(d.profitFillEl instanceof Element)) return;
   const entry = d.p1.price, stop = d.p2.price, target = d.targetPrice;
-  const x1 = chart.timeScale().timeToCoordinate(d.p1.time), x2 = chart.timeScale().timeToCoordinate(d.p2.time);
+  // Mismo par (t1,t2) que usan las 3 líneas (ver buildDrawingOnChart/
+  // positionToolRenderTimes) — si no, el relleno queda corrido o con
+  // ancho CERO (invisible) respecto a las líneas reales apenas este
+  // dibujo vino sincronizado de un panel en otro TF.
+  const { t1: fillT1, t2: fillT2 } = positionToolRenderTimes(d);
+  const x1 = chart.timeScale().timeToCoordinate(fillT1), x2 = chart.timeScale().timeToCoordinate(fillT2);
   const yEntry = candleSeries.priceToCoordinate(entry);
   const yStop  = candleSeries.priceToCoordinate(stop);
   const yTarget= candleSeries.priceToCoordinate(target);
@@ -3107,13 +3162,19 @@ function buildDrawingOnChart(d) {
     const entryColor = d.entryColor || '#e8e8f0';
     const profitColor = d.profitColor || '#26a69a';
     const lossColor = d.lossColor || '#ef5350';
+    // positionToolRenderTimes/safeLineTime: ver los comentarios junto a su
+    // definición — sin esto, un dibujo creado en un TF y sincronizado a
+    // otro (M5 → H1, por ejemplo) corría todas las velas de ESE panel un
+    // lugar apenas se dibujaba, porque p1.time/p2.time casi nunca caen
+    // justo en una vela real de un TF distinto al que lo creó.
+    const { t1: lineT1, t2: lineT2 } = positionToolRenderTimes(d);
     const mkLvl = (price, color, dashed) => {
       const s = chart.addLineSeries({
         color, lineWidth:lw, lineStyle: dashed?2:0,
         priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
         autoscaleInfoProvider: () => null,
       });
-      s.setData([{time:d.p1.time,value:price},{time:d.p2.time,value:price}]);
+      s.setData([{time:lineT1,value:price},{time:lineT2,value:price}]);
       d.series.push(s);
     };
     mkLvl(d.p1.price,      entryColor, false); // entrada
@@ -3226,6 +3287,62 @@ function clampPositionToolT2(t2){
   const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
   const maxT2 = candles[candles.length-1].time + 10*barStep;
   return Math.min(t2, maxT2);
+}
+
+// Herramienta de posición: sus 3 líneas (entrada/TP/SL) y la herramienta
+// misma se comparten entre paneles de CUALQUIER TF del mismo símbolo (ver
+// comentario de zentinelDrawingsSync) — un p1.time/p2.time pensado en M5
+// casi nunca cae justo en el horario de una vela real de H1 o D. Probado
+// a mano: agregarle al chart una serie con un horario que no coincide con
+// la grilla de velas de ESE panel hace que lightweight-charts inserte un
+// punto nuevo en su eje de tiempo compartido y CORRA el resto de las
+// velas un lugar — no es que "desaparezca" una vela, es que todo lo que
+// viene después se desplaza, lo que se ve igual de raro. safeLineTime
+// busca el horario real (o de whitespace futuro) más cercano de ESTE
+// panel para usar en las 3 líneas en vez del horario crudo — solo cambia
+// DÓNDE SE DIBUJAN, nunca d.p1.time/d.p2.time (el dato compartido entre
+// paneles sigue siendo el real, cada panel lo redondea a su manera).
+function safeLineTime(time){
+  const candles = window._lastCandles || [];
+  if (!candles.length) return time;
+  const last = candles[candles.length-1];
+  const barStep = candles.length>1 ? (candles[candles.length-1].time-candles[candles.length-2].time) : 3600;
+  if (time <= last.time) {
+    // Vela real más cercana — un scan simple alcanza (candles no suele
+    // pasar de unos miles) y evita asumir que no hay huecos de sesión
+    // (fin de semana, feriados) entre medio.
+    let best = candles[0].time, bestDiff = Math.abs(candles[0].time - time);
+    for (let i = candles.length - 1; i >= 0; i--) {
+      const diff = Math.abs(candles[i].time - time);
+      if (diff < bestDiff) { bestDiff = diff; best = candles[i].time; }
+      if (candles[i].time < time - 8*86400) break; // no hace falta ir más atrás que ~8 días
+    }
+    return best;
+  }
+  // Futuro: redondear al punto de whitespace más cercano — son EXACTAMENTE
+  // los que genera futureWhitespace() (last.time + barStep*k), así que
+  // siempre existen ya en el eje de tiempo del chart.
+  const stepsAhead = Math.max(1, Math.round((time - last.time) / barStep));
+  return last.time + stepsAhead * barStep;
+}
+
+// Par (t1,t2) final para DIBUJAR una herramienta de posición en ESTE
+// panel — usado tanto por las 3 líneas (buildDrawingOnChart) como por el
+// relleno/etiquetas (syncPositionTool). Antes cada uno aplicaba
+// safeLineTime() por su cuenta, y solo uno de los dos corregía el caso
+// "los dos bordes cayeron en la misma vela" (dibujo nacido en un TF chico,
+// p.ej. 2 velas de M5, visto en un panel de TF grande, p.ej. D) — así que
+// las líneas se veían bien pero el relleno quedaba con ancho CERO
+// (invisible, aunque técnicamente "dibujado"). Juntarlo acá en un solo
+// lugar evita que las dos puedan volver a desincronizarse.
+function positionToolRenderTimes(d){
+  let t1 = safeLineTime(d.p1.time), t2 = safeLineTime(d.p2.time);
+  if (t2 <= t1) {
+    const cc = window._lastCandles || [];
+    const bs = cc.length>1 ? (cc[cc.length-1].time-cc[cc.length-2].time) : 3600;
+    t2 = t1 + bs;
+  }
+  return { t1, t2 };
 }
 
 // Aplica el arrastre de una "manija" (handle) según su rol — normaliza
@@ -6713,6 +6830,7 @@ async function appendNewBar(symbol, timeframe){
       }
     });
     renderSeries(timeframe);
+    if (window._syncOverlayPositions) window._syncOverlayPositions(); // ver refreshFormingCandle — mismo motivo
 
     const last=window._lastCandles[window._lastCandles.length-1];
     const prev=window._lastCandles[window._lastCandles.length-2];
@@ -6960,6 +7078,17 @@ async function refreshFormingCandle(symbol, timeframe){
 
     window._lastCandles[window._lastCandles.length-1]=bar;
     renderSeries(timeframe);
+    // Si esta vela en formación hizo un máximo/mínimo nuevo, el autoescalado
+    // de precio se mueve — las velas y las LÍNEAS del dibujo (series reales
+    // del chart) se reacomodan solas con el repintado de arriba, pero el
+    // relleno de color y las etiquetas de la herramienta de posición/rect
+    // (capa SVG aparte, se posicionan a mano) no tienen quién les avise:
+    // sin esto se quedaban pegados en su pixel viejo, uno o dos frames
+    // "atrasados" de las velas reales — se veía como si la vela empujara
+    // el dibujo, o como si una vela quedara tapada por un relleno que ya
+    // no correspondía a esa altura de precio. Mismo syncOverlayPositions()
+    // que ya se llama en cada pan/zoom/resize.
+    if (window._syncOverlayPositions) window._syncOverlayPositions();
 
     const prev=window._lastCandles[window._lastCandles.length-2];
     updateTopbarPrice(bar,prev);
