@@ -6386,9 +6386,17 @@ function applyChartSettings(){
   if(!chart || !candleSeries) return;
   const cs = STATE.chartSettings;
   const ohlcvBar = document.getElementById('ohlcv-bar');
-  if (ohlcvBar) ohlcvBar.style.display = cs.showOhlcv===false ? 'none' : '';
+  const ohlcvHidden = cs.showOhlcv===false;
+  if (ohlcvBar) ohlcvBar.style.display = ohlcvHidden ? 'none' : '';
   const indChips = document.getElementById('chart-indicator-chips');
-  if (indChips) indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
+  if (indChips) {
+    indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
+    // #chart-indicator-chips tiene un top fijo en CSS (40px) pensado para
+    // dejar lugar a la barra OHLCV arriba — si esa barra está oculta, sin
+    // esto quedaba el mismo hueco vacío de todas formas. Sube a la misma
+    // posición que usaría el OHLCV (8px, ver #ohlcv-bar) cuando no está.
+    indChips.style.top = ohlcvHidden ? '8px' : '';
+  }
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
   chart.applyOptions({
     layout: { background: buildChartBackground(cs), textColor: cs.textColor },
