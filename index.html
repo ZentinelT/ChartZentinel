@@ -2434,7 +2434,7 @@ function fmtReplayTime(epochSeconds){
 // Mismo criterio de arriba (UTC forzado) para la etiqueta de fecha/hora
 // que lightweight-charts dibuja pegada al cursor (crosshair) sobre el eje
 // de tiempo — acá además se antepone el día de la semana.
-const CROSSHAIR_WEEKDAYS = ['do','lu','ma','mi','ju','vi','sá'];
+const CROSSHAIR_WEEKDAYS = ['dom','lun','mar','mie','jue','vie','sab'];
 const CROSSHAIR_MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function fmtCrosshairTime(time){
   if (typeof time !== 'number') return '';
