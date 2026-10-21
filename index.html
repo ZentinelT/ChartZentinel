@@ -330,12 +330,13 @@
   @keyframes zentinel-spin { to { transform: rotate(360deg); } }
   #btn-refresh.spinning svg { animation: zentinel-spin .6s linear infinite; }
 
-  /* Grupo segmentado sin bordes individuales — mismo lenguaje que el
-     selector de TF de TV, no una fila de botones sueltos. */
-  #layout-picker {
-    display: flex; gap: 1px; margin-right: 4px;
-    background: var(--bg-secondary); border-radius: 7px; padding: 2px;
-  }
+  /* Ícono único (cuadrado con bordes redondeados) que despliega un menú
+     con las opciones de cantidad de paneles — como el picker de layouts
+     de TV, en vez de una fila de botones sueltos siempre visibles. */
+  #layout-picker-wrap { position: relative; flex-shrink: 0; }
+  .layout-picker-popup { right: 0; left: auto; min-width: 160px; padding: 6px; }
+  /* .layout-btn: sigue usándose para el selector Activo/Todos de la
+     grilla (gc-scope) aunque el picker de cantidad de paneles ya no lo use. */
   .layout-btn {
     background: none; border: none; border-radius: 5px;
     color: var(--text-secondary); font-family: var(--font-ui); font-size: 11px; font-weight: 500;
@@ -343,6 +344,15 @@
   }
   .layout-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .layout-btn.active { background: var(--gold-glow); color: var(--gold); font-weight: 600; }
+  .layout-opt-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 8px; border-radius: 5px; cursor: pointer;
+    color: var(--text-secondary); font-family: var(--font-ui); font-size: 12px;
+  }
+  .layout-opt-row svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .layout-opt-row:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .layout-opt-row.active { color: var(--gold); }
+  .layout-opt-row.active svg { color: var(--gold); }
 
   /* ─── Modo embed (panel dentro de una grilla multi-chart) ──────
      Cada panel del grid 2×/4⊞ no necesita repetir el header completo
@@ -365,7 +375,9 @@
      grilla (ver gbar en renderLayoutGrid), no uno recortado por panel. */
   html.embed-mode #tf-bar-tfs-wrap,
   html.embed-mode #tf-bar .tf-sep,
-  html.embed-mode #tf-fav-wrap { display: none !important; }
+  html.embed-mode #tf-fav-wrap,
+  html.embed-mode #symbol-search-wrap,
+  html.embed-mode #price-display { display: none !important; }
   /* Picker de layout + tema/refresh/settings/badge: ya tienen su propio
      equivalente una sola vez en la barra del shell (ver renderLayoutGrid)
      — cada panel individual no los repite. */
@@ -449,6 +461,30 @@
   .tf-scroll-fade-l { left: 0; justify-content: flex-start; background: linear-gradient(to right, var(--bg-secondary) 35%, transparent); }
   .tf-scroll-fade-r { right: 0; justify-content: flex-end; background: linear-gradient(to left, var(--bg-secondary) 35%, transparent); }
   #tf-bar .topbar-btn { flex-shrink: 0; }
+  /* Único elemento que se achica cuando falta espacio es el selector de
+     TF de arriba (tf-bar-tfs-wrap, hasta su piso de 90px con scroll). Todo
+     lo demás en esta fila (símbolo/precio/indicadores/replay/preset/
+     layout/tema/refresh/settings/badge) debe quedar siempre visible —
+     si no, en ventanas angostas el spacer cede espacio antes de que el
+     TF picker llegue a su piso y los íconos de la derecha se salen de
+     la pantalla. */
+  #tf-bar > *:not(#tf-bar-tfs-wrap):not(.topbar-spacer) { flex-shrink: 0; }
+
+  /* En ventanas angostas (laptop chica, mitad de pantalla) ya no entran
+     todos los textos de la barra — se esconden las etiquetas y se deja
+     solo el ícono, así el picker de layout / tema / refresh / settings
+     (lo más importante, a la derecha) nunca se corre fuera de pantalla. */
+  @media (max-width: 1320px) {
+    .tb-label { display: none; }
+    #symbol-search-wrap .topbar-input,
+    #gc-symbol { width: 90px !important; }
+  }
+  @media (max-width: 1100px) {
+    #tf-bar { gap: 6px; }
+    #tf-bar-tfs-wrap { min-width: 50px; }
+    #symbol-search-wrap .topbar-input,
+    #gc-symbol { width: 70px !important; }
+  }
 
   .tf-btn {
     background: none;
@@ -892,15 +928,6 @@
 <div id="topbar">
   <div class="logo">ZENTINEL</div>
   <div class="logo-sep"></div>
-
-  <div id="symbol-search-wrap">
-    <input id="symbol-input" class="topbar-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
-  </div>
-
-  <div id="price-display">
-    <span id="price-last">—</span>
-    <span id="price-change" class="">—</span>
-  </div>
 </div>
 
 <!-- ══ TIMEFRAME BAR (+ utilidades, misma fila que topbar) ═ -->
@@ -918,14 +945,24 @@
     <div id="tf-fav-popup" class="tf-fav-popup"></div>
   </div>
   <div class="tf-sep"></div>
+
+  <div id="symbol-search-wrap">
+    <input id="symbol-input" class="topbar-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
+  </div>
+
+  <div id="price-display">
+    <span id="price-last">—</span>
+    <span id="price-change" class="">—</span>
+  </div>
+
   <button class="topbar-btn" id="btn-indicators" onclick="openIndicatorModal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    Indicators
+    <span class="tb-label">Indicators</span>
     <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
   </button>
   <button class="topbar-btn" id="btn-replay" title="Replay: click a candle to start" onclick="toggleReplayPicker()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-    Replay
+    <span class="tb-label">Replay</span>
   </button>
 
   <!-- Picker de layout + utilidades: solo tienen sentido en modo 1
@@ -934,11 +971,12 @@
        html.embed-mode con #tf-bar-tools de abajo. -->
   <div class="topbar-spacer"></div>
   <div id="tf-bar-tools">
-    <div id="layout-picker" title="Cantidad de gráficos">
-      <button class="layout-btn active" data-layout="1">1</button>
-      <button class="layout-btn" data-layout="2">2 ×</button>
-      <button class="layout-btn" data-layout="3">3 ×</button>
-      <button class="layout-btn" data-layout="4">4 ⊞</button>
+    <div id="layout-picker-wrap">
+      <button id="layout-picker-trigger" class="topbar-btn" title="Cantidad de gráficos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+        <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
     </div>
 
     <button class="topbar-btn theme-toggle-btn" title="Cambiar a modo claro" onclick="toggleTheme()"></button>
@@ -1597,18 +1635,11 @@ function renderLayoutGrid(n){
   bar.innerHTML = `
     <div class="logo">ZENTINEL</div>
     <div class="logo-sep"></div>
-    <div id="gc-scope" style="display:flex;gap:2px;"></div>
-    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Símbolo…" autocomplete="off" title="Símbolo para el panel activo o todos — Enter para aplicar" style="width:120px;">
   `;
 
   const gbar = document.createElement('div');
   gbar.id = 'tf-bar';
   gbar.innerHTML = `
-    <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:6px;">
-      <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;">Preset:</span>
-      <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
-      <button id="gc-preset-apply" class="topbar-btn">Aplicar</button>
-    </div>
     <div id="tf-bar-tfs-wrap">
       <div id="tf-bar-tfs"></div>
       <div class="tf-scroll-fade tf-scroll-fade-l"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></div>
@@ -1620,32 +1651,44 @@ function renderLayoutGrid(n){
       </button>
       <div id="tf-fav-popup" class="tf-fav-popup"></div>
     </div>
+    <div class="tf-sep"></div>
+    <div id="gc-scope" style="display:flex;gap:2px;"></div>
+    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Símbolo…" autocomplete="off" title="Símbolo para el panel activo o todos — Enter para aplicar" style="width:120px;">
+    <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:6px;">
+      <span class="tb-label" style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;">Preset:</span>
+      <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
+      <button id="gc-preset-apply" class="topbar-btn">Aplicar</button>
+    </div>
+    <div id="gc-replay-wrap" style="display:flex;align-items:center;gap:4px;">
+      <button class="topbar-btn" id="gc-replay-btn" title="Replay sincronizado: click en una vela del panel activo para arrancar — los demás paneles del mismo símbolo lo siguen, aunque estén en otro TF">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span class="tb-label">Replay</span>
+      </button>
+      <div id="gc-replay-bar" style="display:none;align-items:center;gap:4px;">
+        <button class="topbar-btn" id="gc-replay-play" title="Play / Pause">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        </button>
+        <button class="topbar-btn" id="gc-replay-step" title="Avanzar una vela">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 5 20 12 13 19"/><line x1="4" y1="5" x2="4" y2="19"/></svg>
+        </button>
+        <select id="gc-replay-speed" class="topbar-input" style="width:auto;padding:4px 6px;font-size:11px;">
+          <option value="1200">0.5×</option>
+          <option value="600" selected>1×</option>
+          <option value="300">2×</option>
+          <option value="120">4×</option>
+        </select>
+        <span id="gc-replay-label" style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap;min-width:80px;text-align:center;"></span>
+        <button class="topbar-btn" id="gc-replay-exit" title="Salir del replay" style="color:var(--red);">✕</button>
+      </div>
+    </div>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
-      <div id="gc-replay-wrap" style="display:flex;align-items:center;gap:4px;margin-right:4px;">
-        <button class="topbar-btn" id="gc-replay-btn" title="Replay sincronizado: click en una vela del panel activo para arrancar — los demás paneles del mismo símbolo lo siguen, aunque estén en otro TF">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Replay
+      <div id="layout-picker-wrap">
+        <button id="layout-picker-trigger" class="topbar-btn" title="Cantidad de gráficos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+          <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <div id="gc-replay-bar" style="display:none;align-items:center;gap:4px;">
-          <button class="topbar-btn" id="gc-replay-play" title="Play / Pause">
-            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-          </button>
-          <button class="topbar-btn" id="gc-replay-step" title="Avanzar una vela">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 5 20 12 13 19"/><line x1="4" y1="5" x2="4" y2="19"/></svg>
-          </button>
-          <select id="gc-replay-speed" class="topbar-input" style="width:auto;padding:4px 6px;font-size:11px;">
-            <option value="1200">0.5×</option>
-            <option value="600" selected>1×</option>
-            <option value="300">2×</option>
-            <option value="120">4×</option>
-          </select>
-          <span id="gc-replay-label" style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap;min-width:80px;text-align:center;"></span>
-          <button class="topbar-btn" id="gc-replay-exit" title="Salir del replay" style="color:var(--red);">✕</button>
-        </div>
-      </div>
-      <div id="layout-picker" title="Cantidad de gráficos">
-        ${[1,2,3,4].map(v=>`<button class="layout-btn${v===n?' active':''}" data-layout="${v}">${v===1?'1':v===2?'2 ×':v===3?'3 ×':'4 ⊞'}</button>`).join('')}
+        <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
       </div>
       <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
       <button class="topbar-btn" id="gc-refresh" title="Refrescar">
@@ -1660,12 +1703,30 @@ function renderLayoutGrid(n){
       <div id="api-badge" style="pointer-events:none;">MULTI</div>
     </div>
   `;
-  gbar.querySelectorAll('[data-layout]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const v = btn.dataset.layout;
+  (function initShellLayoutPicker(){
+    const trigger = gbar.querySelector('#layout-picker-trigger');
+    const popup = gbar.querySelector('#layout-picker-popup');
+    popup.innerHTML = [1,2,3,4].map(v =>
+      `<div class="layout-opt-row${v===n?' active':''}" data-layout="${v}">${LAYOUT_ICONS[v]}<span>${LAYOUT_LABELS[v]}</span></div>`
+    ).join('');
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      popup.classList.toggle('open');
+      trigger.classList.toggle('active', popup.classList.contains('open'));
+    });
+    popup.addEventListener('click', (e) => {
+      const row = e.target.closest('.layout-opt-row');
+      if (!row) return;
+      const v = row.dataset.layout;
       location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
     });
-  });
+    document.addEventListener('click', (e) => {
+      if (!gbar.querySelector('#layout-picker-wrap').contains(e.target)) {
+        popup.classList.remove('open');
+        trigger.classList.remove('active');
+      }
+    });
+  })();
 
   headerRow.appendChild(bar);
   headerRow.appendChild(gbar);
@@ -1968,7 +2029,7 @@ function renderLayoutGrid(n){
   });
 
   // Scope: Activo / Todos
-  const scopeWrap = bar.querySelector('#gc-scope');
+  const scopeWrap = gbar.querySelector('#gc-scope');
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
       `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="¿A qué panel(es) aplican el símbolo, los TFs rápidos y 'Aplicar preset' de esta barra?">${s==='active'?'Activo':'Todos'}</button>`
@@ -1980,7 +2041,7 @@ function renderLayoutGrid(n){
   renderScopeBtns();
 
   // Símbolo: Enter para aplicar
-  const symbolInp = bar.querySelector('#gc-symbol');
+  const symbolInp = gbar.querySelector('#gc-symbol');
   symbolInp.addEventListener('keydown', e=>{
     if (e.key !== 'Enter') return;
     const sym = symbolInp.value.trim();
@@ -4453,14 +4514,40 @@ function clonePaneState(fromSuffix, toSuffix){
     if (v!=null) lsSet(k+toSuffix, v);
   });
 }
-document.querySelectorAll('.layout-btn').forEach(btn=>{
-  btn.classList.toggle('active', Number(btn.dataset.layout)===LAYOUT_N);
-  btn.addEventListener('click', ()=>{
-    const v = btn.dataset.layout;
-    if (v!=='1' && !EMBED_MODE && LAYOUT_N===1) clonePaneState('', '_p1');
-    location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
+const LAYOUT_ICONS = {
+  1: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+  2: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
+  3: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="12" y1="12" x2="21" y2="12"/></svg>',
+  4: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+};
+const LAYOUT_LABELS = { 1:'1 gráfico', 2:'2 gráficos', 3:'3 gráficos', 4:'4 gráficos' };
+function goToLayout(v){
+  if (v!=='1' && !EMBED_MODE && LAYOUT_N===1) clonePaneState('', '_p1');
+  location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
+}
+(function initLayoutPicker(){
+  const trigger = document.getElementById('layout-picker-trigger');
+  const popup = document.getElementById('layout-picker-popup');
+  if (!trigger || !popup) return;
+  popup.innerHTML = [1,2,3,4].map(v =>
+    `<div class="layout-opt-row${v===LAYOUT_N?' active':''}" data-layout="${v}">${LAYOUT_ICONS[v]}<span>${LAYOUT_LABELS[v]}</span></div>`
+  ).join('');
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popup.classList.toggle('open');
+    trigger.classList.toggle('active', popup.classList.contains('open'));
   });
-});
+  popup.addEventListener('click', (e) => {
+    const row = e.target.closest('.layout-opt-row');
+    if (row) goToLayout(row.dataset.layout);
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('layout-picker-wrap').contains(e.target)) {
+      popup.classList.remove('open');
+      trigger.classList.remove('active');
+    }
+  });
+})();
 
 function setTool(btn, name) {
   // btn es opcional: cuando la grilla multi-chart maneja el panel activo
