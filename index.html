@@ -803,6 +803,35 @@
   }
   .cs-row .cs-color-inp { margin-bottom: 0; flex: 1; }
 
+  /* ─── Paleta de colores tipo TV ──────────────────────────────────
+     Se engancha sola (ver attachColorPalette/MutationObserver cerca del
+     BOOT) a TODO <input type="color"> de la app, sin tener que tocar
+     cada uno de los ~30 lugares donde aparecen (modal de Settings,
+     dibujos, Watchtower, Sniper, Sweeps, niveles de Fibo...). El click en
+     el swatch de siempre abre esta grilla en vez del picker nativo del
+     navegador — el picker nativo sigue estando a un click, como opción
+     "personalizado" (círculo arcoíris) adentro de la grilla. */
+  input[type="color"].color-pal-input-active { outline: 2px solid var(--gold-dim); outline-offset: 1px; }
+  .color-pal-popup {
+    position: fixed; z-index: 600; display: none;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    padding: 8px;
+  }
+  .color-pal-popup.open { display: block; }
+  .color-pal-grid { display: grid; grid-template-columns: repeat(8, 20px); gap: 4px; }
+  .color-pal-swatch {
+    width: 20px; height: 20px; border-radius: 4px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.12); padding: 0;
+    transition: transform .1s, border-color .1s;
+  }
+  .color-pal-swatch:hover { transform: scale(1.15); border-color: var(--gold); z-index: 1; }
+  .color-pal-swatch.custom {
+    background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .color-pal-swatch.custom svg { width: 11px; height: 11px; color: #fff; filter: drop-shadow(0 0 1px rgba(0,0,0,.8)); }
+
   .btn-primary {
     background: var(--gold-dim); border: 1px solid var(--gold); color: var(--gold-bright);
     font-family: var(--font-ui); font-size: 12px; font-weight: 600; padding: 7px 18px;
@@ -7349,6 +7378,86 @@ if (EMBED_MODE && PANE_ID) {
     window.parent.postMessage({ type:'zentinel:paneFocused', pane:PANE_ID }, '*');
   }, true);
 }
+
+// ══════════════════════════════════════════════════════════
+//  PALETA DE COLORES (tipo TV) — se engancha sola a cualquier
+//  <input type="color"> de la app, presente o futuro (modales se
+//  reconstruyen con innerHTML todo el tiempo: fib levels, Watchtower,
+//  Sniper, Sweeps...), vía MutationObserver. No reemplaza el input
+//  nativo (sigue ahí al lado, para elegir cualquier color custom) —
+//  solo agrega el botón que despliega la grilla de swatches rápidos.
+// ══════════════════════════════════════════════════════════
+const COLOR_PALETTE = [
+  '#ffffff', '#d1d4dc', '#9598a1', '#787b86', '#5d606b', '#434651', '#2a2e39', '#131722',
+  '#f23645', '#ff5252', '#ff8a80', '#ffcdd2', '#ff9800', '#ffb74d', '#ffca28', '#ffeb3b',
+  '#8bc34a', '#4caf50', '#089981', '#26a69a', '#00bcd4', '#4dd0e1', '#2196f3', '#64b5f6',
+  '#3f51b5', '#5b9cf6', '#7e57c2', '#9c27b0', '#e91e63', '#f06292', '#795548', '#607d8b',
+];
+let _colorPalOpenPopup = null;
+function closeColorPalette(){
+  if (!_colorPalOpenPopup) return;
+  _colorPalOpenPopup.popup.classList.remove('open');
+  _colorPalOpenPopup.trigger.classList.remove('color-pal-input-active');
+  _colorPalOpenPopup = null;
+}
+function attachColorPalette(input){
+  if (!input || input.dataset.palAttached) return;
+  input.dataset.palAttached = '1';
+
+  const popup = document.createElement('div');
+  popup.className = 'color-pal-popup';
+  popup.innerHTML = '<div class="color-pal-grid">'
+    + COLOR_PALETTE.map(c => `<button type="button" class="color-pal-swatch" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('')
+    + '<button type="button" class="color-pal-swatch custom" data-color="custom" title="Color personalizado…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.3c2.6 0 4.7-2.1 4.7-4.7C22 5.9 17.5 2 12 2z"/></svg></button>'
+    + '</div>';
+  document.body.appendChild(popup);
+
+  // El click en el input de color ABRE NUESTRA paleta en vez del picker
+  // nativo del navegador — así el swatch de siempre (el que ya se usaba
+  // en toda la app) es directamente el que dispara la grilla tipo TV, sin
+  // agregar un botón aparte que nadie nota. El picker nativo sigue a un
+  // click de distancia: es la opción "personalizado" (el círculo arcoíris)
+  // adentro de la propia grilla — ahí sí se deja pasar el click real.
+  input.addEventListener('click', (e) => {
+    if (input.dataset.palBypass) { delete input.dataset.palBypass; return; }
+    e.preventDefault();
+    e.stopPropagation();
+    const wasOpen = popup.classList.contains('open');
+    closeColorPalette();
+    if (wasOpen) return;
+    const r = input.getBoundingClientRect();
+    popup.style.top = (r.bottom + 6) + 'px';
+    popup.style.left = Math.max(4, r.left) + 'px';
+    popup.classList.add('open');
+    input.classList.add('color-pal-input-active');
+    _colorPalOpenPopup = { popup, trigger: input };
+  });
+  popup.addEventListener('click', (e) => {
+    const sw = e.target.closest('[data-color]');
+    if (!sw) return;
+    e.stopPropagation();
+    closeColorPalette();
+    if (sw.dataset.color === 'custom') { input.dataset.palBypass = '1'; input.click(); return; }
+    input.value = sw.dataset.color;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+function scanForColorInputs(root){
+  (root || document).querySelectorAll('input[type="color"]:not([data-pal-attached])').forEach(attachColorPalette);
+}
+document.addEventListener('click', closeColorPalette);
+document.addEventListener('scroll', closeColorPalette, true);
+scanForColorInputs();
+new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    m.addedNodes.forEach((n) => {
+      if (n.nodeType !== 1) return;
+      if (n.matches && n.matches('input[type="color"]')) attachColorPalette(n);
+      else if (n.querySelectorAll) scanForColorInputs(n);
+    });
+  }
+}).observe(document.body, { childList: true, subtree: true });
 
 // ══════════════════════════════════════════════════════════
 //  BOOT
