@@ -2431,6 +2431,22 @@ function fmtReplayTime(epochSeconds){
   const time = d.toLocaleTimeString([], { timeZone:'UTC', hour:'2-digit', minute:'2-digit' });
   return `${date} ${time}`;
 }
+// Mismo criterio de arriba (UTC forzado) para la etiqueta de fecha/hora
+// que lightweight-charts dibuja pegada al cursor (crosshair) sobre el eje
+// de tiempo — acá además se antepone el día de la semana.
+const CROSSHAIR_WEEKDAYS = ['do','lu','ma','mi','ju','vi','sá'];
+const CROSSHAIR_MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtCrosshairTime(time){
+  if (typeof time !== 'number') return '';
+  const d = new Date(time * 1000);
+  const wd = CROSSHAIR_WEEKDAYS[d.getUTCDay()];
+  const day = d.getUTCDate();
+  const mon = CROSSHAIR_MONTHS[d.getUTCMonth()];
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  const hh = String(d.getUTCHours()).padStart(2,'0');
+  const mm = String(d.getUTCMinutes()).padStart(2,'0');
+  return `${wd} ${day} ${mon}´${yy} ${hh}:${mm}`;
+}
 const CHART_SETTINGS_DEFAULTS = {
   bgColor:'#0a0a0c',
   bgGradient:false, bgColor2:'#1a1a28',
@@ -3565,6 +3581,7 @@ function initChart() {
     },
     rightPriceScale: { borderColor:'#222230', scaleMargins:{top:0.08,bottom:0.18} },
     timeScale: { borderColor:'#222230', timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
+    localization: { timeFormatter: fmtCrosshairTime },
     watermark: { visible:false },
   });
 
