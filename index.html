@@ -371,18 +371,15 @@
   html.embed-mode #toolbar,
   html.embed-mode #btn-sidebar-toggle,
   html.embed-mode #sidebar { display: none !important; }
-  /* Mismo criterio para los TF: un solo selector arriba de toda la
-     grilla (ver gbar en renderLayoutGrid), no uno recortado por panel. */
-  html.embed-mode #tf-bar-tfs-wrap,
-  html.embed-mode #tf-bar .tf-sep,
-  html.embed-mode #tf-fav-wrap,
-  html.embed-mode #symbol-search-wrap,
-  html.embed-mode #price-display { display: none !important; }
-  /* Picker de layout + tema/refresh/settings/badge: ya tienen su propio
-     equivalente una sola vez en la barra del shell (ver renderLayoutGrid)
-     — cada panel individual no los repite. */
-  html.embed-mode #tf-bar > .topbar-spacer,
-  html.embed-mode #tf-bar-tools { display: none !important; }
+  /* Mismo criterio para los TF, símbolo, Indicators, Replay, Undo/Redo,
+     layout/tema/refresh/settings: un solo juego de controles arriba de
+     toda la grilla (ver gbar en renderLayoutGrid), no uno repetido por
+     panel. Ya no queda nada de #tf-bar que valga la pena mostrar por
+     panel individual (el nombre del símbolo pasó a flotar adentro del
+     chart, ver #pane-symbol-badge), así que se oculta entera y el chart
+     de cada panel gana esa altura. */
+  html.embed-mode #tf-bar,
+  html.embed-mode #header-row { display: none !important; }
   #tf-bar-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
   #api-badge {
@@ -739,6 +736,26 @@
   }
   #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
 
+  /* ─── Nombre del símbolo DENTRO del chart (solo panel de grilla) ──
+     Antes cada panel de la grilla tenía su propia fila fija arriba (igual
+     a #tf-bar) solo para mostrar el símbolo — ahora que Indicators/Replay
+     de cada panel se sacaron a la barra global, esa fila quedaba casi
+     vacía desperdiciando alto. Se saca esa fila (ver html.embed-mode
+     #tf-bar más abajo) y el nombre pasa a flotar adentro del chart, mismo
+     criterio que el OHLCV/los chips de indicadores — así el chart gana
+     esa altura. Solo se muestra en modo embed: en 1 gráfico el símbolo ya
+     se ve en el buscador de la barra de arriba, repetirlo acá sería
+     redundante. */
+  #pane-symbol-badge {
+    display: none;
+    position: absolute; top: 8px; left: 8px; z-index: 7;
+    font-family: var(--font-display); font-size: 12px; font-weight: 700;
+    letter-spacing: .5px; color: var(--text-primary);
+    text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5);
+    pointer-events: none;
+  }
+  html.embed-mode #pane-symbol-badge { display: block; }
+
   /* ─── STATUS BAR ──────────────────────────────────────── */
   #statusbar {
     height: 22px; background: var(--bg-panel); border-top: 1px solid var(--border);
@@ -964,6 +981,12 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
     <span class="tb-label">Replay</span>
   </button>
+  <button class="topbar-btn" id="btn-undo-top" title="Undo (Ctrl+Z)" onclick="undoDrawing()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
+  </button>
+  <button class="topbar-btn" id="btn-redo-top" title="Redo (Ctrl+Shift+Z)" onclick="redoDrawing()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
+  </button>
 
   <!-- Picker de layout + utilidades: solo tienen sentido en modo 1
        gráfico (en la grilla multi-chart ya existen sus propios
@@ -1070,13 +1093,6 @@
       </svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn" data-tip="Undo (Ctrl+Z)" onclick="undoDrawing()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
-    </button>
-    <button class="tool-btn" data-tip="Redo (Ctrl+Shift+Z)" onclick="redoDrawing()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
-    </button>
-    <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Clear All" onclick="clearDrawings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"/>
@@ -1126,6 +1142,7 @@
   <!-- ── CHART ─────────────────────────────────────────── -->
   <div id="chart-wrap">
     <div id="chart-container">
+      <div id="pane-symbol-badge"></div>
       <div id="price-countdown-badge">—</div>
       <div id="ohlcv-bar">
         <span><b>O</b><span id="ohlc-o">—</span></span>
@@ -1659,6 +1676,11 @@ function renderLayoutGrid(n){
       <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
       <button id="gc-preset-apply" class="topbar-btn">Aplicar</button>
     </div>
+    <button class="topbar-btn" id="gc-indicators" title="Indicadores del panel activo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span class="tb-label">Indicators</span>
+      <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
     <div id="gc-replay-wrap" style="display:flex;align-items:center;gap:4px;">
       <button class="topbar-btn" id="gc-replay-btn" title="Replay sincronizado: click en una vela del panel activo para arrancar — los demás paneles del mismo símbolo lo siguen, aunque estén en otro TF">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1681,6 +1703,12 @@ function renderLayoutGrid(n){
         <button class="topbar-btn" id="gc-replay-exit" title="Salir del replay" style="color:var(--red);">✕</button>
       </div>
     </div>
+    <button class="topbar-btn" id="gc-undo" title="Undo (Ctrl+Z) — panel activo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
+    </button>
+    <button class="topbar-btn" id="gc-redo" title="Redo (Ctrl+Shift+Z) — panel activo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
+    </button>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
       <div id="layout-picker-wrap">
@@ -1772,13 +1800,6 @@ function renderLayoutGrid(n){
         <path d="M6 3h4v9a2 2 0 0 0 4 0V3h4v9a6 6 0 0 1-12 0V3z"/>
         <path d="M6 3v4H2V3h4zM18 3v4h4V3h-4z"/>
       </svg>
-    </button>
-    <div class="tool-sep"></div>
-    <button class="tool-btn" data-tip="Undo (Ctrl+Z)" onclick="shellUndoDrawing()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
-    </button>
-    <button class="tool-btn" data-tip="Redo (Ctrl+Shift+Z)" onclick="shellRedoDrawing()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
     </button>
     <div class="tool-sep"></div>
     <button class="tool-btn" data-tip="Clear All" onclick="shellClearDrawings()">
@@ -2178,6 +2199,16 @@ function renderLayoutGrid(n){
   gbar.querySelector('#gc-settings').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
   });
+
+  // Indicators — como Settings, siempre sobre el panel activo.
+  gbar.querySelector('#gc-indicators').addEventListener('click', ()=>{
+    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openIndicators' }, '*');
+  });
+
+  // Undo/Redo — igual que Settings, siempre sobre el panel activo (cada
+  // panel tiene su propio historial de dibujos, no tiene sentido "a todos").
+  gbar.querySelector('#gc-undo').addEventListener('click', shellUndoDrawing);
+  gbar.querySelector('#gc-redo').addEventListener('click', shellRedoDrawing);
 
   // Replay — como Settings, siempre apunta a un panel puntual (el activo
   // para arrancar, el maestro una vez arrancado) sin importar el selector
@@ -4376,6 +4407,8 @@ function renderTfBar() {
 }
 function updateTfBarSymbol(symbol) {
   document.getElementById('tf-bar-symbol').textContent = symbol;
+  const badge = document.getElementById('pane-symbol-badge');
+  if (badge) badge.textContent = symbol;
 }
 function initTfBarScrollFade(scroller, wrap) {
   const fadeL = wrap.querySelector('.tf-scroll-fade-l');
@@ -6610,13 +6643,19 @@ function applyChartSettings(){
   const ohlcvHidden = cs.showOhlcv===false;
   if (ohlcvBar) ohlcvBar.style.display = ohlcvHidden ? 'none' : '';
   const indChips = document.getElementById('chart-indicator-chips');
+  // En un panel de grilla, el nombre del símbolo flota arriba de todo
+  // (#pane-symbol-badge, ver CSS) en el lugar donde en modo 1 gráfico
+  // estaba la fila #tf-bar — así que acá todo lo demás (OHLCV, chips de
+  // indicadores) se corre ~24px más abajo para no superponerse.
+  const badgeOffset = EMBED_MODE ? 24 : 0;
+  if (ohlcvBar) ohlcvBar.style.top = (8 + badgeOffset) + 'px';
   if (indChips) {
     indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
-    // #chart-indicator-chips tiene un top fijo en CSS (40px) pensado para
-    // dejar lugar a la barra OHLCV arriba — si esa barra está oculta, sin
-    // esto quedaba el mismo hueco vacío de todas formas. Sube a la misma
-    // posición que usaría el OHLCV (8px, ver #ohlcv-bar) cuando no está.
-    indChips.style.top = ohlcvHidden ? '8px' : '';
+    // #chart-indicator-chips tiene un top "natural" de 40px (deja lugar a
+    // la barra OHLCV arriba) — si esa barra está oculta, sube a la misma
+    // posición que usaría el OHLCV (8px) cuando no está. badgeOffset suma
+    // el lugar del símbolo cuando corresponde (ver arriba).
+    indChips.style.top = (ohlcvHidden ? 8 + badgeOffset : 40 + badgeOffset) + 'px';
   }
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
   chart.applyOptions({
@@ -7268,6 +7307,8 @@ window.addEventListener('message', (e) => {
     refreshChart();
   } else if (msg.type === 'zentinel:openSettings') {
     openChartSettingsModal();
+  } else if (msg.type === 'zentinel:openIndicators') {
+    openIndicatorModal();
   } else if (msg.type === 'zentinel:startReplayPick') {
     // El botón "Replay" de la grilla vive en el shell (acá adentro no se
     // ve: #topbar está oculto en modo embed) — esto es lo que hace que
