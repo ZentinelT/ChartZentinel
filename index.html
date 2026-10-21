@@ -201,7 +201,7 @@
      ni de tener el sidebar abierto. */
   #chart-indicator-chips {
     position: absolute;
-    top: 40px;
+    top: 32px;
     left: 8px;
     z-index: 17;
     display: flex;
@@ -726,35 +726,27 @@
 
   /* ─── OHLCV (encima del chart, no en la barra — libera espacio para
      que topbar+tf-bar entren en una sola fila, como TV) ──────────── */
+  /* Símbolo+TF (#pane-symbol-badge) y OHLCV en una sola línea, como el
+     header de panel de TV — antes eran dos filas separadas. En la
+     grilla, esto reemplaza la fila fija que cada panel tenía arriba
+     (igual a #tf-bar) solo para mostrar el símbolo — esa fila quedaba
+     casi vacía desperdiciando alto una vez que Indicators/Replay de
+     cada panel se sacaron a la barra global. También se muestra en
+     modo 1 gráfico (aunque el símbolo ya esté en el buscador de la
+     barra de arriba) para tener símbolo+TF a mano sin levantar la vista. */
   #ohlcv-bar {
     position: absolute; top: 8px; left: 8px;
-    display: flex; gap: 10px;
-    font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+    display: flex; align-items: baseline; gap: 7px;
+    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-secondary);
     background: rgba(10,10,12,.55);
-    padding: 3px 8px; border-radius: 4px;
+    padding: 2px 7px; border-radius: 4px;
     pointer-events: none; z-index: 6;
   }
   #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
-
-  /* ─── Nombre del símbolo DENTRO del chart (solo panel de grilla) ──
-     Antes cada panel de la grilla tenía su propia fila fija arriba (igual
-     a #tf-bar) solo para mostrar el símbolo — ahora que Indicators/Replay
-     de cada panel se sacaron a la barra global, esa fila quedaba casi
-     vacía desperdiciando alto. Se saca esa fila (ver html.embed-mode
-     #tf-bar más abajo) y el nombre pasa a flotar adentro del chart, mismo
-     criterio que el OHLCV/los chips de indicadores — así el chart gana
-     esa altura. Solo se muestra en modo embed: en 1 gráfico el símbolo ya
-     se ve en el buscador de la barra de arriba, repetirlo acá sería
-     redundante. */
   #pane-symbol-badge {
-    display: none;
-    position: absolute; top: 8px; left: 8px; z-index: 7;
-    font-family: var(--font-display); font-size: 12px; font-weight: 700;
-    letter-spacing: .5px; color: var(--text-primary);
-    text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5);
-    pointer-events: none;
+    font-family: var(--font-ui); font-size: 11px; font-weight: 700;
+    color: var(--text-primary); margin-right: 2px;
   }
-  html.embed-mode #pane-symbol-badge { display: block; }
 
   /* ─── STATUS BAR ──────────────────────────────────────── */
   #statusbar {
@@ -1142,14 +1134,14 @@
   <!-- ── CHART ─────────────────────────────────────────── -->
   <div id="chart-wrap">
     <div id="chart-container">
-      <div id="pane-symbol-badge"></div>
       <div id="price-countdown-badge">—</div>
       <div id="ohlcv-bar">
-        <span><b>O</b><span id="ohlc-o">—</span></span>
-        <span><b>H</b><span id="ohlc-h">—</span></span>
-        <span><b>L</b><span id="ohlc-l">—</span></span>
-        <span><b>C</b><span id="ohlc-c">—</span></span>
-        <span><b>V</b><span id="ohlc-v">—</span></span>
+        <span id="pane-symbol-badge"></span>
+        <span class="ohlcv-val"><b>O</b><span id="ohlc-o">—</span></span>
+        <span class="ohlcv-val"><b>H</b><span id="ohlc-h">—</span></span>
+        <span class="ohlcv-val"><b>L</b><span id="ohlc-l">—</span></span>
+        <span class="ohlcv-val"><b>C</b><span id="ohlc-c">—</span></span>
+        <span class="ohlcv-val"><b>V</b><span id="ohlc-v">—</span></span>
       </div>
       <div id="watchtower-bias-badge"></div>
       <div id="chart-indicator-chips"></div>
@@ -1971,6 +1963,13 @@ function renderLayoutGrid(n){
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
       e.preventDefault();
       try { f.contentWindow.redoDrawing(); } catch(err){}
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'r') {
+      // Tecla R sola (sin Ctrl/Cmd — ESE es el reload nativo del navegador,
+      // que una página no puede interceptar) refresca el chart en el
+      // lugar, sin recargar la página ni perder dibujos/layout — mismo
+      // criterio que el botón Refrescar (respeta el selector Activo/Todos).
+      e.preventDefault();
+      broadcast({ type:'zentinel:refresh' });
     }
   });
   window.shellToggleVolume = function(){
@@ -4357,6 +4356,15 @@ function initDrawingLayer() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
       e.preventDefault();
       redoDrawing();
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'r') {
+      // Tecla R sola (sin Ctrl/Cmd — ESE es el reload nativo del navegador,
+      // que una página no puede interceptar) refresca el chart en el
+      // lugar, sin recargar la página ni perder dibujos/layout — mismo
+      // criterio que el botón Refrescar de la barra.
+      const tag = document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+      e.preventDefault();
+      refreshChart();
     }
   });
 }
@@ -4405,10 +4413,13 @@ function renderTfBar() {
   });
   bar.innerHTML = html;
 }
-function updateTfBarSymbol(symbol) {
+function updateTfBarSymbol(symbol, timeframe) {
   document.getElementById('tf-bar-symbol').textContent = symbol;
   const badge = document.getElementById('pane-symbol-badge');
-  if (badge) badge.textContent = symbol;
+  if (!badge) return;
+  const tf = timeframe || STATE.timeframe;
+  const tfInfo = ALL_TIMEFRAMES.find(t => t.tf === tf);
+  badge.textContent = tfInfo ? `${symbol} · ${tfInfo.label}` : symbol;
 }
 function initTfBarScrollFade(scroller, wrap) {
   const fadeL = wrap.querySelector('.tf-scroll-fade-l');
@@ -6639,23 +6650,15 @@ function buildChartBackground(cs){
 function applyChartSettings(){
   if(!chart || !candleSeries) return;
   const cs = STATE.chartSettings;
+  // El símbolo+TF y los valores OHLCV ahora comparten una sola línea
+  // (#ohlcv-bar) — ocultar OHLCV (cs.showOhlcv) solo apaga esos valores,
+  // el símbolo+TF de esa misma línea sigue siempre visible.
   const ohlcvBar = document.getElementById('ohlcv-bar');
   const ohlcvHidden = cs.showOhlcv===false;
-  if (ohlcvBar) ohlcvBar.style.display = ohlcvHidden ? 'none' : '';
+  if (ohlcvBar) ohlcvBar.querySelectorAll('.ohlcv-val').forEach(el => { el.style.display = ohlcvHidden ? 'none' : ''; });
   const indChips = document.getElementById('chart-indicator-chips');
-  // En un panel de grilla, el nombre del símbolo flota arriba de todo
-  // (#pane-symbol-badge, ver CSS) en el lugar donde en modo 1 gráfico
-  // estaba la fila #tf-bar — así que acá todo lo demás (OHLCV, chips de
-  // indicadores) se corre ~24px más abajo para no superponerse.
-  const badgeOffset = EMBED_MODE ? 24 : 0;
-  if (ohlcvBar) ohlcvBar.style.top = (8 + badgeOffset) + 'px';
   if (indChips) {
     indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
-    // #chart-indicator-chips tiene un top "natural" de 40px (deja lugar a
-    // la barra OHLCV arriba) — si esa barra está oculta, sube a la misma
-    // posición que usaría el OHLCV (8px) cuando no está. badgeOffset suma
-    // el lugar del símbolo cuando corresponde (ver arriba).
-    indChips.style.top = (ohlcvHidden ? 8 + badgeOffset : 40 + badgeOffset) + 'px';
   }
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
   chart.applyOptions({
@@ -7077,7 +7080,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     updateWLPrice(symbol,last.close);
 
     document.getElementById('symbol-input').value=symbol;
-    updateTfBarSymbol(symbol);
+    updateTfBarSymbol(symbol, timeframe);
     document.title=`${symbol} · Zentinel`;
     setStatus('ok','● live');
     showOverlay(false);
