@@ -993,7 +993,7 @@
     <div class="tf-scroll-fade tf-scroll-fade-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
   </div>
   <div id="tf-fav-wrap">
-    <button id="tf-fav-trigger" title="Más timeframes / favoritos">
+    <button id="tf-fav-trigger" title="More timeframes / favorites">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     <div id="tf-fav-popup" class="tf-fav-popup"></div>
@@ -1032,7 +1032,7 @@
   <div class="topbar-spacer"></div>
   <div id="tf-bar-tools">
     <div id="layout-picker-wrap">
-      <button id="layout-picker-trigger" class="topbar-btn" title="Cantidad de gráficos">
+      <button id="layout-picker-trigger" class="topbar-btn" title="Number of charts">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
         <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -1041,7 +1041,7 @@
 
     <button class="topbar-btn theme-toggle-btn" title="Cambiar a modo claro" onclick="toggleTheme()"></button>
 
-    <button class="topbar-btn" id="btn-refresh" title="Refresh chart" onclick="refreshChart()">
+<button class="topbar-btn" id="btn-refresh" title="Refresh chart" onclick="refreshChart()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
 
@@ -1052,7 +1052,7 @@
       </svg>
     </button>
 
-    <button class="topbar-btn" id="btn-trades" title="Operaciones (paper trading)" onclick="openTradesModal()">
+    <button class="topbar-btn" id="btn-trades" title="Trades (paper trading)" onclick="openTradesModal()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
       <span class="tb-label" id="btn-trades-count"></span>
     </button>
@@ -1263,13 +1263,13 @@
       </div>
     </div>
   </div>
-  <button class="dtb-btn" id="dtb-confirm-trade" title="Registrar esta posición como operación abierta (paper trading)" onclick="confirmTrade()" style="display:none;color:var(--gold);">
+  <button class="dtb-btn" id="dtb-confirm-trade" title="Register this position as an open trade (paper trading)" onclick="confirmTrade()" style="display:none;color:var(--gold);">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l3.5 3.5L14 3"/></svg>
-    Confirmar operación
+    Confirm trade
   </button>
-  <button class="dtb-btn danger" id="dtb-close-trade" title="Cerrar manualmente esta operación" onclick="manualCloseTrade()" style="display:none;">
+  <button class="dtb-btn danger" id="dtb-close-trade" title="Manually close this trade" onclick="manualCloseTrade()" style="display:none;">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M6 6l4 4M10 6l-4 4"/></svg>
-    Cerrar operación
+    Close trade
   </button>
   <div class="dtb-sep"></div>
   <span class="dtb-label">Width</span>
@@ -1308,11 +1308,11 @@
   </button>
   <!-- Solo para 'rect': hoy borde y relleno comparten color y siempre están
        los dos prendidos — esto permite apagar uno sin el otro. -->
-  <button class="dtb-btn active" id="dtb-rect-border" title="Mostrar/ocultar el borde" onclick="onDtbToggleRectPart('showBorder')" style="display:none">
+  <button class="dtb-btn active" id="dtb-rect-border" title="Show/hide border" onclick="onDtbToggleRectPart('showBorder')" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/></svg>
     Border
   </button>
-  <button class="dtb-btn active" id="dtb-rect-fill" title="Mostrar/ocultar el relleno" onclick="onDtbToggleRectPart('showFill')" style="display:none">
+  <button class="dtb-btn active" id="dtb-rect-fill" title="Show/hide fill" onclick="onDtbToggleRectPart('showFill')" style="display:none">
     <svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/></svg>
     Fill
   </button>
@@ -1347,14 +1347,14 @@
 <div class="modal-overlay" id="modal-chart-settings">
   <div class="modal" style="max-height:85vh;overflow-y:auto;">
     <h2>Chart Settings</h2>
-    <label>Preset (colores + indicadores + config de cada uno)</label>
+    <label>Preset (colors + indicators + each one's settings)</label>
     <div class="cs-row">
       <select id="cs-preset-select" class="dtb-select" style="flex:1;"></select>
     </div>
     <div class="cs-row" style="margin-bottom:14px;">
-      <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Aplicar</button>
-      <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Guardar actual como…</button>
-      <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Borrar</button>
+      <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
+      <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
+      <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
     </div>
     <div style="border-top:1px solid var(--border);margin-bottom:14px;"></div>
     <label>Background</label>
@@ -1363,7 +1363,7 @@
       <input type="color" id="cs-bg2" class="cs-color-inp" style="display:none;">
       <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;">
         <input type="checkbox" id="cs-bg-gradient" onchange="document.getElementById('cs-bg2').style.display=this.checked?'':'none';">
-        Degradé
+        Gradient
       </label>
     </div>
     <label>Text color (price scale, time axis, watermark)</label>
@@ -1452,19 +1452,19 @@
 <!-- ══ MODAL: OPERACIONES (paper trading) ═══════════════ -->
 <div class="modal-overlay" id="modal-trades">
   <div class="modal" style="max-height:85vh;overflow-y:auto;max-width:560px;">
-    <h2>Operaciones</h2>
-    <label>USD por punto, por lote (para calcular el profit)</label>
+    <h2>Trades</h2>
+    <label>USD per point, per lot (used to calculate profit)</label>
     <div class="cs-row" style="margin-bottom:14px;">
       <input type="number" id="trades-point-value" class="dtb-select" style="flex:1;" step="0.01" min="0" onchange="setTradesPointValue(this.value)">
     </div>
-    <label>Abiertas</label>
+    <label>Open</label>
     <div id="trades-open-list" style="margin-bottom:14px;"></div>
-    <label>Cerradas (<span id="trades-closed-count">0</span>)</label>
+    <label>Closed (<span id="trades-closed-count">0</span>)</label>
     <div id="trades-closed-list" style="max-height:220px;overflow-y:auto;scrollbar-width:thin;margin-bottom:14px;"></div>
     <div class="modal-btns">
-      <button class="btn-ghost" style="color:var(--red);" onclick="clearClosedTrades()">Vaciar cerradas</button>
-      <button class="btn-ghost" onclick="closeModal('modal-trades')">Cerrar</button>
-      <button class="btn-primary" onclick="downloadTradesCsv()">Descargar CSV</button>
+      <button class="btn-ghost" style="color:var(--red);" onclick="clearClosedTrades()">Clear closed</button>
+      <button class="btn-ghost" onclick="closeModal('modal-trades')">Close</button>
+      <button class="btn-primary" onclick="downloadTradesCsv()">Download CSV</button>
     </div>
   </div>
 </div>
@@ -1495,7 +1495,7 @@ try { localStorage.setItem('__td_probe__','1'); localStorage.removeItem('__td_pr
 const _lsMem = {};
 function lsGet(key){ if(!_lsOK) return _lsMem[key] ?? null; try { return localStorage.getItem(key); } catch(e){ return _lsMem[key] ?? null; } }
 function lsSet(key, val){ if(!_lsOK){ _lsMem[key]=val; return; } try { localStorage.setItem(key, val); } catch(e){ _lsMem[key]=val; } }
-if (!_lsOK) console.warn('Zentinel: localStorage no disponible (bloqueado por el navegador) — la configuración no va a persistir entre recargas.');
+if (!_lsOK) console.warn('Zentinel: localStorage not available (blocked by the browser) — settings will not persist across reloads.');
 
 // ══════════════════════════════════════════════════════════
 //  TEMA (claro/oscuro) — afecta toda la interfaz (toolbar, sidebar,
@@ -1549,7 +1549,8 @@ function toggleTheme(){
   lsSet('td_theme', next);
   applyTheme(next);
 }
-const THEME_ICON_SUN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+
+const THEME_ICON_SUN  ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
 const THEME_ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 applyTheme(lsGet('td_theme') || 'dark');
 // Si se cambia el tema desde OTRA pestaña/panel (grilla multi-chart: cada
@@ -1733,26 +1734,26 @@ function renderLayoutGrid(n){
       <div class="tf-scroll-fade tf-scroll-fade-r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>
     <div id="tf-fav-wrap">
-      <button id="tf-fav-trigger" title="Más timeframes / favoritos (panel activo)">
+      <button id="tf-fav-trigger" title="More timeframes / favorites (active panel)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div id="tf-fav-popup" class="tf-fav-popup"></div>
     </div>
     <div class="tf-sep"></div>
     <div id="gc-scope" style="display:flex;gap:2px;"></div>
-    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Símbolo…" autocomplete="off" title="Símbolo para el panel activo o todos — Enter para aplicar" style="width:120px;">
+    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Symbol…" autocomplete="off" title="Symbol for the active panel or all — Enter to apply" style="width:120px;">
     <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:6px;">
       <span class="tb-label" style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;">Preset:</span>
       <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
-      <button id="gc-preset-apply" class="topbar-btn">Aplicar</button>
+      <button id="gc-preset-apply" class="topbar-btn">Apply</button>
     </div>
-    <button class="topbar-btn" id="gc-indicators" title="Indicadores del panel activo">
+    <button class="topbar-btn" id="gc-indicators" title="Active panel indicators">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       <span class="tb-label">Indicators</span>
       <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     <div id="gc-replay-wrap" style="display:flex;align-items:center;gap:4px;">
-      <button class="topbar-btn" id="gc-replay-btn" title="Replay sincronizado: click en una vela del panel activo para arrancar — los demás paneles del mismo símbolo lo siguen, aunque estén en otro TF">
+      <button class="topbar-btn" id="gc-replay-btn" title="Synced replay: click a candle in the active panel to start — other panels with the same symbol follow it, even on a different TF">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         <span class="tb-label">Replay</span>
       </button>
@@ -1760,7 +1761,7 @@ function renderLayoutGrid(n){
         <button class="topbar-btn" id="gc-replay-play" title="Play / Pause">
           <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
         </button>
-        <button class="topbar-btn" id="gc-replay-step" title="Avanzar una vela">
+        <button class="topbar-btn" id="gc-replay-step" title="Step forward one bar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 5 20 12 13 19"/><line x1="4" y1="5" x2="4" y2="19"/></svg>
         </button>
         <select id="gc-replay-speed" class="topbar-input" style="width:auto;padding:4px 6px;font-size:11px;">
@@ -1770,19 +1771,19 @@ function renderLayoutGrid(n){
           <option value="120">4×</option>
         </select>
         <span id="gc-replay-label" style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap;min-width:80px;text-align:center;"></span>
-        <button class="topbar-btn" id="gc-replay-exit" title="Salir del replay" style="color:var(--red);">✕</button>
+        <button class="topbar-btn" id="gc-replay-exit" title="Exit replay" style="color:var(--red);">✕</button>
       </div>
     </div>
-    <button class="topbar-btn" id="gc-undo" title="Undo (Ctrl+Z) — panel activo">
+    <button class="topbar-btn" id="gc-undo" title="Undo (Ctrl+Z) — active panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
     </button>
-    <button class="topbar-btn" id="gc-redo" title="Redo (Ctrl+Shift+Z) — panel activo">
+    <button class="topbar-btn" id="gc-redo" title="Redo (Ctrl+Shift+Z) — active panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
     </button>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
       <div id="layout-picker-wrap">
-        <button id="layout-picker-trigger" class="topbar-btn" title="Cantidad de gráficos">
+        <button id="layout-picker-trigger" class="topbar-btn" title="Number of charts">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
           <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
@@ -1792,13 +1793,13 @@ function renderLayoutGrid(n){
       <button class="topbar-btn" id="gc-refresh" title="Refrescar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       </button>
-      <button class="topbar-btn" id="gc-settings" title="Configuración del panel activo">
+      <button class="topbar-btn" id="gc-settings" title="Active panel settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
-      <button class="topbar-btn" id="gc-trades" title="Operaciones (paper trading)">
+      <button class="topbar-btn" id="gc-trades" title="Trades (paper trading)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
         <span class="tb-label" id="gc-trades-count"></span>
       </button>
@@ -2071,7 +2072,7 @@ function renderLayoutGrid(n){
   function syncMagnetBtn(f){
     const btn = shellToolbar.querySelector('#btn-magnet');
     const mode = paneEval(f, 'STATE.magnetMode') || 'off';
-    const TIPS = { off:'Magnet: off', weak:'Magnet: weak (ajusta solo si el mouse está cerca)', strong:'Magnet: strong (ajusta siempre a la vela)' };
+    const TIPS = { off:'Magnet: off', weak:'Magnet: weak (snaps only when the mouse is close)', strong:'Magnet: strong (always snaps to the candle)' };
     btn.classList.toggle('active', mode==='strong');
     btn.classList.toggle('weak-active', mode==='weak');
     btn.dataset.tip = TIPS[mode] || TIPS.off;
@@ -2134,7 +2135,7 @@ function renderLayoutGrid(n){
   const scopeWrap = gbar.querySelector('#gc-scope');
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
-      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="¿A qué panel(es) aplican el símbolo, los TFs rápidos y 'Aplicar preset' de esta barra?">${s==='active'?'Activo':'Todos'}</button>`
+      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="Which panel(s) does this bar's symbol, quick TFs and 'Apply preset' affect?">${s==='active'?'Active':'All'}</button>`
     ).join('');
     scopeWrap.querySelectorAll('[data-scope]').forEach(b=>{
       b.addEventListener('click', ()=>{ scope=b.dataset.scope; renderScopeBtns(); });
@@ -2255,7 +2256,7 @@ function renderLayoutGrid(n){
     const names = Object.keys(presets).sort();
     presetSel.innerHTML = names.length
       ? names.map(nm=>`<option value="${nm}">${nm}</option>`).join('')
-      : `<option value="">(sin presets guardados)</option>`;
+      : `<option value="">(no saved presets)</option>`;
     if (names.includes(current)) presetSel.value = current;
   }
   renderPresetOptions();
@@ -2547,8 +2548,8 @@ function tfToSeconds(tf){
 // del gráfico (ORG, ejes, killzones).
 function fmtReplayTime(epochSeconds){
   const d = new Date(epochSeconds * 1000);
-  const date = d.toLocaleDateString([], { timeZone:'UTC' });
-  const time = d.toLocaleTimeString([], { timeZone:'UTC', hour:'2-digit', minute:'2-digit' });
+  const date = d.toLocaleDateString('en-US', { timeZone:'UTC' });
+  const time = d.toLocaleTimeString('en-US', { timeZone:'UTC', hour:'2-digit', minute:'2-digit' });
   return `${date} ${time}`;
 }
 // Mismo criterio de arriba (UTC forzado) para la etiqueta de fecha/hora
@@ -4254,7 +4255,7 @@ function initDrawingLayer() {
       // Como en TV: se escribe directo sobre el chart, no un prompt() nativo.
       const label = document.createElement('div');
       label.contentEditable = 'true';
-      label.dataset.placeholder = 'Añadir texto';
+      label.dataset.placeholder = 'Add text';
       label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolDefaults.color};font-family:var(--font-mono);font-size:${11+toolDefaults.width}px;pointer-events:auto;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;outline:1px solid ${toolDefaults.color}88;min-width:10px;cursor:text;`;
       container.appendChild(label);
 
@@ -4673,7 +4674,7 @@ const LAYOUT_ICONS = {
   3: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="12" y1="12" x2="21" y2="12"/></svg>',
   4: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
 };
-const LAYOUT_LABELS = { 1:'1 gráfico', 2:'2 gráficos', 3:'3 gráficos', 4:'4 gráficos' };
+const LAYOUT_LABELS = { 1:'1 chart', 2:'2 charts', 3:'3 charts', 4:'4 charts' };
 function goToLayout(v){
   if (v!=='1' && !EMBED_MODE && LAYOUT_N===1) clonePaneState('', '_p1');
   location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
@@ -4717,7 +4718,7 @@ function setTool(btn, name) {
 // mouse ya cayó cerca de un punto de la vela) y strong (ajusta siempre al
 // punto más cercano, sin importar la distancia).
 const MAGNET_CYCLE = ['off','weak','strong'];
-const MAGNET_TIPS = { off:'Magnet: off', weak:'Magnet: weak (ajusta solo si el mouse está cerca)', strong:'Magnet: strong (ajusta siempre a la vela)' };
+const MAGNET_TIPS = { off:'Magnet: off', weak:'Magnet: weak (snaps only when the mouse is close)', strong:'Magnet: strong (always snaps to the candle)' };
 function renderMagnetBtn() {
   const btn = document.getElementById('btn-magnet');
   btn.classList.toggle('active', STATE.magnetMode === 'strong');
@@ -4874,11 +4875,11 @@ function renderIndList() {
 // ══════════════════════════════════════════════════════════
 const WT_TOGGLE_DEFS = [
   { key:'killzones', label:'Killzones (Asia/London/NY)' },
-  { key:'pdLevels',  label:'PDH / PDL / PDM (día anterior)' },
-  { key:'pwLevels',  label:'PWH / PWL / PWM (semana anterior)' },
+  { key:'pdLevels',  label:'PDH / PDL / PDM (previous day)' },
+  { key:'pwLevels',  label:'PWH / PWL / PWM (previous week)' },
   { key:'mno',       label:'MNO (Midnight Open)' },
   { key:'org',       label:'ORG (Opening Range Gap)' },
-  { key:'bias',      label:'Tabla de bias diario' },
+  { key:'bias',      label:'Daily bias table' },
 ];
 let _indSettingsTarget = null;
 
@@ -4907,15 +4908,15 @@ function openIndicatorSettings(name) {
     }).join('');
     body.innerHTML = togglesHtml
       + `<div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Transparencia de cajas (todas)</span>
+        <span style="flex:1">Box transparency (all)</span>
         <input type="number" id="wt-box-opacity" min="0" max="100" step="1" value="${STATE.watchtower.boxOpacity}" style="width:56px">
         <span style="color:var(--text-dim)">%</span>
       </div>`
       + `<div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Historial visual de Killzones (días hacia atrás)</span>
+        <span style="flex:1">Killzones visual history (days back)</span>
         <input type="number" id="wt-hist-days" min="1" max="60" step="1" value="${STATE.watchtower.histDays}" style="width:56px">
       </div>`
-      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Horarios de Killzones (hora NY)</div>`
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Killzone times (NY time)</div>`
       + kzHtml
       + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">ORG (Opening Range Gap)</div>
       <div class="wt-set-row" style="gap:8px">
@@ -4933,12 +4934,12 @@ function openIndicatorSettings(name) {
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Low sweep color</span>
         <input type="color" id="sn-color-sweep-low" value="${sweepLow.hex}">
-        <input type="number" id="sn-color-sweep-low-tr" min="0" max="100" step="1" value="${sweepLow.transparency}" style="width:48px" title="Transparencia %">
+        <input type="number" id="sn-color-sweep-low-tr" min="0" max="100" step="1" value="${sweepLow.transparency}" style="width:48px" title="Transparency %">
       </div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">High sweep color</span>
         <input type="color" id="sn-color-sweep-high" value="${sweepHigh.hex}">
-        <input type="number" id="sn-color-sweep-high-tr" min="0" max="100" step="1" value="${sweepHigh.transparency}" style="width:48px" title="Transparencia %">
+        <input type="number" id="sn-color-sweep-high-tr" min="0" max="100" step="1" value="${sweepHigh.transparency}" style="width:48px" title="Transparency %">
       </div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Sweep line width</span>
@@ -4953,12 +4954,12 @@ function openIndicatorSettings(name) {
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Bullish CISD color</span>
         <input type="color" id="sn-color-cisd-bull" value="${cisdBull.hex}">
-        <input type="number" id="sn-color-cisd-bull-tr" min="0" max="100" step="1" value="${cisdBull.transparency}" style="width:48px" title="Transparencia %">
+        <input type="number" id="sn-color-cisd-bull-tr" min="0" max="100" step="1" value="${cisdBull.transparency}" style="width:48px" title="Transparency %">
       </div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Bearish CISD color</span>
         <input type="color" id="sn-color-cisd-bear" value="${cisdBear.hex}">
-        <input type="number" id="sn-color-cisd-bear-tr" min="0" max="100" step="1" value="${cisdBear.transparency}" style="width:48px" title="Transparencia %">
+        <input type="number" id="sn-color-cisd-bear-tr" min="0" max="100" step="1" value="${cisdBear.transparency}" style="width:48px" title="Transparency %">
       </div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">CISD line width</span>
@@ -5005,15 +5006,15 @@ function openIndicatorSettings(name) {
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · M15</div>
       <label class="wt-set-row"><span>Show M15 🟢</span><input type="checkbox" id="sn-show-m15-bull" ${sn.showM15Bull?'checked':''}></label>
       <label class="wt-set-row"><span>Show M15 🔘</span><input type="checkbox" id="sn-show-m15-bear" ${sn.showM15Bear?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (cuántos mostrar)</span><input type="number" id="sn-m15-count" min="1" max="20" step="1" value="${sn.m15Count}" style="width:56px"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-m15-bull-color" value="${snParseRgba(sn.m15BullColor).hex}"><input type="number" id="sn-m15-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BullColor).transparency}" style="width:48px" title="Transparencia %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-m15-bear-color" value="${snParseRgba(sn.m15BearColor).hex}"><input type="number" id="sn-m15-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BearColor).transparency}" style="width:48px" title="Transparencia %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (how many to show)</span><input type="number" id="sn-m15-count" min="1" max="20" step="1" value="${sn.m15Count}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-m15-bull-color" value="${snParseRgba(sn.m15BullColor).hex}"><input type="number" id="sn-m15-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BullColor).transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-m15-bear-color" value="${snParseRgba(sn.m15BearColor).hex}"><input type="number" id="sn-m15-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BearColor).transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · H4</div>
       <label class="wt-set-row"><span>Show H4 🟢</span><input type="checkbox" id="sn-show-h4-bull" ${sn.showH4Bull?'checked':''}></label>
       <label class="wt-set-row"><span>Show H4 🔘</span><input type="checkbox" id="sn-show-h4-bear" ${sn.showH4Bear?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (cuántos mostrar)</span><input type="number" id="sn-h4-count" min="1" max="20" step="1" value="${sn.h4Count}" style="width:56px"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-h4-bull-color" value="${snParseRgba(sn.h4BullColor).hex}"><input type="number" id="sn-h4-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BullColor).transparency}" style="width:48px" title="Transparencia %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-h4-bear-color" value="${snParseRgba(sn.h4BearColor).hex}"><input type="number" id="sn-h4-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BearColor).transparency}" style="width:48px" title="Transparencia %"></div>`;
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (how many to show)</span><input type="number" id="sn-h4-count" min="1" max="20" step="1" value="${sn.h4Count}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-h4-bull-color" value="${snParseRgba(sn.h4BullColor).hex}"><input type="number" id="sn-h4-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BullColor).transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-h4-bear-color" value="${snParseRgba(sn.h4BearColor).hex}"><input type="number" id="sn-h4-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BearColor).transparency}" style="width:48px" title="Transparency %"></div>`;
   } else if (name === 'Sweeps') {
     const sw = STATE.sweeps;
     body.innerHTML = `
@@ -5053,7 +5054,7 @@ function openIndicatorSettings(name) {
         <input type="color" id="ind-style-color" value="${style.color}">
       </div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Grosor de línea</span>
+        <span style="flex:1">Line thickness</span>
         <input type="number" id="ind-style-width" min="1" max="5" step="1" value="${style.lineWidth}" style="width:56px">
       </div>`;
   }
@@ -6794,7 +6795,7 @@ function renderPresetSelect(){
   const current = sel.value;
   try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
   const names = Object.keys(STATE.presets).sort();
-  sel.innerHTML = '<option value="">— elegir preset —</option>'
+  sel.innerHTML = '<option value="">— choose preset —</option>'
     + names.map(n => `<option value="${n}">${n}</option>`).join('');
   if (names.includes(current)) sel.value = current;
 }
@@ -6802,7 +6803,7 @@ function renderPresetSelect(){
 function saveCurrentAsPreset(){
   commitChartSettingsForm();
   const existing = Object.keys(STATE.presets).sort();
-  const name = prompt('Nombre del preset:' + (existing.length ? '\n(ya existen: ' + existing.join(', ') + ')' : ''));
+  const name = prompt('Preset name:' + (existing.length ? '\n(already exist: ' + existing.join(', ') + ')' : ''));
   if (!name) return;
   STATE.presets[name] = JSON.parse(JSON.stringify(captureCurrentDesign()));
   savePresetsState();
@@ -6858,7 +6859,7 @@ function deleteSelectedPreset(){
   const sel = document.getElementById('cs-preset-select');
   const name = sel.value;
   if (!name) return;
-  if (!confirm(`¿Borrar el preset "${name}"?`)) return;
+  if (!confirm(`Delete preset "${name}"?`)) return;
   delete STATE.presets[name];
   savePresetsState();
   renderPresetSelect();
@@ -6890,8 +6891,8 @@ function updateStatusBar(sym,tf,bars,first,last){
   document.getElementById('sb-sym').textContent=sym;
   document.getElementById('sb-tf').textContent=tf;
   document.getElementById('sb-bars').textContent=bars;
-  const d1=new Date(first.time*1000).toLocaleDateString();
-  const d2=new Date(last.time*1000).toLocaleDateString();
+  const d1=new Date(first.time*1000).toLocaleDateString('en-US');
+  const d2=new Date(last.time*1000).toLocaleDateString('en-US');
   document.getElementById('sb-range').textContent=`${d1} – ${d2}`;
 }
 
@@ -7057,7 +7058,7 @@ async function appendNewBar(symbol, timeframe){
     const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=3`;
     const res=await fetch(url);
     const json=await res.json();
-    if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'sin datos');
+    if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'no data');
 
     const prevLastTime=window._lastCandles[window._lastCandles.length-1].time;
     json.bars.forEach(bar=>{
@@ -7125,7 +7126,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     const json=await res.json();
     if(json.error)throw new Error(json.error);
     const candles=json.bars;
-    if(!Array.isArray(candles)||candles.length===0)throw new Error('sin datos para '+symbol);
+    if(!Array.isArray(candles)||candles.length===0)throw new Error('no data for '+symbol);
 
     window._lastCandles=candles;
     // Números enteros en el eje de precio (sin decimales) para símbolos
@@ -7568,10 +7569,10 @@ function renderTradesCountBadge(){
 function confirmTrade(){
   const d = getSelected();
   if (!d || (d.type !== 'long' && d.type !== 'short')) return;
-  const volStr = prompt('Volumen (lotes) para esta operación:', '1');
+  const volStr = prompt('Volume (lots) for this trade:', '1');
   if (volStr === null) return;
   const volume = parseFloat(volStr);
-  if (!volume || volume <= 0) { alert('Volumen inválido.'); return; }
+  if (!volume || volume <= 0) { alert('Invalid volume.'); return; }
   captureUndoSnapshot();
   const trade = {
     id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -7692,8 +7693,8 @@ function renderTradesModal(){
   const curSym = normalizeSymbolForJournal(STATE.symbol);
   const openList = document.getElementById('trades-open-list');
   if (openList) {
-    openList.innerHTML = !open.length ? '<div class="trades-empty">Sin operaciones abiertas.</div>' : open.map(t => {
-      let plHtml = '<span class="trade-row-meta">— (abrí el símbolo para ver el P/L en vivo)</span>';
+    openList.innerHTML = !open.length ? '<div class="trades-empty">No open trades.</div>' : open.map(t => {
+      let plHtml = '<span class="trade-row-meta">— (open the symbol to see live P/L)</span>';
       if (lastBar && t.symbol === curSym) {
         const sign = t.side === 'long' ? 1 : -1;
         const pl = (lastBar.close - t.entry_price) * sign * t.volume * pointValue;
@@ -7713,7 +7714,7 @@ function renderTradesModal(){
   if (countEl) countEl.textContent = String(closed.length);
   const closedList = document.getElementById('trades-closed-list');
   if (closedList) {
-    closedList.innerHTML = !closed.length ? '<div class="trades-empty">Todavía no cerraste ninguna.</div>' : closed.slice().reverse().map(t => `<div class="trade-row">
+    closedList.innerHTML = !closed.length ? '<div class="trades-empty">No closed trades yet.</div>' : closed.slice().reverse().map(t => `<div class="trade-row">
       <div class="trade-row-top">
         <span class="trade-side ${t.side}">${t.side==='long'?'LONG':'SHORT'}</span>
         <span class="trade-sym">${t.symbol}</span>
@@ -7725,7 +7726,7 @@ function renderTradesModal(){
 }
 function clearClosedTrades(){
   if (!getClosedTrades().length) return;
-  if (!confirm('¿Vaciar el historial de operaciones cerradas? Esto no se puede deshacer (si no las bajaste en CSV todavía, se pierden).')) return;
+  if (!confirm('Clear the closed trades history? This can\'t be undone (if you haven\'t downloaded the CSV yet, they\'re lost).')) return;
   saveClosedTrades([]);
   renderTradesModal();
 }
@@ -7735,7 +7736,7 @@ function clearClosedTrades(){
 // literal (no 'buy'/'sell') para que ese parser lo reconozca.
 function downloadTradesCsv(){
   const closed = getClosedTrades();
-  if (!closed.length) { alert('No hay operaciones cerradas para exportar.'); return; }
+  if (!closed.length) { alert('No closed trades to export.'); return; }
   const header = ['entry_time','exit_time','account','contract','side','quantity','entry_price','exit_price','duration','gross_pnl','fees','commission','net_pnl','pnl_ticks','entry_time_utc','exit_time_utc'];
   const rows = closed.map(t => {
     const entryIso = new Date(t.open_time * 1000).toISOString();
@@ -7788,8 +7789,8 @@ function downloadTradesCsv(){
     });
   }).catch(()=>{
     badge.textContent='BRIDGE OFF';badge.classList.remove('connected');
-    showLoader('No conecta con el puente MT5 — corré bridge_server.py y abrí MT5 con el Service ZentinelBridge');
-    setStatus('err','● sin puente');
+    showLoader('Not connected to the MT5 bridge — run bridge_server.py and open MT5 with the ZentinelBridge Service');
+    setStatus('err','● no bridge');
   });
 })();
 </script>
