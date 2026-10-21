@@ -304,18 +304,20 @@
   }
 
   /* ─── Panel de Operaciones (paper trading) ───────────────────── */
-  .trade-row { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .trade-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid var(--border); font-size:11px; font-family:var(--font-mono); }
   .trade-row:last-child { border-bottom:none; }
-  .trade-row-top { display:flex; align-items:center; gap:8px; }
-  .trade-side { font-weight:700; font-family:var(--font-mono); font-size:11px; padding:1px 6px; border-radius:3px; }
-  .trade-side.long { color:var(--green); background:rgba(38,166,154,.15); }
-  .trade-side.short { color:var(--red); background:rgba(239,83,80,.15); }
-  .trade-sym { font-weight:600; flex:1; }
-  .trade-pl { font-family:var(--font-mono); font-weight:600; }
+  .trade-side { font-weight:700; font-size:10px; width:14px; text-align:center; flex-shrink:0; }
+  .trade-side.long { color:var(--green); }
+  .trade-side.short { color:var(--red); }
+  .trade-src-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .trade-src-dot.live { background:var(--green); }
+  .trade-src-dot.replay { background:#5b9cf6; }
+  .trade-sym { font-weight:600; flex-shrink:0; }
+  .trade-row-meta { color:var(--text-dim); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .trade-pl { font-weight:600; flex-shrink:0; text-align:right; }
   .trade-pl.pos { color:var(--green); }
   .trade-pl.neg { color:var(--red); }
-  .trade-row-meta { font-family:var(--font-mono); font-size:10.5px; color:var(--text-dim); }
-  .trade-close-btn { background:none; border:1px solid var(--border-light); border-radius:4px; color:var(--text-dim); font-size:10px; padding:2px 8px; cursor:pointer; }
+  .trade-close-btn { background:none; border:1px solid var(--border-light); border-radius:4px; color:var(--text-dim); font-size:10px; padding:1px 6px; cursor:pointer; flex-shrink:0; }
   .trade-close-btn:hover { color:var(--red); border-color:var(--red); }
   .trades-empty { color:var(--text-dim); font-size:12px; padding:8px 0; }
 
@@ -2294,6 +2296,21 @@ function renderLayoutGrid(n){
   gbar.querySelector('#gc-trades').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openTrades' }, '*');
   });
+  // El journal es global pero el precio fresco solo lo tiene CADA panel
+  // (su propio window._lastCandles) — el badge de P/L en vivo de la barra
+  // del shell se arma leyendo getTradesBadgeInfo() del panel activo cada
+  // 1s (mismo ritmo que el tick de precio en vivo de cada panel), en vez
+  // de duplicar el cálculo acá sin tener el precio.
+  setInterval(() => {
+    const gcCount = document.getElementById('gc-trades-count');
+    if (!gcCount) return;
+    const f = iframeEls[activePane-1];
+    try {
+      const info = f.contentWindow.getTradesBadgeInfo();
+      gcCount.textContent = info.label;
+      gcCount.style.color = info.color;
+    } catch(e){}
+  }, 1000);
 
   // Undo/Redo — igual que Settings, siempre sobre el panel activo (cada
   // panel tiene su propio historial de dibujos, no tiene sentido "a todos").
@@ -3122,9 +3139,15 @@ function updateDrawingGeometry(d) {
     ok = true;
 
   } else if ((d.type === 'long' || d.type === 'short') && d.series.length === 3) {
-    d.series[0].setData([{time:d.p1.time,value:d.p1.price},{time:d.p2.time,value:d.p1.price}]);
-    d.series[1].setData([{time:d.p1.time,value:d.targetPrice},{time:d.p2.time,value:d.targetPrice}]);
-    d.series[2].setData([{time:d.p1.time,value:d.p2.price},{time:d.p2.time,value:d.p2.price}]);
+    // positionToolRenderTimes en vez de d.p1.time/d.p2.time crudos: exige
+    // tiempos estrictamente ascendentes (sin esto, un dibujo sincronizado
+    // de otro TF o con los dos tiempos "iguales" rompe setData entero y
+    // desaparecen las velas — mismo bug ya resuelto en buildDrawingOnChart
+    // y syncPositionTool, faltaba acá).
+    const { t1: lineT1, t2: lineT2 } = positionToolRenderTimes(d);
+    d.series[0].setData([{time:lineT1,value:d.p1.price},{time:lineT2,value:d.p1.price}]);
+    d.series[1].setData([{time:lineT1,value:d.targetPrice},{time:lineT2,value:d.targetPrice}]);
+    d.series[2].setData([{time:lineT1,value:d.p2.price},{time:lineT2,value:d.p2.price}]);
     syncPositionTool(d);
     ok = true;
   }
@@ -3221,11 +3244,12 @@ function syncPositionTool(d) {
   const risk = Math.abs(entry-stop), reward = Math.abs(target-entry);
   const rr = risk>0 ? (reward/risk) : 0;
   const xMid = (xL+xR)/2;
-  d.entryTextEl.textContent = '';
+  d.entryTextEl.setAttribute('x', xMid); d.entryTextEl.setAttribute('y', yEntry-3);
+  d.entryTextEl.textContent = `RR ${rr.toFixed(1)}`;
   d.tpTextEl.setAttribute('x', xMid); d.tpTextEl.setAttribute('y', yTarget-3);
-  d.tpTextEl.textContent = `TP +${fmt(reward)} pts  ·  R:R 1:${rr.toFixed(2)}`;
+  d.tpTextEl.textContent = `+${fmt(reward)}`;
   d.slTextEl.setAttribute('x', xMid); d.slTextEl.setAttribute('y', yStop-3);
-  d.slTextEl.textContent = `SL -${fmt(risk)} pts`;
+  d.slTextEl.textContent = `-${fmt(risk)}`;
 }
 
 function clearDrawings() {
@@ -3397,8 +3421,9 @@ function buildDrawingOnChart(d) {
     ['entryTextEl','tpTextEl','slTextEl'].forEach(key => {
       if (!(d[key] instanceof Element)) {
         const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-        t.setAttribute('font-family', "'DM Mono', monospace");
-        t.setAttribute('font-size', '10');
+        t.setAttribute('font-family', "'DM Sans', sans-serif");
+        t.setAttribute('font-size', '11');
+        t.setAttribute('font-weight', '500');
         t.setAttribute('dominant-baseline', 'auto');
         t.setAttribute('text-anchor', 'middle');
         window._drawingLayerSvg.appendChild(t);
@@ -4221,7 +4246,16 @@ function initDrawingLayer() {
       d.p1.price = candleSeries.coordinateToPrice(y) ?? d.p1.price;
       d.p1.time  = chart.timeScale().coordinateToTime(x) ?? d.p1.time;
     }
-    if (window._dragSession) { highlightSelectedSvg(selectedDrawingId); markDrawingsDirty(); }
+    if (window._dragSession) {
+      highlightSelectedSvg(selectedDrawingId);
+      markDrawingsDirty();
+      // Si el dibujo que se acaba de arrastrar es una posición YA confirmada
+      // (tiene tradeId), el SL/TP que quedó dibujado pasa a ser el SL/TP
+      // real de la operación abierta — si no, mover el dibujo no tenía
+      // ningún efecto en lo que realmente se estaba vigilando para cerrar
+      // solo, y la operación seguía con los niveles viejos (invisibles).
+      syncTradeFromDrawing(window._dragSession.drawing);
+    }
     _commitDragUndoSnapshot();
     window._dragSession = null;
   }, { capture:true });
@@ -7318,7 +7352,7 @@ async function refreshFormingCandle(symbol, timeframe){
     if (bar.open===last.open && bar.high===last.high && bar.low===last.low && bar.close===last.close && bar.volume===last.volume) return;
 
     window._lastCandles[window._lastCandles.length-1]=bar;
-    checkOpenTradesAgainstBar(bar);
+    checkOpenTradesAgainstBar(bar, true);
     renderSeries(timeframe);
     // Si esta vela en formación hizo un máximo/mínimo nuevo, el autoescalado
     // de precio se mueve — las velas y las LÍNEAS del dibujo (series reales
@@ -7560,10 +7594,59 @@ function getSimNow(){
   if (last) return last.time;
   return Math.floor(Date.now() / 1000);
 }
+// Se llama al soltar un drag sobre un dibujo Long/Short ya confirmado —
+// el SL/TP (y el entry, si lo movieron) que quedaron dibujados pasan a
+// ser los de la operación abierta de verdad. Antes de esto, arrastrar el
+// dibujo después de confirmar no cambiaba nada de lo que
+// checkOpenTradesAgainstBar vigilaba para cerrar sola — quedaba
+// desincronizado con lo que se veía en pantalla.
+function syncTradeFromDrawing(d){
+  if (!d || !d.tradeId || (d.type !== 'long' && d.type !== 'short')) return;
+  const open = getOpenTrades();
+  const t = open.find(x => x.id === d.tradeId);
+  if (!t) return;
+  const newSl = (d.p2.price || d.p2.price === 0) ? d.p2.price : null;
+  const newTp = (d.targetPrice || d.targetPrice === 0) ? d.targetPrice : null;
+  if (t.stop_loss === newSl && t.take_profit === newTp && t.entry_price === d.p1.price) return;
+  t.stop_loss = newSl;
+  t.take_profit = newTp;
+  t.entry_price = d.p1.price;
+  saveOpenTrades(open);
+  renderTradesCountBadge();
+  renderTradesModalIfOpen();
+}
+
+// Suma de P/L en vivo de las operaciones abiertas DEL SÍMBOLO ACTUAL (es
+// lo único de lo que este panel tiene precio fresco) — se llama en cada
+// tick de precio en vivo y en cada paso de replay, igual que
+// checkOpenTradesAgainstBar, así el número de la barra de arriba queda
+// al día en los dos modos sin agregar un mecanismo aparte. Expuesta como
+// getTradesBadgeInfo() (function declaration → cuelga de contentWindow)
+// para que en la grilla el shell pueda leerla del panel activo, ya que
+// #gc-trades-count vive en OTRO documento (el shell), no acá.
+function getTradesBadgeInfo(){
+  const open = getOpenTrades();
+  const n = open.length;
+  if (n === 0) return { label:'', color:'' };
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+  const pointValue = getTradesPointValue();
+  let pl = 0, havePrice = false;
+  open.forEach(t => {
+    if (t.symbol !== sym || !lastBar) return;
+    havePrice = true;
+    const sign = t.side === 'long' ? 1 : -1;
+    pl += (lastBar.close - t.entry_price) * sign * t.volume * pointValue;
+  });
+  return {
+    label: havePrice ? `${n} · ${pl>=0?'+':''}${pl.toFixed(2)}` : String(n),
+    color: havePrice ? (pl >= 0 ? 'var(--green)' : 'var(--red)') : '',
+  };
+}
 function renderTradesCountBadge(){
-  const n = getOpenTrades().length;
+  const info = getTradesBadgeInfo();
   const el = document.getElementById('btn-trades-count');
-  if (el) el.textContent = n > 0 ? String(n) : '';
+  if (el) { el.textContent = info.label; el.style.color = info.color; }
 }
 
 function confirmTrade(){
@@ -7574,6 +7657,17 @@ function confirmTrade(){
   const volume = parseFloat(volStr);
   if (!volume || volume <= 0) { alert('Invalid volume.'); return; }
   captureUndoSnapshot();
+  // Confirmar ejecuta YA, al precio de mercado actual — como una orden a
+  // mercado real, no al nivel exacto que se dibujó (ese era solo para
+  // planificar la entrada). Se corre TODO el bloque (entry+SL+TP) la
+  // misma cantidad de puntos que se corrió el entry, preservando el RR
+  // que se armó visualmente — mismo mecanismo que arrastrar a mano la
+  // línea de entry (ver applyHandleDrag, role:'entry'), así el dibujo en
+  // pantalla queda consistente con la operación que realmente se abrió.
+  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+  const marketPrice = lastBar ? lastBar.close : d.p1.price;
+  applyHandleDrag(d, 'entry', marketPrice, d.p1.time);
+  if (!updateDrawingGeometry(d)) redrawDrawing(d);
   const trade = {
     id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     symbol: normalizeSymbolForJournal(STATE.symbol),
@@ -7621,8 +7715,12 @@ function finalizeTradeClose(t, closePrice, closeTime, reason){
 // con el mismo símbolo — getOpenTrades() siempre relee el storage (fuente
 // de verdad compartida), así que el segundo panel que llega ya no encuentra
 // la operación y no la cierra dos veces.
-function checkOpenTradesAgainstBar(bar){
+function checkOpenTradesAgainstBar(bar, formingLive){
   if (!bar) return;
+  // Esto corre en CADA tick de precio en vivo y en CADA paso de replay —
+  // es el lugar más barato para además refrescar el P/L en vivo de la
+  // barra de arriba, sin agregar un segundo gancho aparte solo para eso.
+  renderTradesCountBadge();
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const open = getOpenTrades();
   let changed = false;
@@ -7631,12 +7729,25 @@ function checkOpenTradesAgainstBar(bar){
     const t = open[i];
     if (t.symbol !== sym) continue;
     let hitPrice = null, reason = null;
+    // La vela EN FORMACIÓN en vivo (refreshFormingCandle) trae su high/low
+    // de TODO lo que lleva formada esa vela hasta ahora — si el usuario
+    // confirma una operación a mitad de esa vela con un SL/TP cerca, el
+    // rango que la vela YA tenía antes de confirmar (antes de que la
+    // operación existiera) podía "tocar" el nivel y cerrarla al toque, sin
+    // que el precio se hubiera movido un solo tick desde que se confirmó.
+    // Para ese caso puntual (bar recién llegado, sigue en formación) se
+    // compara solo contra el último precio (bar.close) — lo único que
+    // representa de verdad "ahora". Velas ya cerradas (nueva vela real,
+    // replay) sí llevan high/low completo: ahí el rango entero es
+    // posterior a la confirmación, no hay nada que contaminar.
+    const hi = formingLive ? bar.close : bar.high;
+    const lo = formingLive ? bar.close : bar.low;
     if (t.side === 'long') {
-      if (t.stop_loss != null && bar.low <= t.stop_loss) { hitPrice = t.stop_loss; reason = 'sl'; }
-      else if (t.take_profit != null && bar.high >= t.take_profit) { hitPrice = t.take_profit; reason = 'tp'; }
+      if (t.stop_loss != null && lo <= t.stop_loss) { hitPrice = t.stop_loss; reason = 'sl'; }
+      else if (t.take_profit != null && hi >= t.take_profit) { hitPrice = t.take_profit; reason = 'tp'; }
     } else {
-      if (t.stop_loss != null && bar.high >= t.stop_loss) { hitPrice = t.stop_loss; reason = 'sl'; }
-      else if (t.take_profit != null && bar.low <= t.take_profit) { hitPrice = t.take_profit; reason = 'tp'; }
+      if (t.stop_loss != null && hi >= t.stop_loss) { hitPrice = t.stop_loss; reason = 'sl'; }
+      else if (t.take_profit != null && lo <= t.take_profit) { hitPrice = t.take_profit; reason = 'tp'; }
     }
     if (hitPrice != null) {
       finalizeTradeClose(t, hitPrice, bar.time, reason);
@@ -7694,19 +7805,20 @@ function renderTradesModal(){
   const openList = document.getElementById('trades-open-list');
   if (openList) {
     openList.innerHTML = !open.length ? '<div class="trades-empty">No open trades.</div>' : open.map(t => {
-      let plHtml = '<span class="trade-row-meta">— (open the symbol to see live P/L)</span>';
+      let plHtml = '<span class="trade-pl">—</span>';
       if (lastBar && t.symbol === curSym) {
         const sign = t.side === 'long' ? 1 : -1;
         const pl = (lastBar.close - t.entry_price) * sign * t.volume * pointValue;
-        plHtml = `<span class="trade-pl ${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${pl.toFixed(2)} USD</span>`;
+        plHtml = `<span class="trade-pl ${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${pl.toFixed(2)}</span>`;
       }
-      return `<div class="trade-row">
-        <div class="trade-row-top">
-          <span class="trade-side ${t.side}">${t.side==='long'?'LONG':'SHORT'}</span>
-          <span class="trade-sym">${t.symbol}</span>
-          ${plHtml}
-        </div>
-        <div class="trade-row-meta">Entry ${fmt(t.entry_price)} · SL ${t.stop_loss!=null?fmt(t.stop_loss):'—'} · TP ${t.take_profit!=null?fmt(t.take_profit):'—'} · Vol ${t.volume} · ${t.source==='replay'?'Replay':'Live'} · ${fmtTradeTime(t.open_time)}</div>
+      const meta = `${fmt(t.entry_price)} SL${t.stop_loss!=null?fmt(t.stop_loss):'—'} TP${t.take_profit!=null?fmt(t.take_profit):'—'} · ${t.volume}L`;
+      const fullInfo = `Entry ${fmt(t.entry_price)} · SL ${t.stop_loss!=null?fmt(t.stop_loss):'—'} · TP ${t.take_profit!=null?fmt(t.take_profit):'—'} · Vol ${t.volume} · ${t.source==='replay'?'Replay':'Live'} · Opened ${fmtTradeTime(t.open_time)}`;
+      return `<div class="trade-row" title="${fullInfo}">
+        <span class="trade-side ${t.side}">${t.side==='long'?'L':'S'}</span>
+        <span class="trade-src-dot ${t.source}"></span>
+        <span class="trade-sym">${t.symbol}</span>
+        <span class="trade-row-meta">${meta}</span>
+        ${plHtml}
       </div>`;
     }).join('');
   }
@@ -7714,14 +7826,17 @@ function renderTradesModal(){
   if (countEl) countEl.textContent = String(closed.length);
   const closedList = document.getElementById('trades-closed-list');
   if (closedList) {
-    closedList.innerHTML = !closed.length ? '<div class="trades-empty">No closed trades yet.</div>' : closed.slice().reverse().map(t => `<div class="trade-row">
-      <div class="trade-row-top">
-        <span class="trade-side ${t.side}">${t.side==='long'?'LONG':'SHORT'}</span>
+    closedList.innerHTML = !closed.length ? '<div class="trades-empty">No closed trades yet.</div>' : closed.slice().reverse().map(t => {
+      const meta = `${fmt(t.entry_price)}→${fmt(t.close_price)} · ${t.pips}p · ${t.duration_minutes}m · ${t.close_reason}`;
+      const fullInfo = `Entry ${fmt(t.entry_price)} → Close ${fmt(t.close_price)} · ${t.pips} pips · ${t.duration_minutes} min · Closed by ${t.close_reason} · ${t.source==='replay'?'Replay':'Live'} · ${fmtTradeTime(t.close_time)}`;
+      return `<div class="trade-row" title="${fullInfo}">
+        <span class="trade-side ${t.side}">${t.side==='long'?'L':'S'}</span>
+        <span class="trade-src-dot ${t.source}"></span>
         <span class="trade-sym">${t.symbol}</span>
-        <span class="trade-pl ${t.profit>=0?'pos':'neg'}">${t.profit>=0?'+':''}${t.profit.toFixed(2)} USD</span>
-      </div>
-      <div class="trade-row-meta">${fmt(t.entry_price)} → ${fmt(t.close_price)} · ${t.pips} pips · ${t.duration_minutes}min · ${t.close_reason} · ${t.source==='replay'?'Replay':'Live'} · ${fmtTradeTime(t.close_time)}</div>
-    </div>`).join('');
+        <span class="trade-row-meta">${meta}</span>
+        <span class="trade-pl ${t.profit>=0?'pos':'neg'}">${t.profit>=0?'+':''}${t.profit.toFixed(2)}</span>
+      </div>`;
+    }).join('');
   }
 }
 function clearClosedTrades(){
