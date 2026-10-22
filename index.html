@@ -7288,6 +7288,15 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
 
     Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
     STATE.indicators.forEach(name=>addIndicatorSeries(name));
+    // Los indicadores recién se agregan ACÁ, después del resize/resync de
+    // más arriba — si alguno trae una escala de precio con más dígitos o
+    // decimales que las velas (ninguna garantía de que coincida), la
+    // librería recién ahora se entera y puede necesitar más ancho para el
+    // price-scale, achicando el área de velas. Repetir el resize con el
+    // tamaño actual (mismos px, pero fuerza una relayout) atrapa ese caso
+    // — el que explicaba por qué el "mal acomodado al refrescar" aparecía
+    // solo en los paneles CON indicadores activos.
+    chart.applyOptions({ width:_cc.clientWidth, height:_cc.clientHeight });
 
     drawings.forEach(d => {
       d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
