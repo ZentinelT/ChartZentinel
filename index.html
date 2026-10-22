@@ -6962,6 +6962,7 @@ function renderSeries(timeframe){
   renderWatchtower();
   renderSniper();
   renderSweeps();
+  renderTradeMarkers();
 }
 
 // Recalcula EMA/SMA/VWAP sobre el set completo de velas cargadas — si no,
@@ -7687,6 +7688,7 @@ function confirmTrade(){
   selectDrawing(d.id);
   renderTradesCountBadge();
   renderTradesModalIfOpen();
+  renderTradeMarkers();
 }
 
 function finalizeTradeClose(t, closePrice, closeTime, reason){
@@ -7705,6 +7707,50 @@ function finalizeTradeClose(t, closePrice, closeTime, reason){
   const closedList = getClosedTrades();
   closedList.push(closed);
   saveClosedTrades(closedList);
+}
+
+// Flechitas estilo TradingView sobre las velas: entrada (arrowUp/arrowDown)
+// y, si ya cerró, resultado (circle verde/rojo con TP/SL/Close + P/L). Se
+// recalculan enteras cada vez — setMarkers() no tiene modo incremental, y
+// la lista de trades nunca es tan grande como para que importe el costo.
+function renderTradeMarkers(){
+  if (!candleSeries || !candleSeries.setMarkers) return;
+  const candles = window._lastCandles;
+  if (!candles || !candles.length) { candleSeries.setMarkers([]); return; }
+  const minT = candles[0].time, maxT = candles[candles.length - 1].time;
+  const inRange = (t) => t != null && t >= minT && t <= maxT;
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const markers = [];
+
+  const entryMarker = (t) => ({
+    time: t.open_time,
+    position: t.side === 'long' ? 'belowBar' : 'aboveBar',
+    color: t.side === 'long' ? '#26a69a' : '#ef5350',
+    shape: t.side === 'long' ? 'arrowUp' : 'arrowDown',
+    text: (t.side === 'long' ? 'Buy ' : 'Sell ') + fmt(t.entry_price),
+  });
+
+  getOpenTrades().forEach(t => {
+    if (t.symbol === sym && inRange(t.open_time)) markers.push(entryMarker(t));
+  });
+
+  getClosedTrades().forEach(t => {
+    if (t.symbol !== sym) return;
+    if (inRange(t.open_time)) markers.push(entryMarker(t));
+    if (inRange(t.close_time)) {
+      const label = t.close_reason === 'tp' ? 'TP' : t.close_reason === 'sl' ? 'SL' : 'Close';
+      markers.push({
+        time: t.close_time,
+        position: t.side === 'long' ? 'aboveBar' : 'belowBar',
+        color: t.profit >= 0 ? '#26a69a' : '#ef5350',
+        shape: 'circle',
+        text: `${label} ${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}`,
+      });
+    }
+  });
+
+  markers.sort((a, b) => a.time - b.time);
+  candleSeries.setMarkers(markers);
 }
 
 // Se llama en cada tick de precio en vivo (refreshFormingCandle/appendNewBar)
@@ -7768,6 +7814,7 @@ function checkOpenTradesAgainstBar(bar, formingLive){
   markDrawingsDirty();
   renderTradesCountBadge();
   renderTradesModalIfOpen();
+  renderTradeMarkers();
 }
 
 function manualCloseTrade(){
@@ -7788,6 +7835,7 @@ function manualCloseTrade(){
   markDrawingsDirty();
   renderTradesCountBadge();
   renderTradesModalIfOpen();
+  renderTradeMarkers();
 }
 
 function fmtTradeTime(epochSeconds){ return fmtReplayTime(epochSeconds); }
@@ -7849,6 +7897,7 @@ function clearClosedTrades(){
   if (!confirm('Clear the closed trades history? This can\'t be undone (if you haven\'t downloaded the CSV yet, they\'re lost).')) return;
   saveClosedTrades([]);
   renderTradesModal();
+  renderTradeMarkers();
 }
 // Formato CSV = fingerprint "Hyperprop" del importador del dashboard
 // (entry_time/exit_time + net_pnl/gross_pnl) — entra directo sin pasar
