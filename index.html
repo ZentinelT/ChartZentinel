@@ -4570,6 +4570,59 @@ function initDrawingLayer() {
     _redoStack = [];
   }
 
+  // Mover el dibujo seleccionado con las flechas: arriba/abajo un tick de
+  // precio (el mismo minMove que usa el eje ahora mismo), izquierda/derecha
+  // una vela — un paso fijo por tecla, no "a ojo" como con el mouse. Reusa
+  // el mismo snapshot pendiente + commit debounced que ya usa el drag con
+  // mouse (_pendingDragUndoSnapshot/_commitDragUndoSnapshot) para que
+  // mantener apretada la flecha (varios keydown seguidos) quede como UN
+  // solo paso de undo, no uno por tecla.
+  let _nudgeCommitTimer = null;
+  function nudgeSelectedDrawing(dir){
+    const d = getSelected();
+    if (!d || d.locked) return;
+    const candles = window._lastCandles || [];
+    if (!candles.length) return;
+    const barStep = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
+    let minMove = 0.01;
+    try { minMove = candleSeries.options().priceFormat.minMove || 0.01; } catch(e){}
+
+    const dPrice = dir === 'up' ? minMove : dir === 'down' ? -minMove : 0;
+    const dTime  = dir === 'right' ? barStep : dir === 'left' ? -barStep : 0;
+
+    if (!_pendingDragUndoSnapshot) _pendingDragUndoSnapshot = serializeDrawings();
+    clearTimeout(_nudgeCommitTimer);
+    _nudgeCommitTimer = setTimeout(_commitDragUndoSnapshot, 600);
+
+    if (d.type === 'text') {
+      if (d.p1.price != null) d.p1.price += dPrice;
+      if (d.p1.time  != null) d.p1.time  += dTime;
+      syncTextLabelPos(d);
+    } else {
+      if (d.p1 && d.p1.price != null) d.p1.price += dPrice;
+      if (d.p1 && d.p1.time  != null) d.p1.time  += dTime;
+      if (d.p2) {
+        if (d.p2.price != null) d.p2.price += dPrice;
+        if (d.p2.time  != null) d.p2.time  += dTime;
+      }
+      if (d.targetPrice != null) d.targetPrice += dPrice;
+      if (d.type === 'long' || d.type === 'short') {
+        // Mismo recorte que el drag con mouse del cuerpo entero (ver el
+        // mousemove de arriba) — si el borde derecho se va más allá del
+        // límite seguro, se corre TODA la caja hacia atrás en vez de
+        // recortar p2 solo, para no distorsionar el ancho (tiempo de riesgo).
+        const clampedT2 = clampPositionToolT2(d.p2.time);
+        if (clampedT2 !== d.p2.time) {
+          const shift = d.p2.time - clampedT2;
+          d.p1.time -= shift; d.p2.time -= shift;
+        }
+      }
+      if (!updateDrawingGeometry(d)) redrawDrawing(d);
+    }
+    markDrawingsDirty();
+    syncTradeFromDrawing(d);
+  }
+
   svg.addEventListener('mousedown', e => {
     e.preventDefault();
     const tool = STATE.activeTool;
@@ -4761,6 +4814,13 @@ function initDrawingLayer() {
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
       if (document.activeElement.tagName === 'INPUT') return;
       onDtbDelete();
+    }
+    if (selectedDrawingId && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      const tag = document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+      e.preventDefault();
+      const dir = e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down' : e.key === 'ArrowLeft' ? 'left' : 'right';
+      nudgeSelectedDrawing(dir);
     }
     // Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace — como en
     // cualquier editor. Se ignora con foco en un input, textarea o el
@@ -7503,14 +7563,24 @@ async function appendNewBar(symbol, timeframe){
     if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'no data');
 
     const prevLastTime=window._lastCandles[window._lastCandles.length-1].time;
-    json.bars.forEach(bar=>{
+    json.bars.forEach((bar,i)=>{
       if(bar.time<prevLastTime)return; // vela vieja, ya la tenemos
       if(bar.time===window._lastCandles[window._lastCandles.length-1].time){
         window._lastCandles[window._lastCandles.length-1]=bar;
       } else {
         window._lastCandles.push(bar);
       }
-      checkOpenTradesAgainstBar(bar);
+      // El bridge siempre devuelve la vela en formación como la ÚLTIMA del
+      // array (CopyRates con startShift=0 la incluye siempre — ver
+      // ZentinelBridge.mq5). Las anteriores ya cerraron de verdad, su
+      // high/low completo es válido para el chequeo de SL/TP; esta última
+      // todavía no — compararla con rango completo en vez de solo el precio
+      // actual (igual que corrige formingLive más abajo) podía cerrar una
+      // operación por una mecha vieja que esa vela ya tenía ANTES de que
+      // esta operación existiera siquiera, sin que el precio real se haya
+      // acercado desde entonces. Bug reportado 2026-10-22.
+      const isStillForming = i === json.bars.length - 1;
+      checkOpenTradesAgainstBar(bar, isStillForming);
     });
     renderSeries(timeframe);
     if (window._syncOverlayPositions) window._syncOverlayPositions(); // ver refreshFormingCandle — mismo motivo
@@ -8310,7 +8380,7 @@ function confirmTrade(){
   renderTradeMarkers();
 }
 
-function finalizeTradeClose(t, closePrice, closeTime, reason){
+function finalizeTradeClose(t, closePrice, closeTime, reason, triggerBar){
   const pointValue = getTradesPointValue();
   const sign = t.side === 'long' ? 1 : -1;
   const priceDiff = (closePrice - t.entry_price) * sign;
@@ -8322,6 +8392,11 @@ function finalizeTradeClose(t, closePrice, closeTime, reason){
     ...t, close_price: closePrice, close_time: closeTime, profit, pips, duration_minutes,
     result: profit > 0.01 ? 'win' : profit < -0.01 ? 'loss' : 'breakeven',
     close_reason: reason,
+    // Auditoría: la vela exacta (y si todavía estaba en formación) que
+    // disparó este cierre automático — sin esto, un cierre sospechoso
+    // (SL/TP marcado sin que el precio real se haya acercado) no se puede
+    // verificar después, solo especular. Ver bug reportado 2026-10-22.
+    ...(triggerBar ? { trigger_bar: { time: triggerBar.time, open: triggerBar.open, high: triggerBar.high, low: triggerBar.low, close: triggerBar.close, formingLive: !!triggerBar.formingLive } } : {}),
   };
   const closedList = getClosedTrades();
   closedList.push(closed);
@@ -8450,7 +8525,7 @@ function checkOpenTradesAgainstBar(bar, formingLive){
       // quede en el minuto exacto, no en el primero del bloque (mismo
       // motivo que el fix de arriba para open_time).
       const closeTime = formingLive ? getSimNow() : bar.time;
-      finalizeTradeClose(t, hitPrice, closeTime, reason);
+      finalizeTradeClose(t, hitPrice, closeTime, reason, { ...bar, formingLive: !!formingLive });
       closedIds.push(t.id);
       open.splice(i, 1);
       changed = true;
@@ -8611,7 +8686,9 @@ function renderTradesModal(){
   if (closedList) {
     closedList.innerHTML = !closed.length ? '<div class="trades-empty">No closed trades yet.</div>' : closed.slice().reverse().map(t => {
       const meta = `${fmt(t.entry_price)}→${fmt(t.close_price)} · ${t.pips}p · ${t.duration_minutes}m · ${t.close_reason}`;
-      const fullInfo = `Entry ${fmt(t.entry_price)} → Close ${fmt(t.close_price)} · ${t.pips} pips · ${t.duration_minutes} min · Closed by ${t.close_reason} · ${t.source==='replay'?'Replay':'Live'} · ${fmtTradeTime(t.close_time)}`;
+      const tb = t.trigger_bar;
+      const triggerInfo = tb ? ` · Vela disparo: O${fmt(tb.open)} H${fmt(tb.high)} L${fmt(tb.low)} C${fmt(tb.close)} ${fmtTradeTime(tb.time)}${tb.formingLive?' (en formación)':''}` : '';
+      const fullInfo = `Entry ${fmt(t.entry_price)} → Close ${fmt(t.close_price)} · ${t.pips} pips · ${t.duration_minutes} min · Closed by ${t.close_reason} · ${t.source==='replay'?'Replay':'Live'} · ${fmtTradeTime(t.close_time)}${triggerInfo}`;
       return `<div class="trade-row" title="${fullInfo}">
         <span class="trade-side ${t.side}">${t.side==='long'?'L':'S'}</span>
         <span class="trade-src-dot ${t.source}"></span>
