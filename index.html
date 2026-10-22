@@ -7101,8 +7101,15 @@ async function ensureWeeklyHistoryForWatchtower(){
   }
 
   if (fetchedMore) {
+    // Este fetch corre solo, en segundo plano, mientras el usuario puede
+    // haber estado mirando el chart — si para cuando termina ya se movió a
+    // mano lejos del borde en vivo (scrolleó hacia atrás en el historial),
+    // forzar scrollToRealTime() se lo pisaba sin avisar ("me rebobino y se
+    // vuelve solo"). Solo reacomodamos la vista si seguía cerca del
+    // presente justo antes de este re-render.
+    const wasNearRealTime = Math.abs(chart.timeScale().scrollPosition()) < 5;
     renderSeries(STATE.timeframe);
-    chart.timeScale().scrollToRealTime();
+    if (wasNearRealTime) chart.timeScale().scrollToRealTime();
     const updated = window._lastCandles;
     updateStatusBar(STATE.symbol, STATE.timeframe, updated.length, updated[0], updated[updated.length-1]);
   }
