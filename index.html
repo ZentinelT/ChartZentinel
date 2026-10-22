@@ -7728,6 +7728,11 @@ function checkOpenTradesAgainstBar(bar, formingLive){
   for (let i = open.length - 1; i >= 0; i--) {
     const t = open[i];
     if (t.symbol !== sym) continue;
+    // Si esta vela es anterior a cuando se abrió la operación (otro panel
+    // en replay rebobinado, o atrasado, que vuelve a procesar historia
+    // vieja), ignorarla: cerrar con una mecha previa al open_time sería
+    // cerrar la operación por algo que pasó antes de que existiera.
+    if (bar.time != null && t.open_time != null && bar.time < t.open_time) continue;
     let hitPrice = null, reason = null;
     // La vela EN FORMACIÓN en vivo (refreshFormingCandle) trae su high/low
     // de TODO lo que lleva formada esa vela hasta ahora — si el usuario
