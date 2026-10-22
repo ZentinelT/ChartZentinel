@@ -3746,11 +3746,16 @@ function highlightSelectedSvg(id) {
     } else if (d.type === 'vline') {
       addHandle(timeToX(d.p1.time), container.clientHeight * 0.5, id, 'vtime');
     } else if (d.type === 'long' || d.type === 'short') {
-      const xMid = (timeToX(d.p1.time)+timeToX(d.p2.time))/2;
+      // Mismo motivo que en isClickOnDrawing: usar los tiempos RENDERIZADOS
+      // (ajustados a este panel), no los crudos — si no, las manijas de un
+      // dibujo sincronizado desde otro TF aparecían clickeables en un punto
+      // que no coincidía con la caja dibujada (o null, afuera de pantalla).
+      const { t1: boxT1, t2: boxT2 } = positionToolRenderTimes(d);
+      const xMid = (timeToX(boxT1)+timeToX(boxT2))/2;
       addHandle(xMid, priceToY(d.p1.price), id, 'entry');
       addHandle(xMid, priceToY(d.targetPrice), id, 'target');
       addHandle(xMid, priceToY(d.p2.price), id, 'stop');
-      addHandle(timeToX(d.p2.time), priceToY(d.p1.price), id, 'time2');
+      addHandle(timeToX(boxT2), priceToY(d.p1.price), id, 'time2');
     }
   });
 }
@@ -4367,7 +4372,17 @@ function initDrawingLayer() {
     if (d.type === 'long' || d.type === 'short') {
       // Caja completa (del SL al TP) clickeable en cualquier punto interno
       // — igual que un rect, no hace falta acertarle a un borde fino.
-      const x1=timeToX(d.p1.time), x2=timeToX(d.p2.time);
+      // positionToolRenderTimes, no d.p1.time/d.p2.time crudos: el dibujo
+      // se DIBUJA con los tiempos ajustados a las velas reales de ESTE
+      // panel (ver buildDrawingOnChart) — un dibujo sincronizado desde otro
+      // TF casi nunca tiene su p1.time/p2.time crudo cayendo justo en una
+      // vela de este panel, así que comparar contra eso dejaba el área de
+      // click en un lugar distinto de donde la caja se ve de verdad (o
+      // afuera de pantalla) — el click nunca acertaba. Bug reportado
+      // 2026-10-22 ("si pongo una posicion en una temporalidad, no puedo
+      // modificarla... en otra").
+      const { t1: boxT1, t2: boxT2 } = positionToolRenderTimes(d);
+      const x1=timeToX(boxT1), x2=timeToX(boxT2);
       const prices=[d.p1.price,d.p2.price,d.targetPrice];
       const y1=priceToY(Math.max(...prices)), y2=priceToY(Math.min(...prices));
       if (x1===null||x2===null||y1===null||y2===null) return false;
