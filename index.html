@@ -7584,13 +7584,21 @@ function setTradesPointValue(v){ const n = parseFloat(v); lsSet('td_point_value'
 // "Ahora" simulado: en replay es el cierre de la vela donde está parado
 // el cursor del replay (no el reloj real de la máquina) — mismo criterio
 // que usa el sync entre paneles (ver _applyReplayFrame/zentinelCrosshairBroadcast).
-// En vivo TAMBIÉN se usa el time de la última vela (no Date.now() real):
-// candle.time en esta app no es un epoch UTC real, es la hora de sesión
-// (NY) codificada como si fuera UTC (ver fmtReplayTime/fmtCrosshairTime) —
-// si acá se mezclara Date.now() con ese otro reloj, open_time y close_time
-// (que al cerrarse solo por SL/TP sale de bar.time) quedarían en relojes
-// distintos y la duración calculada daría cualquier cosa (hasta negativa).
+// En vivo NO se usa el time de la vela en formación (eso es el inicio del
+// bucket del TF actual: en M5 clava todo al minuto 0 del bloque de 5) ni
+// Date.now() real (candle.time no es un epoch UTC real, es la hora de
+// sesión NY codificada como si fuera UTC — ver fmtReplayTime/fmtCrosshairTime,
+// mezclarlo con Date.now() da duraciones sin sentido). Se usa en cambio el
+// ancla server-time + performance.now() que ya mantiene startCountdown
+// (mismo reloj que bar.time, pero con precisión de segundo real, no
+// baldeada al bucket del TF) — así si confirmás en M5 pero después bajás a
+// M1, la marca cae en el minuto exacto en que ejecutaste, no en el primero
+// de los cinco.
 function getSimNow(){
+  if (!window._replay) {
+    const approx = wtApproxNow();
+    if (approx != null) return approx;
+  }
   const last = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
   if (last) return last.time;
   return Math.floor(Date.now() / 1000);
@@ -7717,13 +7725,33 @@ function renderTradeMarkers(){
   if (!candleSeries || !candleSeries.setMarkers) return;
   const candles = window._lastCandles;
   if (!candles || !candles.length) { candleSeries.setMarkers([]); return; }
-  const minT = candles[0].time, maxT = candles[candles.length - 1].time;
+  const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
+  const minT = candles[0].time, maxT = candles[candles.length - 1].time + barStep;
+  // open_time/close_time ahora son un instante real preciso (ver
+  // getSimNow/wtApproxNow), no el inicio del bucket del TF que estaba
+  // viendo al operar — así, al cambiar de temporalidad, cada marca tiene
+  // que "caer" (snapear) a la vela de la temporalidad ACTUAL que realmente
+  // la contiene, en vez de clavarse siempre en la primera vela del bloque
+  // viejo. Como es time real y no bucket, no matchea ninguna vela por
+  // igualdad exacta — hay que buscar la última vela cargada con
+  // time <= t y usar ESA como ancla del marcador.
+  const snapToBar = (t) => {
+    if (t == null) return null;
+    if (t <= minT) return candles[0].time;
+    if (t >= maxT) return candles[candles.length - 1].time;
+    let lo = 0, hi = candles.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (candles[mid].time <= t) lo = mid; else hi = mid - 1;
+    }
+    return candles[lo].time;
+  };
   const inRange = (t) => t != null && t >= minT && t <= maxT;
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const markers = [];
 
   const entryMarker = (t) => ({
-    time: t.open_time,
+    time: snapToBar(t.open_time),
     position: t.side === 'long' ? 'belowBar' : 'aboveBar',
     color: t.side === 'long' ? '#26a69a' : '#ef5350',
     shape: t.side === 'long' ? 'arrowUp' : 'arrowDown',
@@ -7740,7 +7768,7 @@ function renderTradeMarkers(){
     if (inRange(t.close_time)) {
       const label = t.close_reason === 'tp' ? 'TP' : t.close_reason === 'sl' ? 'SL' : 'Close';
       markers.push({
-        time: t.close_time,
+        time: snapToBar(t.close_time),
         position: t.side === 'long' ? 'aboveBar' : 'belowBar',
         color: t.profit >= 0 ? '#26a69a' : '#ef5350',
         shape: 'circle',
@@ -7801,7 +7829,12 @@ function checkOpenTradesAgainstBar(bar, formingLive){
       else if (t.take_profit != null && lo <= t.take_profit) { hitPrice = t.take_profit; reason = 'tp'; }
     }
     if (hitPrice != null) {
-      finalizeTradeClose(t, hitPrice, bar.time, reason);
+      // formingLive: bar.time es el inicio del bucket del TF actual, no el
+      // instante real del cierre — usar getSimNow() ahí para que la marca
+      // quede en el minuto exacto, no en el primero del bloque (mismo
+      // motivo que el fix de arriba para open_time).
+      const closeTime = formingLive ? getSimNow() : bar.time;
+      finalizeTradeClose(t, hitPrice, closeTime, reason);
       closedIds.push(t.id);
       open.splice(i, 1);
       changed = true;
