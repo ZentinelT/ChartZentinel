@@ -6248,16 +6248,27 @@ function snGetFvgData(symbol){
 // del borde — así es como el Pine trata M15/H4 específicamente
 // (use_close_based=true), a diferencia de otros TF del indicador original
 // que no portamos.
+//
+// snFetchTf nunca pide con "before" — siempre trae hasta el presente, así
+// que el ÚLTIMO candle de este array es siempre la vela M15/H4 que está
+// formándose ahora mismo (CopyRates con shift 0 en MQL5 trae la vela
+// actual, todavía incompleta). Tratarla como una vela cerrada más
+// dibujaba/invalidaba FVGs con un high/low/close que todavía puede
+// cambiar — "parpadeaban" hasta que esa vela realmente cerraba. Se la
+// excluye tanto de crear un FVG nuevo (el patrón de 3 velas necesita que
+// la 3ra ya haya cerrado) como de invalidar uno existente (closeBasedInvalidation
+// con un close que no es definitivo tampoco vale).
 function snDetectFvgs(candles){
   const bull=[], bear=[];
-  for (let i=2;i<candles.length;i++){
+  const confirmedLen = Math.max(0, candles.length - 1); // excluye la última (en formación)
+  for (let i=2;i<confirmedLen;i++){
     const c0=candles[i-2], c2=candles[i];
     if (c0.high < c2.low)  bull.push({ startIdx:i-2, createIdx:i, top:c2.low, bottom:c0.high, filledIdx:null });
     if (c0.low  > c2.high) bear.push({ startIdx:i-2, createIdx:i, top:c0.low, bottom:c2.high, filledIdx:null });
   }
   function markFilled(list, isBull){
     list.forEach(f=>{
-      for (let k=f.createIdx+1; k<candles.length; k++){
+      for (let k=f.createIdx+1; k<confirmedLen; k++){
         const c=candles[k];
         const invalid = isBull ? (c.close<f.bottom) : (c.close>f.top);
         if (invalid){ f.filledIdx=k; break; }
