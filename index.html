@@ -4511,13 +4511,30 @@ function initDrawingLayer() {
     }
     if (window._dragSession) {
       highlightSelectedSvg(selectedDrawingId);
-      markDrawingsDirty();
-      // Si el dibujo que se acaba de arrastrar es una posición YA confirmada
-      // (tiene tradeId), el SL/TP que quedó dibujado pasa a ser el SL/TP
-      // real de la operación abierta — si no, mover el dibujo no tenía
-      // ningún efecto en lo que realmente se estaba vigilando para cerrar
-      // solo, y la operación seguía con los niveles viejos (invisibles).
-      syncTradeFromDrawing(window._dragSession.drawing);
+      // Un simple click para SELECCIONAR (mousedown+mouseup sin mover un
+      // solo píxel) deja _dragSession armado igual que un drag real, pero
+      // no cambió ninguna coordenada — llamar a markDrawingsDirty() ahí
+      // iguial disparaba un sync COMPLETO (destruir y reconstruir el
+      // dibujo entero) en los demás paneles de la grilla en CADA CLICK,
+      // sin necesidad. Probado a mano: eso era lo que hacía que los
+      // paneles 2/3 "se corrieran" solos cada vez que se clickeaba una
+      // posición en el panel 1 — reconstruir repetidamente las mismas
+      // líneas con setData() en un panel de otro TF termina insertando
+      // puntos en el eje de tiempo compartido que no calzan exacto y
+      // corren el resto (ver el comentario de safeLineTime). Solo vale la
+      // pena pagar ese costo si alguna coordenada realmente cambió — mismo
+      // chequeo que ya hace _commitDragUndoSnapshot más abajo para no
+      // meter un paso de undo vacío.
+      const changed = !_pendingDragUndoSnapshot || JSON.stringify(_pendingDragUndoSnapshot) !== JSON.stringify(serializeDrawings());
+      if (changed) {
+        markDrawingsDirty();
+        // Si el dibujo que se acaba de arrastrar es una posición YA confirmada
+        // (tiene tradeId), el SL/TP que quedó dibujado pasa a ser el SL/TP
+        // real de la operación abierta — si no, mover el dibujo no tenía
+        // ningún efecto en lo que realmente se estaba vigilando para cerrar
+        // solo, y la operación seguía con los niveles viejos (invisibles).
+        syncTradeFromDrawing(window._dragSession.drawing);
+      }
     }
     _commitDragUndoSnapshot();
     window._dragSession = null;
