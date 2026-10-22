@@ -372,6 +372,34 @@
   .layout-opt-row.active { color: var(--gold); }
   .layout-opt-row.active svg { color: var(--gold); }
 
+  /* Sección "Sync across panels" al pie del mismo popup de layout (solo en
+     la grilla multi-chart) — mismo lenguaje visual que el resto del picker,
+     pero más ancho (160px se quedaba corto para nombre + switch). */
+  .layout-picker-popup.with-sync { min-width: 248px; }
+  .sync-section { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .sync-section-label {
+    font-family: var(--font-ui); font-size: 10px; font-weight: 600; letter-spacing: 1.4px;
+    color: var(--text-dim); text-transform: uppercase; padding: 2px 8px 6px;
+  }
+  .sync-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 6px 8px; border-radius: 5px; cursor: pointer;
+  }
+  .sync-row:hover { background: var(--bg-hover); }
+  .sync-row-label { font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary); }
+  .sync-switch { position: relative; width: 34px; height: 20px; flex-shrink: 0; }
+  .sync-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .sync-switch .track {
+    position: absolute; inset: 0; background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 999px; transition: background .15s, border-color .15s;
+  }
+  .sync-switch .thumb {
+    position: absolute; top: 1.5px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
+    background: var(--text-dim); transition: transform .15s, background .15s;
+  }
+  .sync-switch input:checked ~ .track { background: var(--gold-glow); border-color: var(--gold-dim); }
+  .sync-switch input:checked ~ .track .thumb { transform: translateX(14px); background: var(--gold); }
+
   /* ─── Modo embed (panel dentro de una grilla multi-chart) ──────
      Cada panel del grid 2×/4⊞ no necesita repetir el header completo
      (buscador de símbolo, O/H/L/C/V, refresh, settings, badge del
@@ -1740,6 +1768,22 @@ function renderLayoutGrid(n){
   const iframeEls = [];
   let activePane = 1;
   let scope = 'active'; // 'active' | 'all' — a quién les llegan los controles globales
+  // ─── Sync entre paneles (Símbolo/TF/Indicadores/Dibujos/Crosshair) ──
+  // Distinto de `scope` de arriba: scope decide a quién le llegan las
+  // acciones manuales disparadas DESDE esta barra de afuera (buscador,
+  // botones de TF rápidos...); esto sincroniza sin importar desde qué
+  // panel salió el cambio — adentro de cualquiera de ellos, no solo desde
+  // acá. Guardado sin sufijo de pane (es una sola configuración para toda
+  // la grilla, no por panel). Drawings/crosshair ya tenían su propio
+  // mecanismo de sync (ver más abajo) desde antes de esto — acá se les
+  // agrega la opción de apagarlos, por eso arrancan en true (mismo
+  // comportamiento de siempre si nadie toca nada); símbolo/TF/indicadores
+  // son capacidad nueva, arrancan en false para no sorprender a nadie.
+  const syncConfig = Object.assign(
+    { symbol:false, timeframe:false, drawings:true, indicators:false, crosshair:true },
+    (() => { try { return JSON.parse(lsGet('td_grid_sync') || '{}'); } catch(e){ return {}; } })()
+  );
+  function saveSyncConfig(){ lsSet('td_grid_sync', JSON.stringify(syncConfig)); }
   function setActivePane(idx){
     activePane = idx;
     iframeEls.forEach((el,i) => { el.style.borderColor = (i+1===idx) ? 'var(--gold)' : 'transparent'; });
@@ -1749,9 +1793,26 @@ function renderLayoutGrid(n){
   // 'blur' de abajo, que solo agarra bien el primer salto de foco.
   window.addEventListener('message', (e) => {
     const msg = e.data;
-    if (msg && msg.type === 'zentinel:paneFocused') {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'zentinel:paneFocused') {
       const idx = Number(msg.pane);
       if (idx >= 1 && idx <= iframeEls.length) setActivePane(idx);
+    } else if (msg.type === 'zentinel:paneSymbolTf') {
+      // Un panel avisa que cambió de símbolo y/o TF (ver _notifySymbolTfChange
+      // en el script de cada panel) — si el sync de esa categoría está
+      // prendido, lo retransmitimos a TODOS los demás (nunca al que avisó,
+      // para no generar un eco). Cada categoría es independiente: si solo
+      // symbol está prendido, acá NO se toca el TF de nadie.
+      const others = iframeEls.filter((el, i) => String(i+1) !== String(msg.pane));
+      if (syncConfig.symbol && msg.changedSymbol) {
+        others.forEach(el => el.contentWindow.postMessage({ type:'zentinel:setSymbol', symbol: msg.symbol }, '*'));
+      }
+      if (syncConfig.timeframe && msg.changedTf) {
+        others.forEach(el => el.contentWindow.postMessage({ type:'zentinel:setTimeframe', tf: msg.tf }, '*'));
+      }
+    } else if (msg.type === 'zentinel:paneIndicators' && syncConfig.indicators) {
+      const others = iframeEls.filter((el, i) => String(i+1) !== String(msg.pane));
+      others.forEach(el => el.contentWindow.postMessage({ type:'zentinel:setIndicators', indicators: msg.indicators }, '*'));
     }
   });
   // Fallback por si el panel todavía no cargó el script que manda el aviso
@@ -1927,9 +1988,27 @@ function renderLayoutGrid(n){
   (function initShellLayoutPicker(){
     const trigger = gbar.querySelector('#layout-picker-trigger');
     const popup = gbar.querySelector('#layout-picker-popup');
+    popup.classList.add('with-sync');
+    // Solo tiene sentido con más de 1 panel — con n=1 esta grilla ni se
+    // renderiza (ver boot: LAYOUT_N>1 es justamente la condición para
+    // llegar acá), así que siempre se muestra.
+    const SYNC_ROWS = [
+      { key:'symbol',     label:'Symbol' },
+      { key:'timeframe',  label:'Timeframe' },
+      { key:'drawings',   label:'Drawings' },
+      { key:'indicators', label:'Indicators' },
+      { key:'crosshair',  label:'Crosshair' },
+    ];
     popup.innerHTML = [1,2,3,4].map(v =>
       `<div class="layout-opt-row${v===n?' active':''}" data-layout="${v}">${LAYOUT_ICONS[v]}<span>${LAYOUT_LABELS[v]}</span></div>`
-    ).join('');
+    ).join('') + `<div class="sync-section">
+      <div class="sync-section-label">Sync across panels</div>
+      ${SYNC_ROWS.map(r => `
+        <label class="sync-row" data-sync="${r.key}">
+          <span class="sync-row-label">${r.label}</span>
+          <span class="sync-switch"><input type="checkbox" ${syncConfig[r.key]?'checked':''}><span class="track"><span class="thumb"></span></span></span>
+        </label>`).join('')}
+    </div>`;
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       popup.classList.toggle('open');
@@ -1940,6 +2019,17 @@ function renderLayoutGrid(n){
       if (!row) return;
       const v = row.dataset.layout;
       location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
+    });
+    // Clic en cualquier parte de la fila (el <label> entero) togglea su
+    // switch solo, por semántica nativa de HTML — acá solo reaccionamos al
+    // resultado (evento 'change'), sin togglear nada a mano.
+    popup.addEventListener('change', (e) => {
+      const row = e.target.closest('.sync-row');
+      if (!row) return;
+      const key = row.dataset.sync;
+      syncConfig[key] = e.target.checked;
+      saveSyncConfig();
+      if (key === 'crosshair') pushCrosshairSyncToAllPanes();
     });
     document.addEventListener('click', (e) => {
       if (!gbar.querySelector('#layout-picker-wrap').contains(e.target)) {
@@ -2502,7 +2592,13 @@ function renderLayoutGrid(n){
       // leer su estado real (el iframe recién estaba cargando) — reintentar
       // acá una vez que el script de adentro ya corrió deja todo sincronizado
       // desde el primer momento, no recién al cambiar de panel.
-      iframe.addEventListener('load', () => { if (i === activePane) syncShellControls(); });
+      iframe.addEventListener('load', () => {
+        if (i === activePane) syncShellControls();
+        // El valor por defecto de cada panel (STATE.chartSettings.syncCrosshair)
+        // puede no coincidir con el toggle central de Sync — alinearlo apenas
+        // termina de cargar, no recién cuando alguien toque el toggle.
+        paneEval(iframe, `STATE.chartSettings.syncCrosshair=${!!syncConfig.crosshair}; saveChartSettingsState();`);
+      });
       grid.appendChild(iframe);
       iframeEls.push(iframe);
     }
@@ -2522,17 +2618,30 @@ function renderLayoutGrid(n){
   // moviendo a upa, y el resultado visual es el precio saltando entre dos
   // valores todo el tiempo. Comparar por ID es inequívoco.
   window.zentinelCrosshairBroadcast = function(time, sourcePaneId){
+    if (!syncConfig.crosshair) return; // apagado desde Sync (popup de layout)
     iframeEls.forEach((el, i) => {
       if (String(i+1) === String(sourcePaneId)) return;
       try { el.contentWindow.setExternalCrosshair(time); } catch(e){}
     });
   };
+  // El toggle de Sync es la autoridad; cada panel además tiene su propio
+  // STATE.chartSettings.syncCrosshair (ver subscribeCrosshairMove de cada
+  // uno, que corta ANTES de avisar acá si está en false) — esto lo
+  // mantiene alineado con el toggle central apenas cambia o apenas se crea
+  // un panel nuevo, para no tener que ir a tocarlo a mano en Settings de
+  // cada panel por separado.
+  function pushCrosshairSyncToAllPanes(){
+    iframeEls.forEach(el => {
+      paneEval(el, `STATE.chartSettings.syncCrosshair=${!!syncConfig.crosshair}; saveChartSettingsState();`);
+    });
+  }
 
   // Dibujos sincronizados entre paneles con el MISMO símbolo (cualquier
   // TF — un nivel marcado en 1H tiene sentido seguir viéndolo en 15m del
   // mismo instrumento). sourcePaneId como string: así lo manda cada panel
   // (PANE_ID), sin forzar conversión de tipos en ningún lado.
   window.zentinelDrawingsSync = function(sourcePaneId, symbol, list){
+    if (!syncConfig.drawings) return; // apagado desde Sync (popup de layout)
     iframeEls.forEach((el, i) => {
       if (String(i+1) === String(sourcePaneId)) return;
       const otherSymbol = paneEval(el, 'STATE.symbol');
@@ -4859,7 +4968,10 @@ function clonePaneState(fromSuffix, toSuffix){
 const LAYOUT_ICONS = {
   1: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
   2: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
-  3: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="12" y1="12" x2="21" y2="12"/></svg>',
+  // renderLayoutGrid: n===3 son 3 columnas iguales en una sola fila (cols=n,
+  // rows=1) — no un split tipo L. El ícono viejo (1 grande + 2 apiladas a la
+  // derecha) prometía algo que la grilla real no hacía.
+  3: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
   4: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
 };
 const LAYOUT_LABELS = { 1:'1 chart', 2:'2 charts', 3:'3 charts', 4:'4 charts' };
@@ -5001,6 +5113,13 @@ function applyIndicators() {
   STATE.indicators=selected; saveState();
   selected.forEach(name=>addIndicatorSeries(name));
   renderIndList(); closeModal('modal-indicators');
+  // Sync de indicadores entre paneles (si está prendido en el shell) — ver
+  // 'zentinel:setIndicators' en el listener de mensajes. No hace falta
+  // flag anti-eco acá: el receptor de ese mensaje nunca llama a
+  // applyIndicators(), así que no hay cómo que esto se dispare en bucle.
+  if (EMBED_MODE && PANE_ID) {
+    window.parent.postMessage({ type:'zentinel:paneIndicators', pane:PANE_ID, indicators: STATE.indicators }, '*');
+  }
 }
 
 function addIndicatorSeries(name) {
@@ -7418,6 +7537,26 @@ function _resyncChartLayout(){
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
+// Avisa al shell (modo grilla) cada vez que ESTE panel termina de cargar un
+// símbolo/TF distinto al que tenía antes — el shell, si el sync de esa
+// categoría está prendido (ver Sync en el popup de layout), lo retransmite
+// a los demás paneles. Sin flag de supresión: el handler de
+// 'zentinel:setSymbol'/'zentinel:setTimeframe' (más abajo) actualiza
+// _lastNotifiedSymbol/_lastNotifiedTf ANTES de aplicar el cambio que vino
+// sincronizado — para cuando esta función corre después (al terminar ese
+// loadChart), ya no hay diferencia que notificar, así que el eco de
+// vuelta al shell se evita solo, por construcción (mismo valor = nada que
+// avisar), sin depender de ningún timeout.
+let _lastNotifiedSymbol = STATE.symbol, _lastNotifiedTf = STATE.timeframe;
+function _notifySymbolTfChange(symbol, timeframe){
+  if (!EMBED_MODE || !PANE_ID) return;
+  const changedSymbol = symbol !== _lastNotifiedSymbol;
+  const changedTf = timeframe !== _lastNotifiedTf;
+  _lastNotifiedSymbol = symbol; _lastNotifiedTf = timeframe;
+  if (!changedSymbol && !changedTf) return;
+  window.parent.postMessage({ type:'zentinel:paneSymbolTf', pane:PANE_ID, symbol, tf:timeframe, changedSymbol, changedTf }, '*');
+}
+
 async function loadChart(symbol, timeframe, _isUppercaseRetry) {
   // Cambiar de símbolo/TF o refrescar en medio de un replay no tiene forma
   // sensata de "seguir" el replay (los datos de abajo cambian por completo),
@@ -7527,6 +7666,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     showOverlay(false);
 
     startCountdown(timeframe, last.time, json.serverTime);
+    _notifySymbolTfChange(symbol, timeframe);
 
   } catch(err) {
     // El input de símbolo se muestra todo en mayúsculas por CSS
@@ -7740,12 +7880,32 @@ window.addEventListener('message', (e) => {
   const msg = e.data;
   if (!msg || typeof msg !== 'object' || !String(msg.type||'').startsWith('zentinel:')) return;
   if (msg.type === 'zentinel:setSymbol' && msg.symbol) {
+    _lastNotifiedSymbol = msg.symbol; // ver _notifySymbolTfChange: evita el eco de vuelta
     selectSymbol(msg.symbol);
   } else if (msg.type === 'zentinel:setTimeframe' && msg.tf) {
+    _lastNotifiedTf = msg.tf;
     STATE.timeframe = msg.tf;
     saveState();
     setActiveTF(STATE.timeframe);
     loadChart(STATE.symbol, STATE.timeframe);
+  } else if (msg.type === 'zentinel:setIndicators' && Array.isArray(msg.indicators)) {
+    // Sync de indicadores (ver Sync en el popup de layout) — mismo patrón
+    // que applyIndicators() pero sin pasar por el modal: apaga los que ya
+    // no están en la lista nueva, prende los que faltan.
+    STATE.indicators.forEach(name=>{
+      if (msg.indicators.includes(name)) return;
+      const def=INDICATOR_DEFS.find(d=>d.name===name);
+      if(def && def.custom){
+        if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
+        else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
+        else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
+      }
+      else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
+    });
+    STATE.indicators = [...msg.indicators];
+    saveState();
+    STATE.indicators.forEach(name=>addIndicatorSeries(name));
+    renderIndList();
   } else if (msg.type === 'zentinel:applyPreset' && msg.name) {
     applyPreset(msg.name);
   } else if (msg.type === 'zentinel:refresh') {
