@@ -8539,8 +8539,14 @@ function editTradeById(id){
   if (slInput === null) return; // canceló
   const tpInput = prompt('Take profit (empty = none):', t.take_profit!=null ? fmt(t.take_profit) : '');
   if (tpInput === null) return;
-  const newSl = slInput.trim() === '' ? null : Number(slInput);
-  const newTp = tpInput.trim() === '' ? null : Number(tpInput);
+  // fmt() precarga el prompt con coma como separador de miles (ej.
+  // "29,050.50", convención en-US) — si el usuario apenas edita un dígito
+  // y confirma, esa coma le llega de vuelta a Number(), que no la entiende
+  // y devuelve NaN ("Invalid price" con un número perfectamente válido).
+  // Sacarla antes de parsear.
+  const parsePrice = (s) => Number(s.replace(/,/g, ''));
+  const newSl = slInput.trim() === '' ? null : parsePrice(slInput);
+  const newTp = tpInput.trim() === '' ? null : parsePrice(tpInput);
   if ((slInput.trim() !== '' && !isFinite(newSl)) || (tpInput.trim() !== '' && !isFinite(newTp))) {
     alert('Invalid price.');
     return;
