@@ -3468,9 +3468,20 @@ function buildDrawingOnChart(d) {
   markDrawingsDirty();
 }
 
+// Varios disparadores independientes pueden llamar a esto casi al mismo
+// tiempo (mouseup de un drag, el ResizeObserver del chart, selectDrawing) —
+// cada uno agendaba SU PROPIO requestAnimationFrame, y si dos quedaban en
+// cola dentro del mismo frame, el segundo terminaba agregando manijas
+// DESPUÉS de que el primero ya las hubiera agregado (clearSvgHighlights, al
+// correr cada uno, solo alcanza a borrar lo que ya esté en el DOM en ESE
+// instante). Guardar el id del rAF pendiente y cancelarlo si llega uno
+// nuevo asegura que solo el último gane.
+let _highlightSvgRaf = null;
 function highlightSelectedSvg(id) {
   clearSvgHighlights();
-  requestAnimationFrame(() => {
+  if (_highlightSvgRaf !== null) cancelAnimationFrame(_highlightSvgRaf);
+  _highlightSvgRaf = requestAnimationFrame(() => {
+    _highlightSvgRaf = null;
     const d = drawings.find(x => x.id === id);
     if (!d || !window._drawingLayerSvg) return;
     const svg = window._drawingLayerSvg;
@@ -3651,9 +3662,29 @@ function applyHandleDrag(d, role, price, time) {
   }
 }
 
+// addHandle (ver highlightSelectedSvg) empuja cada manija a d.svgEls junto
+// con las líneas/fills propios del dibujo — pero una manija es un afford
+// de selección efímero (vive mientras el dibujo está seleccionado), no
+// parte permanente del dibujo. Si acá solo se borraban del DOM sin sacarlas
+// también de d.svgEls, cada re-highlight (resize, mouseup de un drag,
+// reselección) dejaba las viejas colgando ahí adentro — detached, pero
+// SIGUEN con dataset.role seteado, así que hitTestHandle (que recorre
+// d.svgEls buscando ese dato) las seguía contando como manijas válidas con
+// coordenadas viejas y congeladas. Con suficientes re-renders terminaba
+// habiendo decenas de manijas fantasma por encima de las reales, lo que
+// hacía más fácil que un clic pensado para la manija real terminara sin
+// pegarle a nada preciso — y sin preventDefault/stopPropagation, ESE click
+// le llegaba derecho al canvas de abajo, que lo interpretaba como pan.
 function clearSvgHighlights() {
   if (!window._drawingLayerSvg) return;
-  window._drawingLayerSvg.querySelectorAll('.drawing-handle').forEach(el => el.remove());
+  window._drawingLayerSvg.querySelectorAll('.drawing-handle').forEach(el => {
+    const d = el.dataset.drawingId && drawings.find(x => x.id === el.dataset.drawingId);
+    if (d && d.svgEls) {
+      const idx = d.svgEls.indexOf(el);
+      if (idx !== -1) d.svgEls.splice(idx, 1);
+    }
+    el.remove();
+  });
 }
 
 // ══════════════════════════════════════════════════════════
