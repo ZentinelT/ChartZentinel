@@ -7156,6 +7156,18 @@ function refreshChart(){
   loadChart(STATE.symbol, STATE.timeframe).finally(()=>btn.classList.remove('spinning'));
 }
 
+// Ver uso en loadChart: reaplica el tamaño real del contenedor (y re-scrollea
+// al presente) para corregir un layout que haya cambiado DESPUÉS del resize
+// inicial de loadChart — sin esto, el chart quedaba mal ajustado hasta la
+// próxima acción que disparara otro resize a mano.
+function _resyncChartLayout(){
+  if (!chart) return;
+  const cc = document.getElementById('chart-container');
+  if (!cc || !cc.clientWidth || !cc.clientHeight) return;
+  chart.applyOptions({ width: cc.clientWidth, height: cc.clientHeight });
+  chart.timeScale().scrollToRealTime();
+}
+
 async function loadChart(symbol, timeframe, _isUppercaseRetry) {
   // Cambiar de símbolo/TF o refrescar en medio de un replay no tiene forma
   // sensata de "seguir" el replay (los datos de abajo cambian por completo),
@@ -7218,6 +7230,18 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     renderSeries(timeframe);
     chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
     chart.timeScale().scrollToRealTime();
+    // El resync de más arriba lee clientWidth/clientHeight EN ESE INSTANTE —
+    // si algo que afecta el layout todavía no terminó de asentarse justo
+    // ahí (fuentes custom (DM Mono/Sans) cargando desde Google Fonts, que
+    // cambian el ancho medido del price-scale; en modo grilla, el iframe
+    // recién creado; el devicePixelRatio del SO justo después de abrir o
+    // mover la ventana), el chart queda mal ajustado hasta la próxima
+    // acción que fuerce OTRO resize — como un segundo click en Refresh.
+    // Forzamos esa segunda pasada solos en vez de depender de que el
+    // usuario la dispare a mano: una al frame siguiente (cubre layout/DPR
+    // asentándose) y otra cuando las fuentes terminan de cargar.
+    requestAnimationFrame(() => requestAnimationFrame(_resyncChartLayout));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(_resyncChartLayout);
     ensureWeeklyHistoryForWatchtower(); // no se espera: completa el historial semanal en segundo plano
 
     Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
