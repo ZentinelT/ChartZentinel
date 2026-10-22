@@ -7157,15 +7157,19 @@ function refreshChart(){
 }
 
 // Ver uso en loadChart: reaplica el tamaño real del contenedor (y re-scrollea
-// al presente) para corregir un layout que haya cambiado DESPUÉS del resize
-// inicial de loadChart — sin esto, el chart quedaba mal ajustado hasta la
-// próxima acción que disparara otro resize a mano.
+// SOLO el tamaño) para corregir un layout que haya cambiado DESPUÉS del
+// resize inicial de loadChart — sin esto, el chart quedaba mal ajustado
+// hasta la próxima acción que disparara otro resize a mano.
+// A propósito NO llama scrollToRealTime(): esto puede correr bastante
+// después del load (el callback de document.fonts.ready no tiene apuro
+// para resolver), y si para entonces el usuario ya se movió a mano por el
+// historial, forzar el scroll se lo pisaba — "me rebobino y se vuelve
+// solo". Reaplicar solo width/height no toca el rango de tiempo visible.
 function _resyncChartLayout(){
   if (!chart) return;
   const cc = document.getElementById('chart-container');
   if (!cc || !cc.clientWidth || !cc.clientHeight) return;
   chart.applyOptions({ width: cc.clientWidth, height: cc.clientHeight });
-  chart.timeScale().scrollToRealTime();
 }
 
 async function loadChart(symbol, timeframe, _isUppercaseRetry) {
