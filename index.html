@@ -7530,9 +7530,23 @@ function attachColorPalette(input){
     closeColorPalette();
     if (wasOpen) return;
     const r = input.getBoundingClientRect();
-    popup.style.top = (r.bottom + 6) + 'px';
-    popup.style.left = Math.max(4, r.left) + 'px';
+    // El input puede estar pegado al borde inferior de la pantalla (panel
+    // de config de dibujos, que queda abajo del gráfico y no se puede
+    // reacomodar) — ahí "abrir siempre hacia abajo" sacaba la grilla fuera
+    // de la ventana. Medimos la popup ya visible (display:block le da
+    // tamaño real aunque opacity 0) y la volteamos hacia arriba del input
+    // si no entra abajo; lo mismo para que no se corte por los costados.
     popup.classList.add('open');
+    popup.style.visibility = 'hidden';
+    popup.style.top = '0px';
+    popup.style.left = '0px';
+    const pw = popup.offsetWidth, ph = popup.offsetHeight;
+    const spaceBelow = window.innerHeight - r.bottom;
+    const top = spaceBelow >= ph + 6 ? (r.bottom + 6) : Math.max(4, r.top - ph - 6);
+    const left = Math.min(Math.max(4, r.left), window.innerWidth - pw - 4);
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+    popup.style.visibility = '';
     input.classList.add('color-pal-input-active');
     _colorPalOpenPopup = { popup, trigger: input };
   });
