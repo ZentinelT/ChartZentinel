@@ -7606,7 +7606,13 @@ function attachColorPalette(input){
     const pw = popup.offsetWidth, ph = popup.offsetHeight;
     const spaceBelow = window.innerHeight - r.bottom;
     const top = spaceBelow >= ph + 6 ? (r.bottom + 6) : Math.max(4, r.top - ph - 6);
-    const left = Math.min(Math.max(4, r.left), window.innerWidth - pw - 4);
+    // Si el viewport (panel achicado a mano) es más angosto que la popup,
+    // el límite superior (innerWidth - pw - 4) queda por debajo del
+    // inferior (4) — Math.min(Math.max(4,...), ese límite) daba negativo
+    // y la sacaba de pantalla por la izquierda en vez de dejarla pegada
+    // al borde (mismo bug que tenía el clamp del draw-toolbar).
+    const maxLeft = window.innerWidth - pw - 4;
+    const left = maxLeft >= 4 ? Math.min(Math.max(4, r.left), maxLeft) : 4;
     popup.style.top = top + 'px';
     popup.style.left = left + 'px';
     popup.style.visibility = '';
@@ -7663,9 +7669,16 @@ function _dtbDefaultPosition(){
 }
 function _dtbClampToViewport(left, top){
   const w = _dtbBar.offsetWidth, h = _dtbBar.offsetHeight;
+  // Si el panel (iframe de un panel en la grilla, achicado a mano) es más
+  // angosto/bajo que la barra, el límite superior (innerWidth - w - 4)
+  // queda por debajo del inferior (4) — Math.min(Math.max(4,left), ese
+  // límite) daba un resultado negativo, mandando la barra fuera de
+  // pantalla por la izquierda/arriba en vez de dejarla pegada al borde.
+  // Priorizar el mínimo (4) cuando el rango es degenerado evita eso.
+  const maxL = window.innerWidth - w - 4, maxT = window.innerHeight - h - 4;
   return {
-    left: Math.min(Math.max(4, left), window.innerWidth - w - 4),
-    top: Math.min(Math.max(4, top), window.innerHeight - h - 4),
+    left: maxL >= 4 ? Math.min(Math.max(4, left), maxL) : 4,
+    top: maxT >= 4 ? Math.min(Math.max(4, top), maxT) : 4,
   };
 }
 function _dtbApplyPosition(left, top){
