@@ -821,6 +821,63 @@
   }
   .cs-row .cs-color-inp { margin-bottom: 0; flex: 1; }
 
+  /* ─── Settings reorganizado por categorías ──────────────────────
+     Antes era una sola lista larga de labels+inputs sin agrupar. Cada
+     categoría es una "tarjeta" liviana: título chico con ícono + línea
+     divisoria, después sus campos en grilla de 2 columnas (swatch
+     redondo + nombre al lado, más compacto que una barra de color a
+     todo el ancho) o filas con switch estilo pill para los on/off. */
+  #modal-chart-settings .modal { width: 440px; max-width: calc(100vw - 32px); }
+  .cs-section { margin-bottom: 24px; }
+  .cs-section:last-of-type { margin-bottom: 0; }
+  .cs-section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-ui); font-size: 10.5px; font-weight: 600; letter-spacing: 1.6px;
+    color: var(--text-secondary); text-transform: uppercase;
+    margin: 0 0 13px; padding-bottom: 9px; border-bottom: 1px solid var(--border);
+  }
+  .cs-section-title svg { width: 13px; height: 13px; color: var(--gold); flex-shrink: 0; }
+  .cs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; margin-bottom: 4px; }
+  .cs-grid + .cs-grid, .cs-grid + .cs-toggle-row, .cs-toggle-row + .cs-grid { margin-top: 14px; }
+  .cs-field { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .cs-swatch {
+    width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; cursor: pointer;
+    background: var(--bg-secondary); border: 1px solid var(--border-light); padding: 2px;
+  }
+  .cs-field-label {
+    font-size: 11.5px; color: var(--text-secondary); letter-spacing: .3px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cs-field .dtb-select { flex: 1; min-width: 0; }
+
+  /* .cs-toggle-row es un <label> (clic en el texto también togglea el
+     switch) — la regla genérica ".modal label{display:block}" tiene más
+     especificidad que ".cs-toggle-row" sola, así que estas puntuales van
+     prefijadas con el id del modal para ganarle sin pelear con !important. */
+  #modal-chart-settings .cs-toggle-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border); margin: 0; cursor: pointer;
+  }
+  .cs-toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .cs-toggle-row .cs-field-label { color: var(--text-primary); font-size: 12px; white-space: normal; }
+
+  #modal-chart-settings .cs-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; display: inline-block; }
+  .cs-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .cs-switch .track {
+    position: absolute; inset: 0; background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 999px; transition: background .15s, border-color .15s;
+  }
+  .cs-switch .thumb {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text-dim); transition: transform .15s, background .15s;
+  }
+  .cs-switch input:checked ~ .track { background: var(--gold-glow); border-color: var(--gold-dim); }
+  .cs-switch input:checked ~ .track .thumb { transform: translateX(16px); background: var(--gold); }
+
+  .cs-subrow { display: flex; gap: 8px; margin-top: 10px; }
+  .cs-subrow .cs-swatch { width: 32px; height: 32px; margin: 0; }
+  .cs-subrow .dtb-select { flex: 1; }
+
   /* ─── Paleta de colores tipo TV ──────────────────────────────────
      Se engancha sola (ver attachColorPalette/MutationObserver cerca del
      BOOT) a TODO <input type="color"> de la app, sin tener que tocar
@@ -1371,66 +1428,103 @@
 <div class="modal-overlay" id="modal-chart-settings">
   <div class="modal" style="max-height:85vh;overflow-y:auto;">
     <h2>Chart Settings</h2>
-    <label>Preset (colors + indicators + each one's settings)</label>
-    <div class="cs-row">
-      <select id="cs-preset-select" class="dtb-select" style="flex:1;"></select>
+
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M2 6.5h12"/></svg>
+        Preset
+      </div>
+      <select id="cs-preset-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
+      <div class="cs-row" style="margin-bottom:0;">
+        <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
+        <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
+        <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
+      </div>
     </div>
-    <div class="cs-row" style="margin-bottom:14px;">
-      <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
-      <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
-      <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
+
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="3.5" height="9"/><rect x="6.5" y="6.5" width="3.5" height="6.5"/><rect x="11" y="1.5" width="3" height="11.5"/></svg>
+        Background &amp; Candles
+      </div>
+      <div class="cs-grid">
+        <div class="cs-field"><input type="color" id="cs-bg" class="cs-swatch"><span class="cs-field-label">Background</span></div>
+        <div class="cs-field"><input type="color" id="cs-text-color" class="cs-swatch"><span class="cs-field-label">Text color</span></div>
+      </div>
+      <label class="cs-toggle-row" style="margin-top:12px;">
+        <span class="cs-field-label">Background gradient</span>
+        <span class="cs-switch"><input type="checkbox" id="cs-bg-gradient" onchange="document.getElementById('cs-bg2-field').style.display=this.checked?'flex':'none';"><span class="track"><span class="thumb"></span></span></span>
+      </label>
+      <div class="cs-field" id="cs-bg2-field" style="display:none;margin-top:12px;">
+        <input type="color" id="cs-bg2" class="cs-swatch"><span class="cs-field-label">Gradient end color</span>
+      </div>
+      <div class="cs-grid" style="margin-top:14px;">
+        <div class="cs-field"><input type="color" id="cs-up" class="cs-swatch"><span class="cs-field-label">Candle up</span></div>
+        <div class="cs-field"><input type="color" id="cs-down" class="cs-swatch"><span class="cs-field-label">Candle down</span></div>
+        <div class="cs-field"><input type="color" id="cs-border-up" class="cs-swatch"><span class="cs-field-label">Border up</span></div>
+        <div class="cs-field"><input type="color" id="cs-border-down" class="cs-swatch"><span class="cs-field-label">Border down</span></div>
+        <div class="cs-field"><input type="color" id="cs-wick-up" class="cs-swatch"><span class="cs-field-label">Wick up</span></div>
+        <div class="cs-field"><input type="color" id="cs-wick-down" class="cs-swatch"><span class="cs-field-label">Wick down</span></div>
+      </div>
     </div>
-    <div style="border-top:1px solid var(--border);margin-bottom:14px;"></div>
-    <label>Background</label>
-    <div class="cs-row" style="align-items:center;">
-      <input type="color" id="cs-bg" class="cs-color-inp">
-      <input type="color" id="cs-bg2" class="cs-color-inp" style="display:none;">
-      <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;">
-        <input type="checkbox" id="cs-bg-gradient" onchange="document.getElementById('cs-bg2').style.display=this.checked?'':'none';">
-        Gradient
+
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13V9M6 13V5M10 13V7M14 13V3"/></svg>
+        Price Display
+      </div>
+      <label class="cs-toggle-row">
+        <span class="cs-field-label">Show OHLCV values</span>
+        <span class="cs-switch"><input type="checkbox" id="cs-show-ohlcv"><span class="track"><span class="thumb"></span></span></span>
+      </label>
+      <label class="cs-toggle-row">
+        <span class="cs-field-label">Show real-time price line</span>
+        <span class="cs-switch"><input type="checkbox" id="cs-priceline-on"><span class="track"><span class="thumb"></span></span></span>
+      </label>
+      <div class="cs-subrow">
+        <input type="color" id="cs-priceline-color" class="cs-swatch">
+        <select id="cs-priceline-style" class="dtb-select">
+          <option value="0">Solid</option>
+          <option value="1">Dotted</option>
+          <option value="2" selected>Dashed</option>
+          <option value="3">Large dashed</option>
+          <option value="4">Sparse dotted</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4"/><circle cx="8" cy="8" r="2"/></svg>
+        Crosshair
+      </div>
+      <div class="cs-subrow" style="margin-top:0;">
+        <input type="color" id="cs-crosshair-color" class="cs-swatch">
+        <select id="cs-crosshair-style" class="dtb-select">
+          <option value="0">Solid</option>
+          <option value="1">Dotted</option>
+          <option value="2" selected>Dashed</option>
+          <option value="3">Large dashed</option>
+          <option value="4">Sparse dotted</option>
+        </select>
+      </div>
+      <label class="cs-toggle-row" style="margin-top:12px;">
+        <span class="cs-field-label">Sync across panels (multi-chart grid)</span>
+        <span class="cs-switch"><input type="checkbox" id="cs-crosshair-sync-on"><span class="track"><span class="thumb"></span></span></span>
       </label>
     </div>
-    <label>Text color (price scale, time axis, watermark)</label>
-    <input type="color" id="cs-text-color" class="cs-color-inp">
-    <label>Candle up / down</label>
-    <div class="cs-row">
-      <input type="color" id="cs-up" class="cs-color-inp">
-      <input type="color" id="cs-down" class="cs-color-inp">
-    </div>
-    <label>Candle border up / down</label>
-    <div class="cs-row">
-      <input type="color" id="cs-border-up" class="cs-color-inp">
-      <input type="color" id="cs-border-down" class="cs-color-inp">
-    </div>
-    <label>Wick up / down</label>
-    <div class="cs-row">
-      <input type="color" id="cs-wick-up" class="cs-color-inp">
-      <input type="color" id="cs-wick-down" class="cs-color-inp">
-    </div>
-    <label><input type="checkbox" id="cs-show-ohlcv" style="width:auto;margin-right:6px;">Show OHLCV values</label>
-    <label><input type="checkbox" id="cs-priceline-on" style="width:auto;margin-right:6px;">Show real-time price line</label>
-    <div class="cs-row">
-      <input type="color" id="cs-priceline-color" class="cs-color-inp">
-      <select id="cs-priceline-style" class="dtb-select" style="flex:1;">
-        <option value="0">Solid</option>
-        <option value="1">Dotted</option>
-        <option value="2" selected>Dashed</option>
-        <option value="3">Large dashed</option>
-        <option value="4">Sparse dotted</option>
+
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8.5l3.5 3.5L14 3"/></svg>
+        Trade Markers
+      </div>
+      <select id="cs-trade-markers-mode" class="dtb-select" style="width:100%;">
+        <option value="full">Arrows + price / P&amp;L</option>
+        <option value="arrows">Arrows only</option>
       </select>
     </div>
-    <label style="margin-top:10px;">Crosshair line</label>
-    <div class="cs-row">
-      <input type="color" id="cs-crosshair-color" class="cs-color-inp">
-      <select id="cs-crosshair-style" class="dtb-select" style="flex:1;">
-        <option value="0">Solid</option>
-        <option value="1">Dotted</option>
-        <option value="2" selected>Dashed</option>
-        <option value="3">Large dashed</option>
-        <option value="4">Sparse dotted</option>
-      </select>
-    </div>
-    <label style="margin-top:10px;"><input type="checkbox" id="cs-crosshair-sync-on" style="width:auto;margin-right:6px;">Sync crosshair across panels (multi-chart grid)</label>
+
     <div class="modal-btns">
       <button class="btn-ghost" onclick="resetChartSettings()">Reset to default</button>
       <button class="btn-primary" onclick="saveChartSettings()">Save</button>
@@ -2617,6 +2711,7 @@ const CHART_SETTINGS_DEFAULTS = {
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
   crosshairColor:'#c9a84c', crosshairStyle:2, syncCrosshair:true,
   showOhlcv:true,
+  tradeMarkersMode:'full', // 'full' (flechas + precio/P-L en texto) | 'arrows' (solo flechas, sin texto)
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
 // CISD. Los nombres de los inputs son los mismos que en el Pine original
@@ -6781,7 +6876,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-bg').value=cs.bgColor;
   document.getElementById('cs-bg2').value=cs.bgColor2;
   document.getElementById('cs-bg-gradient').checked=!!cs.bgGradient;
-  document.getElementById('cs-bg2').style.display=cs.bgGradient?'':'none';
+  document.getElementById('cs-bg2-field').style.display=cs.bgGradient?'flex':'none';
   document.getElementById('cs-text-color').value=cs.textColor;
   document.getElementById('cs-up').value=cs.upColor;
   document.getElementById('cs-down').value=cs.downColor;
@@ -6796,6 +6891,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-crosshair-color').value=cs.crosshairColor;
   document.getElementById('cs-crosshair-style').value=String(cs.crosshairStyle);
   document.getElementById('cs-crosshair-sync-on').checked=cs.syncCrosshair;
+  document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
 }
 function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); openModal('modal-chart-settings'); }
 
@@ -6818,6 +6914,7 @@ function commitChartSettingsForm(){
     crosshairColor: document.getElementById('cs-crosshair-color').value,
     crosshairStyle: Number(document.getElementById('cs-crosshair-style').value),
     syncCrosshair: document.getElementById('cs-crosshair-sync-on').checked,
+    tradeMarkersMode: document.getElementById('cs-trade-markers-mode').value,
   };
   saveChartSettingsState();
   applyChartSettings();
@@ -6874,6 +6971,7 @@ function applyChartSettings(){
     priceLineColor: cs.priceLineColor || undefined,
     priceLineStyle: cs.priceLineStyle,
   });
+  renderTradeMarkers(); // el modo (flechas solas / + texto) puede haber cambiado
 }
 
 // ══════════════════════════════════════════════════════════
@@ -8072,13 +8170,17 @@ function renderTradeMarkers(){
   const inRange = (t) => t != null && t >= minT && t <= maxT;
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const markers = [];
+  // 'arrows': solo la flecha de entrada/salida, sin el texto de precio/P-L
+  // al lado — para cuando lo único que importa es VER rápido dónde se
+  // ejecutó, sin que el texto compita visualmente con el gráfico.
+  const arrowsOnly = STATE.chartSettings.tradeMarkersMode === 'arrows';
 
   const entryMarker = (t) => ({
     time: snapToBar(t.open_time),
     position: t.side === 'long' ? 'belowBar' : 'aboveBar',
     color: t.side === 'long' ? '#26a69a' : '#ef5350',
     shape: t.side === 'long' ? 'arrowUp' : 'arrowDown',
-    text: (t.side === 'long' ? 'Buy ' : 'Sell ') + fmt(t.entry_price),
+    text: arrowsOnly ? '' : (t.side === 'long' ? 'Buy ' : 'Sell ') + fmt(t.entry_price),
   });
 
   getOpenTrades().forEach(t => {
@@ -8095,7 +8197,7 @@ function renderTradeMarkers(){
         position: t.side === 'long' ? 'aboveBar' : 'belowBar',
         color: t.profit >= 0 ? '#26a69a' : '#ef5350',
         shape: 'circle',
-        text: `${label} ${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}`,
+        text: arrowsOnly ? '' : `${label} ${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}`,
       });
     }
   });
