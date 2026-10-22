@@ -907,6 +907,13 @@
     justify-content: center;
   }
   #draw-toolbar.visible { display: flex; }
+  .dtb-drag-handle {
+    display: flex; align-items: center; justify-content: center;
+    width: 16px; height: 24px; margin-right: 2px; border-radius: 4px;
+    color: var(--text-secondary); cursor: grab; flex-shrink: 0;
+  }
+  .dtb-drag-handle:hover { color: var(--gold); background: rgba(255,255,255,.06); }
+  .dtb-drag-handle.dragging { cursor: grabbing; color: var(--gold); }
 
   .dtb-sep { width: 1px; height: 20px; background: var(--border-light); margin: 0 2px; }
 
@@ -1235,6 +1242,9 @@
 
 <!-- ══ FLOATING DRAWING TOOLBAR ══════════════════════════ -->
 <div id="draw-toolbar">
+  <div class="dtb-drag-handle" id="dtb-drag-handle" title="Drag to move · double-click to reset position">
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>
+  </div>
   <div class="dtb-color-wrap" id="dtb-color-wrap">
     <span class="dtb-label">Color</span>
     <div class="dtb-color-swatch" id="dtb-color-swatch" style="background:#c9a84c">
@@ -2922,7 +2932,13 @@ function deselectDrawing() {
   clearSvgHighlights();
 }
 
-function showDrawToolbar() { document.getElementById('draw-toolbar').classList.add('visible'); }
+function showDrawToolbar() {
+  document.getElementById('draw-toolbar').classList.add('visible');
+  // Recién visible tiene tamaño real (offsetWidth/Height eran 0 oculto) —
+  // reclampear acá para que una posición guardada cerca de un borde no
+  // quede mal calculada contra un tamaño 0.
+  if (typeof _dtbRestoreOrClampPosition === 'function') _dtbRestoreOrClampPosition();
+}
 function hideDrawToolbar() { document.getElementById('draw-toolbar').classList.remove('visible'); }
 
 function onDtbColorChange(val) {
@@ -7576,6 +7592,79 @@ new MutationObserver((mutations) => {
     });
   }
 }).observe(document.body, { childList: true, subtree: true });
+
+// ══════════════════════════════════════════════════════════
+//  PANEL DE CONFIG DE DIBUJOS (#draw-toolbar) — ARRASTRABLE
+//  Nace centrado abajo del gráfico (ver CSS: bottom+left 50%+transform).
+//  Se mueve agarrando el grip de la izquierda; la posición se guarda por
+//  panel (lsKey, sufijada — cada iframe de la grilla tiene su propio
+//  viewport) y se re-aplica/clampea cada vez que el toolbar se muestra
+//  (showDrawToolbar) y al resize, para que nunca quede fuera de pantalla
+//  — justo el problema original (quedaba pegado abajo, sin forma de
+//  despegarlo, y la paleta de colores se salía de la ventana).
+// ══════════════════════════════════════════════════════════
+const _dtbBar = document.getElementById('draw-toolbar');
+const _dtbHandle = document.getElementById('dtb-drag-handle');
+function _dtbClampToViewport(left, top){
+  const w = _dtbBar.offsetWidth, h = _dtbBar.offsetHeight;
+  return {
+    left: Math.min(Math.max(4, left), window.innerWidth - w - 4),
+    top: Math.min(Math.max(4, top), window.innerHeight - h - 4),
+  };
+}
+function _dtbApplyPosition(left, top){
+  _dtbBar.style.left = left + 'px';
+  _dtbBar.style.top = top + 'px';
+  _dtbBar.style.bottom = 'auto';
+  _dtbBar.style.transform = 'none';
+}
+function _dtbResetPosition(){
+  _dtbBar.style.left = '';
+  _dtbBar.style.top = '';
+  _dtbBar.style.bottom = '';
+  _dtbBar.style.transform = '';
+  lsSet(lsKey('dtb_pos'), '');
+}
+function _dtbRestoreOrClampPosition(){
+  const saved = lsGet(lsKey('dtb_pos'));
+  if (!saved) return;
+  let pos;
+  try { pos = JSON.parse(saved); } catch(e){ return; }
+  if (typeof pos.left !== 'number' || typeof pos.top !== 'number') return;
+  const c = _dtbClampToViewport(pos.left, pos.top);
+  _dtbApplyPosition(c.left, c.top);
+}
+if (_dtbBar && _dtbHandle) {
+  _dtbRestoreOrClampPosition();
+  let _dtbDragging = false, _dtbStartX = 0, _dtbStartY = 0, _dtbStartLeft = 0, _dtbStartTop = 0;
+  _dtbHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const r = _dtbBar.getBoundingClientRect();
+    _dtbDragging = true;
+    _dtbStartX = e.clientX; _dtbStartY = e.clientY;
+    _dtbStartLeft = r.left; _dtbStartTop = r.top;
+    _dtbHandle.classList.add('dragging');
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!_dtbDragging) return;
+    const c = _dtbClampToViewport(_dtbStartLeft + (e.clientX - _dtbStartX), _dtbStartTop + (e.clientY - _dtbStartY));
+    _dtbApplyPosition(c.left, c.top);
+  });
+  document.addEventListener('mouseup', () => {
+    if (!_dtbDragging) return;
+    _dtbDragging = false;
+    _dtbHandle.classList.remove('dragging');
+    const r = _dtbBar.getBoundingClientRect();
+    lsSet(lsKey('dtb_pos'), JSON.stringify({ left: r.left, top: r.top }));
+  });
+  _dtbHandle.addEventListener('dblclick', _dtbResetPosition);
+  window.addEventListener('resize', () => {
+    if (!_dtbBar.style.left) return; // sigue en el default centrado, no tocar
+    const r = _dtbBar.getBoundingClientRect();
+    const c = _dtbClampToViewport(r.left, r.top);
+    _dtbApplyPosition(c.left, c.top);
+  });
+}
 
 // ══════════════════════════════════════════════════════════
 //  OPERACIONES (paper trading) — tomar/registrar trades simulados
