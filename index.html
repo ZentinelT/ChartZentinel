@@ -7035,15 +7035,59 @@ function refreshOverlays(candles){
   });
 }
 
+// scrollToRealTime() llamado en el MISMO tick síncrono que el setData() que
+// recién le cargó datos nuevos al chart (símbolo/TF recién cargado, o
+// historial viejo pegado adelante del array) no siempre "prende" — probado
+// a mano, repetidas veces: a veces el chart queda con el rango apuntando a
+// donde estaba el tiempo real de los datos ANTERIORES (puede caer antes de
+// la primera vela real o mucho después de la última), completamente en
+// blanco, y ahí se queda — lo que además podía disparar en cadena el
+// scroll-infinito de acá abajo (loadMoreHistory, si el rango resultante
+// quedaba con "from" bajo) sin terminar de resolverlo. No alcanza con un
+// solo requestAnimationFrame de margen (parece depender de cuánto tarda el
+// reflow interno de la librería, no de un número fijo de frames) — en vez
+// de adivinar cuántos hacen falta, verificamos el resultado de verdad: si
+// la última vela real no quedó visible, reintentamos un frame más.
+function scrollToRealTimeReliably(maxAttempts){
+  let attempts = 0;
+  function attempt(){
+    chart.timeScale().scrollToRealTime();
+    // setTimeout, no requestAnimationFrame: varios rAF encadenados (uno
+    // agendado desde el callback del anterior) pueden correr prácticamente
+    // pegados, sin que pase tiempo de reloj real de por medio — probado a
+    // mano, no alcanzaba. Un timeout corto sí le da lugar al reflow interno
+    // de la librería entre intento e intento.
+    setTimeout(() => {
+      const candles = window._lastCandles;
+      const cc = document.getElementById('chart-container');
+      const lastX = (candles && candles.length && cc)
+        ? chart.timeScale().timeToCoordinate(candles[candles.length-1].time) : null;
+      const visible = lastX != null && lastX >= -5 && lastX <= cc.clientWidth + 5;
+      if (!visible && ++attempts < (maxAttempts || 10)) attempt();
+    }, 60);
+  }
+  attempt();
+}
+
 // Scroll infinito hacia atrás: cuando te acercás al borde izquierdo de lo
 // ya cargado, pide más velas viejas al puente (que a su vez le pide a MT5
 // el tramo anterior) y las pega adelante sin mover la vista de un salto.
-let _loadingMoreHistory = false;
+// _historyFetchBusy es COMPARTIDO con ensureWeeklyHistoryForWatchtower —
+// las dos funciones leen/modifican window._lastCandles con el mismo patrón
+// (older.concat(candles)) sin saber una de la otra; si corrían las dos a la
+// vez (p.ej. un refresh dispara la de Watchtower mientras el usuario sigue
+// scrolleando y dispara ésta), una pisaba el resultado de la otra a mitad
+// de camino — el array terminaba con un tamaño que no coincidía con lo que
+// cualquiera de las dos esperaba, y el cálculo de "correr la vista lo que
+// se agregó" quedaba mal, mostrando un rango sin velas reales (chart en
+// blanco hasta el próximo refresh "con suerte"). Un solo mutex para las dos
+// asegura que nunca se superpongan.
+let _historyFetchBusy = false;
 async function loadMoreHistory(){
-  if (_loadingMoreHistory || window._replay) return;
+  if (_historyFetchBusy || window._replay) return;
   const candles = window._lastCandles;
   if (!candles || !candles.length || candles.length > 8000) return;
-  _loadingMoreHistory = true;
+  _historyFetchBusy = true;
   try {
     const oldest = candles[0].time;
     const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=300&before=${oldest}`;
@@ -7063,7 +7107,7 @@ async function loadMoreHistory(){
   } catch(e) {
     // sin red/MT5 un instante: se reintenta solo la próxima vez que se scrollee
   } finally {
-    _loadingMoreHistory = false;
+    _historyFetchBusy = false;
   }
 }
 
@@ -7088,11 +7132,37 @@ async function loadMoreHistory(){
 // de scroll asumiendo que la llamó un scroll manual del usuario cerca del
 // borde izquierdo. Disparada sola, apenas se abre el chart, ese ajuste se
 // aplica sobre una vista que en realidad nunca se movió.
-async function ensureWeeklyHistoryForWatchtower(){
+// justLoaded=true: esto se está llamando desde loadChart(), inmediatamente
+// después de su propio scrollToRealTime() — NO desde que el usuario recién
+// prendió el toggle de niveles semanales con el chart en cualquier estado.
+// En ese caso justLoaded ya sabemos que la intención es estar en vivo, así
+// que no hace falta (ni conviene) tratar de "detectarlo" leyendo
+// scrollPosition(): scrollToRealTime() actualiza esa posición de forma
+// asíncrona puertas adentro de la librería (su propio rAF) — leerla acá,
+// en el mismo tick síncrono, todavía devuelve el valor VIEJO (de antes del
+// refresh, p.ej. bien scrolleado hacia atrás), dando un falso "no estaba en
+// vivo" aunque loadChart lo acabe de poner ahí. Eso hacía que el bloque de
+// abajo tomara la rama equivocada (shift en vez de scrollToRealTime) y el
+// chart terminara en blanco.
+async function ensureWeeklyHistoryForWatchtower(justLoaded){
   if (!STATE.watchtower.enabled || !STATE.watchtower.pwLevels) return;
   if (!window._lastCandles || !window._lastCandles.length) return;
+  // Mismo mutex que loadMoreHistory (ver su comentario) — si el usuario
+  // está scrolleando y dispara el suyo justo cuando esto arranca, mejor
+  // saltear esta pasada entera (se reintenta solo en el próximo load/
+  // refresh) que correr los dos en simultáneo y corromper el array.
+  if (_historyFetchBusy || window._replay) return;
+  _historyFetchBusy = true;
   const step = TF_SECONDS[STATE.timeframe];
   let fetchedMore = false;
+  let totalAdded = 0;
+  // Capturado ACÁ, antes de arrancar el loop de abajo — no después (eso
+  // tenía el bug): el loop puede tardar varios segundos en varias vueltas
+  // de fetch, y para cuando terminaba, "¿seguía cerca del borde en vivo?"
+  // ya no reflejaba el estado real de cuando arrancó esta función, daba
+  // falsos negativos y el rango terminaba mal ajustado igual.
+  const wasNearRealTime = justLoaded || Math.abs(chart.timeScale().scrollPosition()) < 5;
+  try {
 
   // La estimación de cuántas velas hacen falta (extraBars) puede quedarse
   // corta en la práctica — fines de semana, feriados, o historial que MT5
@@ -7127,6 +7197,7 @@ async function ensureWeeklyHistoryForWatchtower(){
       const older = json.bars.filter(b => b.time < oldest);
       if (older.length===0) break; // el bridge no tiene más historial — no insistir
       window._lastCandles = older.concat(candles);
+      totalAdded += older.length;
       fetchedMore = true;
     } catch(e) { break; }
   }
@@ -7135,14 +7206,26 @@ async function ensureWeeklyHistoryForWatchtower(){
     // Este fetch corre solo, en segundo plano, mientras el usuario puede
     // haber estado mirando el chart — si para cuando termina ya se movió a
     // mano lejos del borde en vivo (scrolleó hacia atrás en el historial),
-    // forzar scrollToRealTime() se lo pisaba sin avisar ("me rebobino y se
-    // vuelve solo"). Solo reacomodamos la vista si seguía cerca del
-    // presente justo antes de este re-render.
-    const wasNearRealTime = Math.abs(chart.timeScale().scrollPosition()) < 5;
+    // forzar el real-time se lo pisaba sin avisar ("me rebobino y se vuelve
+    // solo"). Si seguía cerca del presente, en cambio, sí corresponde
+    // reacomodar — ver scrollToRealTimeReliably() más arriba (mismo helper
+    // que usa loadChart) para el porqué de los reintentos.
+    // (wasNearRealTime se capturó al principio de la función — ver arriba.)
+    const prevRange = chart.timeScale().getVisibleLogicalRange();
     renderSeries(STATE.timeframe);
-    if (wasNearRealTime) chart.timeScale().scrollToRealTime();
+    if (wasNearRealTime) {
+      scrollToRealTimeReliably();
+    } else if (prevRange) {
+      // No estaba en el borde en vivo: mismo bar en la misma posición de
+      // pantalla aunque el array creció a la izquierda — igual que
+      // loadMoreHistory(), que usa este mismo truco para el mismo caso.
+      chart.timeScale().setVisibleLogicalRange({ from: prevRange.from+totalAdded, to: prevRange.to+totalAdded });
+    }
     const updated = window._lastCandles;
     updateStatusBar(STATE.symbol, STATE.timeframe, updated.length, updated[0], updated[updated.length-1]);
+  }
+  } finally {
+    _historyFetchBusy = false;
   }
 }
 
@@ -7208,6 +7291,22 @@ function _resyncChartLayout(){
   const cc = document.getElementById('chart-container');
   if (!cc || !cc.clientWidth || !cc.clientHeight) return;
   chart.applyOptions({ width: cc.clientWidth, height: cc.clientHeight });
+  // El resize de arriba por sí solo NO corrige nada de Watchtower/Sniper/
+  // Sweeps ni de las líneas/manijas de los dibujos propios — esas cajas y
+  // líneas se dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN
+  // EL MOMENTO en que se llama a cada render*; si ese primer renderSeries()
+  // de loadChart corrió con el tamaño todavía mal (la razón de todo este
+  // resync), sus cajas quedaron calculadas con esas coordenadas viejas y
+  // se quedan ahí, gigantes/corridas, por más que el chart de velas de
+  // abajo ya esté bien — nada las vuelve a dibujar solas. Mismo combo que
+  // usa el ResizeObserver normal del chart (ver su .observe(container)
+  // más arriba) para este mismo caso, pero disparado a mano acá.
+  clearSvgHighlights();
+  if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
+  renderWatchtower();
+  renderSniper();
+  renderSweeps();
+  if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
 async function loadChart(symbol, timeframe, _isUppercaseRetry) {
@@ -7271,7 +7370,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     chart.priceScale('right').applyOptions({ autoScale: true });
     renderSeries(timeframe);
     chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
-    chart.timeScale().scrollToRealTime();
+    scrollToRealTimeReliably();
     // El resync de más arriba lee clientWidth/clientHeight EN ESE INSTANTE —
     // si algo que afecta el layout todavía no terminó de asentarse justo
     // ahí (fuentes custom (DM Mono/Sans) cargando desde Google Fonts, que
@@ -7284,7 +7383,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // asentándose) y otra cuando las fuentes terminan de cargar.
     requestAnimationFrame(() => requestAnimationFrame(_resyncChartLayout));
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(_resyncChartLayout);
-    ensureWeeklyHistoryForWatchtower(); // no se espera: completa el historial semanal en segundo plano
+    ensureWeeklyHistoryForWatchtower(true); // no se espera: completa el historial semanal en segundo plano — justLoaded=true, ver comentario de la función
 
     Object.keys(overlays).forEach(name=>{chart.removeSeries(overlays[name]);delete overlays[name];});
     STATE.indicators.forEach(name=>addIndicatorSeries(name));
