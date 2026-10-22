@@ -882,40 +882,48 @@
   /* ══════════════════════════════════════════════════════
      DRAWING TOOLBAR (floating, contextual)
   ══════════════════════════════════════════════════════ */
+  /* Vertical, estilo la barra de herramientas de TV (angosta, íconos
+     apilados) en vez de una fila horizontal larga que a lo ancho se comía
+     el gráfico. Nace pegada al borde izquierdo, centrada en altura —
+     arrastrable igual que antes (ver _dtbApplyPosition/_dtbResetPosition),
+     que ya trabaja en términos de left/top así que no hizo falta tocarlo. */
   #draw-toolbar {
     position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     background: var(--bg-panel);
     border: 1px solid var(--border-light);
     border-radius: 10px;
-    padding: 6px 8px;
+    padding: 6px;
     display: none;
+    flex-direction: column;
     align-items: center;
     gap: 4px;
     z-index: 300;
     box-shadow: 0 8px 32px rgba(0,0,0,.6);
     user-select: none;
-    /* "fixed" se centra contra el viewport de CADA panel (en la grilla
-       multi-chart cada panel es su propio iframe, con su propio viewport
-       angosto) — sin este tope, en un panel achicado por el usuario el
-       contenido (varios selectores/colores en una sola fila) se salía del
-       ancho del iframe y quedaba recortado/invisible más allá del borde. */
+    /* "fixed" se ubica contra el viewport de CADA panel (en la grilla
+       multi-chart cada panel es su propio iframe, con su propio viewport) —
+       sin estos topes, en un panel achicado por el usuario la columna se
+       salía del borde y quedaba recortada/invisible más allá del viewport. */
     max-width: calc(100vw - 16px);
-    flex-wrap: wrap;
-    justify-content: center;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
   }
   #draw-toolbar.visible { display: flex; }
   .dtb-drag-handle {
     display: flex; align-items: center; justify-content: center;
-    width: 16px; height: 24px; margin-right: 2px; border-radius: 4px;
+    width: 100%; height: 14px; margin-bottom: 2px; border-radius: 4px;
     color: var(--text-secondary); cursor: grab; flex-shrink: 0;
   }
+  .dtb-drag-handle svg { transform: rotate(90deg); }
   .dtb-drag-handle:hover { color: var(--gold); background: rgba(255,255,255,.06); }
   .dtb-drag-handle.dragging { cursor: grabbing; color: var(--gold); }
 
-  .dtb-sep { width: 1px; height: 20px; background: var(--border-light); margin: 0 2px; }
+  .dtb-sep { width: 70%; height: 1px; background: var(--border-light); margin: 2px 0; flex-shrink: 0; }
 
   .dtb-btn {
     background: none;
@@ -924,24 +932,29 @@
     color: var(--text-secondary);
     font-family: var(--font-mono);
     font-size: 11px;
-    padding: 4px 8px;
+    padding: 6px;
     cursor: pointer;
-    display: flex; align-items: center; gap: 5px;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
     transition: background .15s, color .15s;
     white-space: nowrap;
   }
   .dtb-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .dtb-btn.danger:hover { background: rgba(239,83,80,.15); color: var(--red); }
   .dtb-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+  /* Botones puramente de ícono: el texto queda en el DOM (title= ya da el
+     tooltip) pero oculto, así la columna queda angosta — las dos
+     excepciones (Confirm/Close trade, acción poco frecuente pero
+     importante como para esconder el texto) no usan esta clase. */
+  .dtb-btn-text { display: none; }
 
   .dtb-color-wrap {
-    display: flex; align-items: center; gap: 6px;
-    padding: 2px 6px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 2px;
     font-size: 11px;
     color: var(--text-secondary);
   }
   .dtb-color-swatch {
-    width: 18px; height: 18px; border-radius: 4px;
+    width: 20px; height: 20px; border-radius: 4px;
     border: 1px solid var(--border-light);
     cursor: pointer; overflow: hidden; position: relative;
   }
@@ -955,10 +968,16 @@
     border-radius: 4px; color: var(--text-primary); font-family: var(--font-mono);
     font-size: 11px; padding: 3px 6px; outline: none; cursor: pointer;
   }
+  #draw-toolbar .dtb-select { width: 64px; }
   .dtb-select option { background: var(--bg-panel); }
 
   .dtb-btn.active { background: var(--gold-glow); color: var(--gold); }
   .dtb-label { font-size: 10px; color: var(--text-dim); padding: 0 4px; }
+  /* Las labels de texto (Color/Width/Style) eran para una fila horizontal
+     donde el campo no explicaba solo qué era — apiladas y angostas ya no
+     entran bien, y cada control tiene su title= con el mismo texto. */
+  #draw-toolbar .dtb-label { display: none; }
+  #draw-toolbar .dtb-color-wrap[style*="gap:10px"] { flex-direction: column; gap: 4px !important; padding: 2px 0; }
 
   .drawing-handle {
     fill: var(--gold);
@@ -1245,8 +1264,7 @@
   <div class="dtb-drag-handle" id="dtb-drag-handle" title="Drag to move · double-click to reset position">
     <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>
   </div>
-  <div class="dtb-color-wrap" id="dtb-color-wrap">
-    <span class="dtb-label">Color</span>
+  <div class="dtb-color-wrap" id="dtb-color-wrap" title="Color">
     <div class="dtb-color-swatch" id="dtb-color-swatch" style="background:#c9a84c">
       <input type="color" id="dtb-color" value="#c9a84c" oninput="onDtbColorChange(this.value)">
     </div>
@@ -1256,20 +1274,17 @@
        arriba no hacía nada para ella (engañaba: parecía que cambiaba algo
        y no pasaba nada). Estos 3 swatches solo se muestran para long/short. -->
   <div class="dtb-color-wrap" id="dtb-pos-colors" style="display:none;gap:10px;">
-    <div class="dtb-color-wrap" style="gap:4px;">
-      <span class="dtb-label">Entry</span>
+    <div class="dtb-color-wrap" style="gap:4px;" title="Entry color">
       <div class="dtb-color-swatch" id="dtb-pos-entry-swatch">
         <input type="color" id="dtb-pos-entry-color" oninput="onDtbPosColorChange('entryColor', this.value, this)">
       </div>
     </div>
-    <div class="dtb-color-wrap" style="gap:4px;">
-      <span class="dtb-label">TP</span>
+    <div class="dtb-color-wrap" style="gap:4px;" title="Take-profit color">
       <div class="dtb-color-swatch" id="dtb-pos-tp-swatch">
         <input type="color" id="dtb-pos-tp-color" oninput="onDtbPosColorChange('profitColor', this.value, this)">
       </div>
     </div>
-    <div class="dtb-color-wrap" style="gap:4px;">
-      <span class="dtb-label">SL</span>
+    <div class="dtb-color-wrap" style="gap:4px;" title="Stop-loss color">
       <div class="dtb-color-swatch" id="dtb-pos-sl-swatch">
         <input type="color" id="dtb-pos-sl-color" oninput="onDtbPosColorChange('lossColor', this.value, this)">
       </div>
@@ -1284,16 +1299,13 @@
     Close trade
   </button>
   <div class="dtb-sep"></div>
-  <span class="dtb-label">Width</span>
-  <select class="dtb-select" id="dtb-width" onchange="onDtbWidthChange(this.value)">
+  <select class="dtb-select" id="dtb-width" title="Line width" onchange="onDtbWidthChange(this.value)">
     <option value="1">1px</option>
     <option value="2">2px</option>
     <option value="3">3px</option>
     <option value="4">4px</option>
   </select>
-  <div class="dtb-sep"></div>
-  <span class="dtb-label">Style</span>
-  <select class="dtb-select" id="dtb-style" onchange="onDtbStyleChange(this.value)">
+  <select class="dtb-select" id="dtb-style" title="Line style" onchange="onDtbStyleChange(this.value)">
     <option value="0">─── Solid</option>
     <option value="1">- - - Dashed</option>
     <option value="2">··· Dotted</option>
@@ -1303,30 +1315,30 @@
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <line x1="2" y1="3" x2="14" y2="3"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="2" y1="11" x2="14" y2="11"/><line x1="2" y1="13.5" x2="14" y2="13.5"/>
     </svg>
-    Levels
+    <span class="dtb-btn-text">Levels</span>
   </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" id="dtb-ext-left" title="Extend Left" onclick="onDtbExtend('left')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <line x1="14" y1="8" x2="2" y2="8"/><polyline points="6,4 2,8 6,12"/>
     </svg>
-    Left
+    <span class="dtb-btn-text">Left</span>
   </button>
   <button class="dtb-btn" id="dtb-ext-right" title="Extend Right" onclick="onDtbExtend('right')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <line x1="2" y1="8" x2="14" y2="8"/><polyline points="10,4 14,8 10,12"/>
     </svg>
-    Right
+    <span class="dtb-btn-text">Right</span>
   </button>
   <!-- Solo para 'rect': hoy borde y relleno comparten color y siempre están
        los dos prendidos — esto permite apagar uno sin el otro. -->
   <button class="dtb-btn active" id="dtb-rect-border" title="Show/hide border" onclick="onDtbToggleRectPart('showBorder')" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/></svg>
-    Border
+    <span class="dtb-btn-text">Border</span>
   </button>
   <button class="dtb-btn active" id="dtb-rect-fill" title="Show/hide fill" onclick="onDtbToggleRectPart('showFill')" style="display:none">
     <svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/></svg>
-    Fill
+    <span class="dtb-btn-text">Fill</span>
   </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" id="dtb-lock" title="Lock drawing" onclick="onDtbLock()">
@@ -1334,14 +1346,14 @@
       <rect x="3" y="7" width="10" height="8" rx="1.5"/>
       <path d="M5 7V5a3 3 0 016 0v2"/>
     </svg>
-    Lock
+    <span class="dtb-btn-text">Lock</span>
   </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" title="Duplicate" onclick="onDtbClone()">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="5" y="5" width="8" height="9" rx="1"/><rect x="3" y="2" width="8" height="9" rx="1"/>
     </svg>
-    Clone
+    <span class="dtb-btn-text">Clone</span>
   </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn danger" title="Delete drawing" onclick="onDtbDelete()">
@@ -1351,7 +1363,7 @@
       <path d="M6.5 7v4M9.5 7v4"/>
       <path d="M6 4V2.5h4V4"/>
     </svg>
-    Delete
+    <span class="dtb-btn-text">Delete</span>
   </button>
 </div>
 
@@ -7595,16 +7607,25 @@ new MutationObserver((mutations) => {
 
 // ══════════════════════════════════════════════════════════
 //  PANEL DE CONFIG DE DIBUJOS (#draw-toolbar) — ARRASTRABLE
-//  Nace centrado abajo del gráfico (ver CSS: bottom+left 50%+transform).
-//  Se mueve agarrando el grip de la izquierda; la posición se guarda por
-//  panel (lsKey, sufijada — cada iframe de la grilla tiene su propio
-//  viewport) y se re-aplica/clampea cada vez que el toolbar se muestra
-//  (showDrawToolbar) y al resize, para que nunca quede fuera de pantalla
-//  — justo el problema original (quedaba pegado abajo, sin forma de
-//  despegarlo, y la paleta de colores se salía de la ventana).
+//  Columna vertical (ver CSS), nace pegada al borde izquierdo del
+//  GRÁFICO (no del viewport entero — si no, en la vista de un solo panel
+//  se metía debajo del watchlist de la izquierda). Se mueve agarrando el
+//  grip de arriba; la posición se guarda por panel (lsKey, sufijada —
+//  cada iframe de la grilla tiene su propio viewport) y se re-aplica/
+//  clampea cada vez que el toolbar se muestra (showDrawToolbar) y al
+//  resize, para que nunca quede fuera de pantalla.
 // ══════════════════════════════════════════════════════════
 const _dtbBar = document.getElementById('draw-toolbar');
 const _dtbHandle = document.getElementById('dtb-drag-handle');
+function _dtbDefaultPosition(){
+  const h = _dtbBar.offsetHeight || 300;
+  const cc = document.getElementById('chart-container');
+  if (cc) {
+    const r = cc.getBoundingClientRect();
+    if (r.width > 0) return { left: r.left + 10, top: r.top + Math.max(10, (r.height - h) / 2) };
+  }
+  return { left: 12, top: Math.max(10, (window.innerHeight - h) / 2) };
+}
 function _dtbClampToViewport(left, top){
   const w = _dtbBar.offsetWidth, h = _dtbBar.offsetHeight;
   return {
@@ -7619,18 +7640,16 @@ function _dtbApplyPosition(left, top){
   _dtbBar.style.transform = 'none';
 }
 function _dtbResetPosition(){
-  _dtbBar.style.left = '';
-  _dtbBar.style.top = '';
-  _dtbBar.style.bottom = '';
-  _dtbBar.style.transform = '';
   lsSet(lsKey('dtb_pos'), '');
+  const pos = _dtbDefaultPosition();
+  const c = _dtbClampToViewport(pos.left, pos.top);
+  _dtbApplyPosition(c.left, c.top);
 }
 function _dtbRestoreOrClampPosition(){
   const saved = lsGet(lsKey('dtb_pos'));
-  if (!saved) return;
-  let pos;
-  try { pos = JSON.parse(saved); } catch(e){ return; }
-  if (typeof pos.left !== 'number' || typeof pos.top !== 'number') return;
+  let pos = null;
+  if (saved) { try { pos = JSON.parse(saved); } catch(e){ pos = null; } }
+  if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number') pos = _dtbDefaultPosition();
   const c = _dtbClampToViewport(pos.left, pos.top);
   _dtbApplyPosition(c.left, c.top);
 }
@@ -7658,8 +7677,11 @@ if (_dtbBar && _dtbHandle) {
     lsSet(lsKey('dtb_pos'), JSON.stringify({ left: r.left, top: r.top }));
   });
   _dtbHandle.addEventListener('dblclick', _dtbResetPosition);
+  // La posición (guardada o default) siempre queda aplicada como estilo
+  // inline en px — si la ventana cambia de tamaño, solo reclampeamos esos
+  // px contra el nuevo viewport (igual que con una posición arrastrada a
+  // mano); no vuelve a recalcular el default contra el chart-container.
   window.addEventListener('resize', () => {
-    if (!_dtbBar.style.left) return; // sigue en el default centrado, no tocar
     const r = _dtbBar.getBoundingClientRect();
     const c = _dtbClampToViewport(r.left, r.top);
     _dtbApplyPosition(c.left, c.top);
