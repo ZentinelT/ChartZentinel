@@ -388,6 +388,23 @@
      la grilla multi-chart) — mismo lenguaje visual que el resto del picker,
      pero más ancho (160px se quedaba corto para nombre + switch). */
   .layout-picker-popup.with-sync { min-width: 248px; }
+
+  /* ─── Go to date/time (popup tipo TV, junto a Undo/Redo) ─────── */
+  .goto-date-wrap { position: relative; flex-shrink: 0; }
+  .goto-date-popup { padding: 10px; min-width: 190px; }
+  .goto-date-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .goto-date-row label { font-family: var(--font-ui); font-size: 11px; color: var(--text-dim); }
+  .goto-date-row input {
+    background: var(--bg-input, #16161c); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 11.5px; padding: 3px 6px;
+    color-scheme: dark;
+  }
+  .goto-date-go {
+    width: 100%; margin-top: 2px; background: var(--gold); color: #141414; border: none;
+    border-radius: 5px; padding: 6px 0; font-family: var(--font-ui); font-size: 11.5px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .goto-date-go:hover { opacity: .85; }
   .sync-section { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
   .sync-section-label {
     font-family: var(--font-ui); font-size: 10px; font-weight: 600; letter-spacing: 1.4px;
@@ -816,10 +833,40 @@
   #statusbar .sb-item { display: flex; gap: 5px; min-width: 0; overflow: hidden; }
   #statusbar .sb-item b { color: var(--text-secondary); font-weight: 400; flex-shrink: 0; }
   #statusbar .sb-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #status-conn { margin-left: auto; flex-shrink: 0; }
+  #status-conn { flex-shrink: 0; margin-left: 12px; }
   #status-conn.ok { color: var(--green); }
   #status-conn.err { color: var(--red); }
   #status-conn.loading { color: var(--gold); }
+
+  /* ─── Reloj / zona horaria (popup tipo TV, en la barra de abajo) ─ */
+  #sb-tz-wrap { position: relative; flex-shrink: 0; margin-left: auto; }
+  #sb-tz-trigger {
+    background: none; border: none; display: flex; align-items: center; gap: 6px;
+    padding: 2px 6px; border-radius: 4px; cursor: pointer;
+    font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);
+    transition: background .15s, color .15s;
+  }
+  #sb-tz-trigger:hover, #sb-tz-trigger.active { background: var(--bg-hover); color: var(--text-primary); }
+  #sb-clock { color: var(--text-secondary); }
+  #sb-tz-trigger:hover #sb-clock, #sb-tz-trigger.active #sb-clock { color: var(--text-primary); }
+  /* Mismo motivo que .sb-tz-popup más abajo: #draw-toolbar tiene
+     overflow-y:auto (para poder scrollear la columna de botones en un
+     panel bajo) — eso también recorta overflow-x, así que un popup
+     absolute adentro quedaba invisible. fixed + posición calculada a mano
+     en JS (ver dtb-template-trigger). */
+  .dtb-template-popup { position: fixed; top: auto; left: auto; min-width: 200px; max-height: 300px; overflow-y: auto; }
+  .dtb-template-row { display:flex; align-items:center; gap:6px; }
+  .dtb-template-row .tf-fav-label { flex:1; }
+  .dtb-template-row .dtb-template-del { flex-shrink:0; width:16px; height:16px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer; opacity:.6; }
+  .dtb-template-row .dtb-template-del:hover { color:var(--red); opacity:1; }
+  .dtb-template-save-row { padding:5px 8px; color:var(--gold); cursor:pointer; border-radius:5px; font-family:var(--font-ui); font-size:12.5px; }
+  .dtb-template-save-row:hover { background:var(--bg-hover); }
+
+  /* position:fixed (no absolute): #statusbar tiene overflow:hidden para
+     que Range/Bars no desborden la barra — un popup absolute heredaba ese
+     recorte y quedaba invisible aunque "abierto". fixed se posiciona desde
+     JS (ver initStatusbarClock) y no lo afecta el overflow del ancestro. */
+  .sb-tz-popup { position: fixed; top: auto; min-width: 170px; }
 
   /* ─── MODALS ──────────────────────────────────────────── */
   .modal-overlay {
@@ -976,6 +1023,26 @@
   #add-sym-inp:focus { border-color: var(--gold-dim); }
   #add-sym-ok { background: var(--gold-dim); border: none; border-radius: 4px; color: var(--gold-bright); font-size: 12px; font-weight: 700; padding: 3px 10px; cursor: pointer; }
 
+  /* Sugerencias del buscador de símbolo — contra la lista real que el
+     broker tiene en Market Watch (bridge /symbols), no texto libre a
+     ciegas: antes había que ADIVINAR el nombre exacto (p.ej. "BTCUSD",
+     no "BTC" ni "BTC/USD"). position:fixed (no absolute): #sidebar tiene
+     overflow:hidden, recortaba un dropdown absolute — mismo motivo que
+     .sb-tz-popup/.dtb-template-popup más arriba, posición calculada a
+     mano en JS (ver wireSymbolSearch). */
+  .add-sym-suggestions {
+    position: fixed; display: none; background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 400;
+    max-height: 260px; overflow-y: auto; min-width: 160px;
+  }
+  .add-sym-suggestions.open { display: block; }
+  .add-sym-suggestion-row {
+    padding: 6px 10px; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .5px;
+    color: var(--text-secondary); cursor: pointer;
+  }
+  .add-sym-suggestion-row:hover, .add-sym-suggestion-row.hl { background: var(--bg-hover); color: var(--text-primary); }
+  .add-sym-suggestion-row b { color: var(--gold); font-weight: 600; }
+
   /* ══════════════════════════════════════════════════════
      DRAWING TOOLBAR (floating, contextual)
   ══════════════════════════════════════════════════════ */
@@ -1127,6 +1194,7 @@
 
   <div id="symbol-search-wrap">
     <input id="symbol-input" class="topbar-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
+    <div id="symbol-input-suggestions" class="add-sym-suggestions"></div>
   </div>
 
   <div id="price-display">
@@ -1149,6 +1217,16 @@
   <button class="topbar-btn" id="btn-redo-top" title="Redo (Ctrl+Shift+Z)" onclick="redoDrawing()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
   </button>
+  <div id="goto-date-wrap" class="goto-date-wrap">
+    <button class="topbar-btn" id="goto-date-trigger" title="Go to date/time">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="2.3"/></svg>
+    </button>
+    <div id="goto-date-popup" class="tf-fav-popup goto-date-popup">
+      <div class="goto-date-row"><label>Date</label><input type="date" id="goto-date-input"></div>
+      <div class="goto-date-row"><label>Time</label><input type="time" id="goto-time-input" value="00:00"></div>
+      <button class="goto-date-go" id="goto-date-go">Go to date/time</button>
+    </div>
+  </div>
 
   <!-- Picker de layout + utilidades: solo tienen sentido en modo 1
        gráfico (en la grilla multi-chart ya existen sus propios
@@ -1292,7 +1370,8 @@
         <button class="sidebar-add-btn" onclick="toggleAddSym()" title="Add symbol">+</button>
       </div>
       <div id="add-sym-form">
-        <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20">
+        <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20" autocomplete="off">
+        <div id="add-sym-suggestions" class="add-sym-suggestions"></div>
         <button id="add-sym-ok" onclick="addSymbol()">→</button>
       </div>
       <div id="watchlist"></div>
@@ -1349,10 +1428,12 @@
 
 <!-- ── STATUS BAR ─────────────────────────────────────── -->
 <div id="statusbar">
-  <div class="sb-item"><b>Symbol:</b><span id="sb-sym">—</span></div>
-  <div class="sb-item"><b>TF:</b><span id="sb-tf">—</span></div>
-  <div class="sb-item"><b>Bars:</b><span id="sb-bars">—</span></div>
-  <div class="sb-item"><b>Range:</b><span id="sb-range">—</span></div>
+  <div id="sb-tz-wrap">
+    <button id="sb-tz-trigger" title="Click to change timezone">
+      <span id="sb-clock">--:--:--</span><span id="sb-tz-label">—</span>
+    </button>
+    <div id="sb-tz-popup" class="tf-fav-popup sb-tz-popup"></div>
+  </div>
   <span id="status-conn" class="loading">● connecting…</span>
 </div>
 
@@ -1445,6 +1526,14 @@
     </svg>
     <span class="dtb-btn-text">Lock</span>
   </button>
+  <div class="dtb-sep"></div>
+  <div id="dtb-template-wrap" style="position:relative;">
+    <button class="dtb-btn" id="dtb-template-trigger" title="Save/load a named style template for this tool">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h8a1 1 0 011 1v11l-5-3-5 3V3a1 1 0 011-1z"/></svg>
+      <span class="dtb-btn-text">Template</span>
+    </button>
+    <div id="dtb-template-popup" class="tf-fav-popup dtb-template-popup"></div>
+  </div>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" title="Duplicate" onclick="onDtbClone()">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1574,6 +1663,37 @@
 </div>
 
 <!-- ══ MODAL: INDICATORS ════════════════════════════════ -->
+<!-- ══ MODAL: SAVE AS (nombre) — reemplaza prompt()/confirm() nativos para
+     guardar presets/templates, que aparecían como un banner del NAVEGADOR
+     arriba de la página en vez de algo de la plataforma. Genérico: lo usan
+     el Preset de todo el chart, los templates de indicador y los de
+     dibujo — ver promptSaveAsName() más abajo. ═══════════════════════ -->
+<div class="modal-overlay" id="modal-save-as" style="z-index:600;">
+  <div class="modal" style="max-width:360px;">
+    <h2 id="save-as-title">Save as…</h2>
+    <div id="save-as-existing" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:none;"></div>
+    <input type="text" id="save-as-input" class="topbar-input" style="width:100%;margin-bottom:16px;" placeholder="Name" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal('modal-save-as')">Cancel</button>
+      <button class="btn-primary" id="save-as-confirm-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Genérico para 1-2 campos sueltos (volumen al confirmar una operación,
+     SL/TP al editarla) — mismo motivo que modal-save-as de arriba: antes
+     eran prompt() nativos del navegador. Ver promptFields(). -->
+<div class="modal-overlay" id="modal-prompt-fields" style="z-index:600;">
+  <div class="modal" style="max-width:360px;">
+    <h2 id="prompt-fields-title">—</h2>
+    <div id="prompt-fields-body"></div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal('modal-prompt-fields')">Cancel</button>
+      <button class="btn-primary" id="prompt-fields-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-fib-levels">
   <div class="modal">
     <h2>Fibonacci Levels</h2>
@@ -1600,6 +1720,15 @@
 <div class="modal-overlay" id="modal-ind-settings">
   <div class="modal" style="max-height:85vh;overflow-y:auto;">
     <h2 id="ind-settings-title">Settings</h2>
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;">Template</label>
+      <select id="ind-settings-template-select" class="dtb-select" style="width:100%;margin-bottom:8px;"></select>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-ghost" style="flex:1;" onclick="applySelectedIndTemplate()">Apply</button>
+        <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsIndTemplate()">Save as…</button>
+        <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedIndTemplate()">Delete</button>
+      </div>
+    </div>
     <div id="ind-settings-body"></div>
     <div class="modal-btns">
       <button class="btn-ghost" onclick="closeModal('modal-ind-settings')">Close</button>
@@ -1934,6 +2063,7 @@ function renderLayoutGrid(n){
     <div class="tf-sep"></div>
     <div id="gc-scope" style="display:flex;gap:2px;"></div>
     <input id="gc-symbol" class="topbar-input" type="text" placeholder="Symbol…" autocomplete="off" title="Symbol for the active panel or all — Enter to apply" style="width:120px;">
+    <div id="gc-symbol-suggestions" class="add-sym-suggestions"></div>
     <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:6px;">
       <span class="tb-label" style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;">Preset:</span>
       <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
@@ -1972,6 +2102,16 @@ function renderLayoutGrid(n){
     <button class="topbar-btn" id="gc-redo" title="Redo (Ctrl+Shift+Z) — active panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
     </button>
+    <div id="gc-goto-date-wrap" class="goto-date-wrap">
+      <button class="topbar-btn" id="gc-goto-date-trigger" title="Go to date/time — active panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="2.3"/></svg>
+      </button>
+      <div id="gc-goto-date-popup" class="tf-fav-popup goto-date-popup">
+        <div class="goto-date-row"><label>Date</label><input type="date" id="gc-goto-date-input"></div>
+        <div class="goto-date-row"><label>Time</label><input type="time" id="gc-goto-time-input" value="00:00"></div>
+        <button class="goto-date-go" id="gc-goto-date-go">Go to date/time</button>
+      </div>
+    </div>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
       <div id="layout-picker-wrap">
@@ -2131,7 +2271,8 @@ function renderLayoutGrid(n){
         <button class="sidebar-add-btn" onclick="shellToggleAddSym()" title="Add symbol">+</button>
       </div>
       <div id="add-sym-form">
-        <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20">
+        <input id="add-sym-inp" type="text" placeholder="AAPL, BTC/USD…" maxlength="20" autocomplete="off">
+        <div id="add-sym-suggestions" class="add-sym-suggestions"></div>
         <button id="add-sym-ok" onclick="shellAddSymbol()">→</button>
       </div>
       <div id="watchlist"></div>
@@ -2200,6 +2341,7 @@ function renderLayoutGrid(n){
     STATE.watchlist.push(sym);
     renderShellWatchlist();
   };
+  wireSymbolSearch(shellSidebar.querySelector('#add-sym-inp'), shellSidebar.querySelector('#add-sym-suggestions'), shellAddSymbol);
   window.shellRemoveSymbol = function(sym, e){
     e.stopPropagation();
     STATE.watchlist = STATE.watchlist.filter(s=>s!==sym);
@@ -2239,6 +2381,11 @@ function renderLayoutGrid(n){
   window.shellRedoDrawing = function(){
     const f = iframeEls[activePane-1];
     if (f) { try { f.contentWindow.redoDrawing(); } catch(e){} }
+  };
+  // Go to date/time — mismo criterio: siempre el panel activo, nunca "todos".
+  window.shellGoToDateTime = function(dateStr, timeStr){
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.goToDateTime(dateStr, timeStr); } catch(e){} }
   };
   // Delete/Escape/Ctrl+Z/Ctrl+Y de dibujos viven en cada panel (ahí está
   // selectedDrawingId y el historial de undo) — pero clickear CUALQUIER
@@ -2366,13 +2513,17 @@ function renderLayoutGrid(n){
 
   // Símbolo: Enter para aplicar
   const symbolInp = gbar.querySelector('#gc-symbol');
-  symbolInp.addEventListener('keydown', e=>{
-    if (e.key !== 'Enter') return;
+  function applyGcSymbolInput(){
     const sym = symbolInp.value.trim();
     if (!sym) return;
     broadcast({ type:'zentinel:setSymbol', symbol:sym });
     symbolInp.value='';
+  }
+  symbolInp.addEventListener('keydown', e=>{
+    if (e.key !== 'Enter') return;
+    applyGcSymbolInput();
   });
+  wireSymbolSearch(symbolInp, gbar.querySelector('#gc-symbol-suggestions'), applyGcSymbolInput);
 
   // Un solo selector de TF para toda la grilla — muestra la lista de
   // favoritos GLOBAL (getTfFavorites/setTfFavorites, misma que usa cada
@@ -2535,6 +2686,10 @@ function renderLayoutGrid(n){
   // panel tiene su propio historial de dibujos, no tiene sentido "a todos").
   gbar.querySelector('#gc-undo').addEventListener('click', shellUndoDrawing);
   gbar.querySelector('#gc-redo').addEventListener('click', shellRedoDrawing);
+  initGoToDatePopup('gc-', shellGoToDateTime, () => {
+    const f = iframeEls[activePane-1];
+    try { return f.contentWindow._lastCandles[f.contentWindow._lastCandles.length-1].time; } catch(e){ return null; }
+  });
 
   // Replay — como Settings, siempre apunta a un panel puntual (el activo
   // para arrancar, el maestro una vez arrancado) sin importar el selector
@@ -2907,6 +3062,15 @@ const STATE = {
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
+  // Templates NOMBRADOS por indicador — {nombreIndicador: {nombreTemplate:
+  // configObjeto}} — distinto de indicatorStyles (que es un único "último
+  // valor usado" automático): esto es "Save as..." explícito, con nombre,
+  // varios guardados por indicador, igual que el Preset de todo el chart
+  // pero acotado a UN indicador puntual. Ver openIndicatorSettings.
+  // SIN lsKey (sin sufijo de panel) a propósito, igual que presets: un
+  // template guardado en un panel de la grilla tiene que estar disponible
+  // en cualquier otro, no quedarse encerrado en el panel donde se guardó.
+  indicatorTemplates: JSON.parse(lsGet('td_ind_templates') || '{}'),
   // "Ocultos" vía el ojo del chip — independiente de estar activo
   // (STATE.indicators/watchtower.enabled/etc. siguen intactos, el
   // indicador sigue calculando; esto solo oculta lo que dibuja). Separado
@@ -2939,10 +3103,39 @@ function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1])
 function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
 function saveChartSettingsState(){ lsSet(lsKey('td_chart_settings'), JSON.stringify(STATE.chartSettings)); }
 function saveIndicatorStylesState(){ lsSet(lsKey('td_ind_styles'), JSON.stringify(STATE.indicatorStyles)); }
+function saveIndicatorTemplatesState(){ lsSet('td_ind_templates', JSON.stringify(STATE.indicatorTemplates)); }
+// Devuelve el objeto de configuración completo de UN indicador (el mismo
+// que lee/escribe openIndicatorSettings/saveIndicatorSettings) — para
+// Watchtower/Sniper/Sweeps es su propio STATE.xxx; para cualquier otro
+// indicador "simple" (EMA, RSI...) es su entrada en indicatorStyles.
+function getIndSettingsObject(name){
+  if (name === 'Watchtower') return STATE.watchtower;
+  if (name === 'Sniper') return STATE.sniper;
+  if (name === 'Sweeps') return STATE.sweeps;
+  const def = INDICATOR_DEFS.find(d => d.name === name);
+  return getIndicatorStyle(name, def || {});
+}
+function setIndSettingsObject(name, obj){
+  if (name === 'Watchtower') {
+    STATE.watchtower = Object.assign({}, obj, { enabled: STATE.watchtower.enabled });
+    saveWatchtowerState(); renderWatchtower();
+    ensureWeeklyHistoryForWatchtower();
+  } else if (name === 'Sniper') {
+    STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, obj, { enabled: STATE.sniper.enabled });
+    saveSniperState(); renderSniper();
+  } else if (name === 'Sweeps') {
+    STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, obj, { enabled: STATE.sweeps.enabled });
+    saveSweepsState(); renderSweeps();
+  } else {
+    STATE.indicatorStyles[name] = obj;
+    saveIndicatorStylesState();
+    if (overlays[name]) overlays[name].applyOptions({ color: obj.color, lineWidth: obj.lineWidth });
+  }
+}
 function getIndicatorStyle(name, def){ return Object.assign({ color: def.color, lineWidth: 1 }, STATE.indicatorStyles[name] || {}); }
 function savePresetsState(){ lsSet('td_presets', JSON.stringify(STATE.presets)); }
 
-let chart, candleSeries, volumeSeries;
+let chart, candleSeries, volumeSeries, futureAxisSeries;
 const overlays = {};
 
 // ══════════════════════════════════════════════════════════
@@ -2958,6 +3151,65 @@ const toolDefaults = {
   extLeft: false,
   extRight: false,
 };
+// Estilo recordado POR TIPO de herramienta (trendline, fib, rect...), no
+// uno solo compartido por todas — así cambiarle el color a un fib no
+// afecta el color con el que nace la próxima trendline. Persistido en
+// localStorage (por panel, igual que STATE.indicatorStyles) para que
+// sobreviva un reload: cambiás el estilo de un dibujo una vez y desde ahí
+// cualquier dibujo NUEVO de ESE tipo nace así, sin tener que guardar nada
+// a mano — mismo criterio que ya usa getIndicatorStyle() para indicadores.
+let TOOL_STYLE_STORE = {};
+try { TOOL_STYLE_STORE = JSON.parse(lsGet('td_tool_styles') || '{}'); } catch(e){}
+function saveToolStyleStore(){ lsSet('td_tool_styles', JSON.stringify(TOOL_STYLE_STORE)); }
+// Vuelca en toolDefaults (el objeto que leen los ~10 puntos donde nace un
+// dibujo nuevo) el estilo recordado para `type`, o la base de arriba si
+// todavía no se personalizó ese tipo.
+function refreshToolDefaultsFor(type){
+  try { TOOL_STYLE_STORE = JSON.parse(lsGet('td_tool_styles') || '{}'); } catch(e){}
+  Object.assign(toolDefaults, { color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false }, TOOL_STYLE_STORE[type] || {});
+}
+// Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
+// existente — guarda ese mismo estilo como el default de su TIPO, para que
+// el próximo dibujo nuevo de ese tipo nazca igual.
+// Campos de estilo relevantes de un dibujo YA construido — distinto por
+// tipo: long/short no tienen "un" color (tienen 3: entrada/TP/SL), el
+// resto sí. Usado tanto por el "último usado" automático (TOOL_STYLE_STORE)
+// como por los templates nombrados (DRAWING_TEMPLATES) — mismo shape.
+function captureDrawingStyle(d){
+  const base = { width: d.width, style: d.style, extLeft: !!d.extLeft, extRight: !!d.extRight };
+  if (d.type === 'long' || d.type === 'short') {
+    return Object.assign(base, {
+      entryColor: d.entryColor || '#e8e8f0',
+      profitColor: d.profitColor || '#26a69a',
+      lossColor: d.lossColor || '#ef5350',
+    });
+  }
+  return Object.assign(base, { color: d.color });
+}
+function rememberToolStyle(d){
+  try { TOOL_STYLE_STORE = JSON.parse(lsGet('td_tool_styles') || '{}'); } catch(e){}
+  TOOL_STYLE_STORE[d.type] = captureDrawingStyle(d);
+  saveToolStyleStore();
+  if (STATE.activeTool === d.type) refreshToolDefaultsFor(d.type);
+}
+
+// ── Templates NOMBRADOS de dibujo ("Save as...", TV-style) — distinto del
+// "último usado" automático de arriba: acá el usuario elige un nombre y
+// puede guardar varios por tipo de herramienta (ej. "Long — scalp" y
+// "Long — swing" con colores distintos), ver dtb-template-trigger. ──
+let DRAWING_TEMPLATES = {};
+try { DRAWING_TEMPLATES = JSON.parse(lsGet('td_drawing_templates') || '{}'); } catch(e){}
+function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringify(DRAWING_TEMPLATES)); }
+// Aplica un style object (mismo shape que captureDrawingStyle) a un dibujo
+// ya existente Y lo deja como el "último usado" de su tipo.
+function applyStyleObjectToDrawing(d, style){
+  captureUndoSnapshot();
+  Object.assign(d, style);
+  restyleDrawingAppearance(d);
+  markDrawingsDirty();
+  rememberToolStyle(d);
+  selectDrawing(d.id); // refresca los swatches/selects del DTB con el nuevo estilo
+}
 
 function genId() { return 'drw_' + Math.random().toString(36).slice(2,9); }
 
@@ -3172,26 +3424,71 @@ function hideDrawToolbar() { document.getElementById('draw-toolbar').classList.r
 
 function onDtbColorChange(val) {
   document.getElementById('dtb-color-swatch').style.background = val;
-  toolDefaults.color = val;
   const d = getSelected();
-  if (d && d.type === 'fib') {
+  if (!d) { rememberToolStyleField(STATE.activeTool, 'color', val); return; }
+  if (d.type === 'fib') {
     // El fibo no tiene "un" color — son los colores por nivel. Este control
     // pinta todos los niveles del mismo color de una (hay que destildar/
     // editar los que se quieran distintos desde "Levels").
     captureUndoSnapshot();
     d.levels.forEach(lv => { lv.color = val; });
-    redrawDrawing(d);
+    d.color = val;
+    restyleDrawingAppearance(d);
+    markDrawingsDirty();
+    rememberToolStyle(d);
     if (document.getElementById('modal-fib-levels').classList.contains('open')) renderFibLevelsRows();
     return;
   }
   applyStyleToSelected({ color: val });
 }
+// Cuando no hay ningún dibujo seleccionado (el usuario ajusta el color/
+// ancho/estilo de la barra ANTES de dibujar, para el próximo trazo) no hay
+// `d` del cual leer el tipo — se guarda directo contra la herramienta
+// actualmente armada.
+function rememberToolStyleField(type, field, val){
+  if (!type) return;
+  toolDefaults[field] = val;
+  try { TOOL_STYLE_STORE = JSON.parse(lsGet('td_tool_styles') || '{}'); } catch(e){}
+  TOOL_STYLE_STORE[type] = Object.assign({}, TOOL_STYLE_STORE[type], { [field]: val });
+  saveToolStyleStore();
+}
+// Color/ancho/estilo son pura apariencia — nunca deberían tocar el horario
+// de ninguna serie del chart. redrawDrawing() (sacar y volver a meter las
+// series) terminaba haciendo justo eso igual, indirectamente: con un
+// dibujo cuyo horario no es exactamente el de una vela de ESTE panel, cada
+// ciclo de sacar/meter dejaba el eje de tiempo un toque distinto — en TFs
+// con velas muy espaciadas (como D) alcanzaba para notarse como el gráfico
+// "corriéndose" en cada cambio de color. applyOptions() sobre las series
+// YA existentes no toca sus datos en absoluto, así que no tiene ese riesgo.
+function restyleDrawingAppearance(d) {
+  const C = d.color, lw = d.width, ls = lwStyle(d.style);
+  if (d.type === 'vline') {
+    if (d.vLineEl) {
+      d.vLineEl.setAttribute('stroke', C);
+      d.vLineEl.setAttribute('stroke-width', lw);
+      d.vLineEl.setAttribute('stroke-dasharray', ls===1?'6,4':ls===2?'2,3':'none');
+    }
+  } else if (d.type === 'rect') {
+    d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
+    if (d.fillEl) d.fillEl.setAttribute('fill', C);
+  } else if (d.type === 'fib') {
+    const levels = (d.levels||[]).filter(lv => lv.on);
+    d.series.forEach((s,i) => {
+      const lv = levels[i]; if (!lv) return;
+      try { s.applyOptions({ color: lv.color+'cc', lineWidth: lw, lineStyle: ls }); } catch(e){}
+    });
+  } else if (d.type === 'long' || d.type === 'short') {
+    restylePositionToolColors(d);
+  } else {
+    d.series.forEach(s => { try { s.applyOptions({ color: C, lineWidth: lw, lineStyle: ls }); } catch(e){} });
+  }
+}
 function onDtbWidthChange(val) {
-  toolDefaults.width = parseInt(val);
+  if (!getSelected()) { rememberToolStyleField(STATE.activeTool, 'width', parseInt(val)); return; }
   applyStyleToSelected({ width: parseInt(val) });
 }
 function onDtbStyleChange(val) {
-  toolDefaults.style = parseInt(val);
+  if (!getSelected()) { rememberToolStyleField(STATE.activeTool, 'style', parseInt(val)); return; }
   applyStyleToSelected({ style: parseInt(val) });
 }
 function onDtbExtend(dir) {
@@ -3200,6 +3497,7 @@ function onDtbExtend(dir) {
   if (dir === 'left')  { d.extLeft  = !d.extLeft;  document.getElementById('dtb-ext-left').classList.toggle('active',  d.extLeft); }
   if (dir === 'right') { d.extRight = !d.extRight; document.getElementById('dtb-ext-right').classList.toggle('active', d.extRight); }
   redrawDrawing(d);
+  rememberToolStyle(d);
 }
 function onDtbLock() {
   const d = getSelected(); if (!d) return;
@@ -3290,7 +3588,14 @@ function resetFibLevels() {
 function onDtbClone() {
   const d = getSelected(); if (!d) return;
   captureUndoSnapshot();
-  const clone = JSON.parse(JSON.stringify({ ...d, id: genId(), series:[], svgEls:[], label:null }));
+  // tradeId: SIN BORRAR esto, un clon de una herramienta de posición con
+  // una operación YA confirmada quedaba apuntando a esa MISMA operación
+  // real (...d copia todos los campos) — dos dibujos en pantalla, pero
+  // atados al mismo trade de fondo: cerrar "uno" cerraba el otro también,
+  // y el botón Confirm trade ni aparecía en el clon (ya tenía tradeId, así
+  // que el toolbar lo trataba como si ya estuviera confirmado). Un clon
+  // tiene que nacer como un dibujo nuevo e independiente, sin operación.
+  const clone = JSON.parse(JSON.stringify({ ...d, id: genId(), series:[], svgEls:[], label:null, tradeId: undefined }));
   clone.p1.price += (d.p2?.price ?? d.p1.price) * 0.001;
   if (clone.p2) clone.p2.price += clone.p1.price * 0.001;
   drawings.push(clone);
@@ -3310,7 +3615,9 @@ function applyStyleToSelected(patch) {
   const d = getSelected(); if (!d) return;
   captureUndoSnapshot();
   Object.assign(d, patch);
-  redrawDrawing(d);
+  restyleDrawingAppearance(d);
+  markDrawingsDirty();
+  rememberToolStyle(d);
 }
 
 function redrawDrawing(d) {
@@ -3343,13 +3650,14 @@ function updateDrawingGeometry(d) {
   let ok = false;
 
   if (d.type === 'hline' && d.series.length === 1) {
-    d.series[0].setData([{time:d.p1.time, value:d.p1.price},{time:tFuture, value:d.p1.price}]);
+    d.series[0].setData([{time:safeLineTime(d.p1.time), value:d.p1.price},{time:tFuture, value:d.p1.price}]);
     ok = true;
 
   } else if (d.type === 'trendline' && d.series.length === 1) {
     const rawT1=d.p1.time, rawT2=d.p2.time, rawP1=d.p1.price, rawP2=d.p2.price;
     const slope = (rawT2 !== rawT1) ? (rawP2 - rawP1) / (rawT2 - rawT1) : 0;
-    let t1=rawT1, t2=rawT2, p1=rawP1, p2=rawP2;
+    let t1=safeLineTime(rawT1), t2=safeLineTime(rawT2), p1=rawP1, p2=rawP2;
+    if (t1 === t2) t2 = t1 + barInterval;
     if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1); }
     if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
     d.series[0].setData([{time:t1,value:p1},{time:t2,value:p2}]);
@@ -3357,8 +3665,10 @@ function updateDrawingGeometry(d) {
 
   } else if (d.type === 'rect' && d.series.length === 4) {
     const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
-    const t1 = Math.min(d.p1.time, d.p2.time);
-    const t2 = d.extRight ? tFuture : Math.max(d.p1.time, d.p2.time);
+    const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+    let t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t2raw === t1) t2raw = t1 + barInterval;
+    const t2 = d.extRight ? tFuture : t2raw;
     d.series[0].setData([{time:t1,value:hi},{time:t2,value:hi}]);
     d.series[1].setData([{time:t1,value:lo},{time:t2,value:lo}]);
     d.series[2].setData([{time:t1,value:lo},{time:t1,value:hi}]);
@@ -3370,7 +3680,9 @@ function updateDrawingGeometry(d) {
     const levels = (d.levels || []).filter(lv => lv.on);
     if (d.series.length === levels.length) {
       const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
-      const rawT1 = Math.min(d.p1.time, d.p2.time), rawT2 = Math.max(d.p1.time, d.p2.time);
+      let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+      let rawT2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+      if (rawT2 === rawT1) rawT2 = rawT1 + barInterval;
       const t1 = d.extLeft  ? tPast   : rawT1;
       const t2 = d.extRight ? tFuture : rawT2;
       levels.forEach((lv,i) => {
@@ -3423,7 +3735,13 @@ function removeDrawingById(id) {
 // después de crearla/arrastrarla, porque no sigue el pan/zoom sola).
 function syncVLine(d) {
   if (!(d.vLineEl instanceof Element)) return;
-  const x = chart.timeScale().timeToCoordinate(d.p1.time);
+  // safeLineTime: el horario crudo de d.p1.time puede no ser un horario de
+  // vela real en el TF/panel actual (p.ej. dibujada en M1, vista en M2/M6)
+  // — a diferencia de hline/trendline/fib, esta línea no es una serie del
+  // chart, así que lightweight-charts no le inserta un punto en el eje de
+  // tiempo solo; sin este redondeo, timeToCoordinate() devuelve null y la
+  // línea queda invisible en esos TFs.
+  const x = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
   // Parar antes de la franja de horas de abajo, para no taparla.
   const h = document.getElementById('chart-container').clientHeight - chart.timeScale().height();
   if (x === null) { d.vLineEl.style.display = 'none'; return; }
@@ -3544,7 +3862,14 @@ function buildDrawingOnChart(d) {
   if (d.type === 'hline') {
     // Rayo horizontal como en TV: nace en el punto donde se dibujó y crece
     // infinito solo hacia la derecha — no hacia atrás, no las dos puntas.
-    mkLine([{time:d.p1.time, value:d.p1.price},{time:tFuture, value:d.p1.price}]);
+    // safeLineTime: ver el comentario grande junto a su definición — d.p1.time
+    // puede no ser un horario de vela real de ESTE panel (p.ej. dibujado en
+    // M5, visto en D), y crear una serie del chart con ese horario crudo
+    // insertaba un punto nuevo en el eje de tiempo compartido, corriendo
+    // TODO el gráfico un lugar — cada vez que esta serie se recreaba (p.ej.
+    // al cambiar el color) se insertaba de nuevo, así que se notaba como un
+    // corrimiento acumulativo en cada cambio.
+    mkLine([{time:safeLineTime(d.p1.time), value:d.p1.price},{time:tFuture, value:d.p1.price}]);
 
   } else if (d.type === 'trendline') {
     const rawT1  = d.p1.time;
@@ -3553,7 +3878,11 @@ function buildDrawingOnChart(d) {
     const rawP2  = d.p2.price;
     const slope  = (rawT2 !== rawT1) ? (rawP2 - rawP1) / (rawT2 - rawT1) : 0;
 
-    let t1 = rawT1, t2 = rawT2, p1 = rawP1, p2 = rawP2;
+    // safeLineTime sobre los horarios crudos (mismo motivo que hline) — las
+    // PRECIOS quedan tal cual (anclados al precio real), solo el horario se
+    // redondea al de una vela/whitespace real de este panel.
+    let t1 = safeLineTime(rawT1), t2 = safeLineTime(rawT2), p1 = rawP1, p2 = rawP2;
+    if (t1 === t2) t2 = t1 + barInterval; // los dos puntos cayeron en la misma vela de este TF
 
     if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1);   }
     if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
@@ -3563,8 +3892,9 @@ function buildDrawingOnChart(d) {
   } else if (d.type === 'rect') {
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
-    const t1 = Math.min(d.p1.time, d.p2.time);
-    const t2_raw = Math.max(d.p1.time, d.p2.time);
+    let t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+    let t2_raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t1 === t2_raw) t2_raw = t1 + barInterval;
     const t2 = d.extRight ? tFuture : t2_raw;
 
     // Borde y relleno se pueden apagar por separado (ver dtb-rect-border /
@@ -3597,7 +3927,9 @@ function buildDrawingOnChart(d) {
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
     if (!d.levels) d.levels = cloneFibLevels();
-    const rawT1 = Math.min(d.p1.time, d.p2.time), rawT2 = Math.max(d.p1.time, d.p2.time);
+    let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+    let rawT2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (rawT2 === rawT1) rawT2 = rawT1 + barInterval;
     const t1 = d.extLeft  ? tPast   : rawT1;
     const t2 = d.extRight ? tFuture : rawT2;
     d.levels.filter(lv => lv.on).forEach(lv => {
@@ -3725,13 +4057,13 @@ function highlightSelectedSvg(id) {
       addHandle(w * 0.5, y, id, 'price');
       addHandle(w * 0.8, y, id, 'price');
     } else if (d.type === 'trendline' || d.type === 'fib') {
-      addHandle(timeToX(d.p1.time), priceToY(d.p1.price), id, 'p1');
-      addHandle(timeToX(d.p2.time), priceToY(d.p2.price), id, 'p2');
+      addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
+      addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
     } else if (d.type === 'rect') {
       const hi = Math.max(d.p1.price, d.p2.price);
       const lo = Math.min(d.p1.price, d.p2.price);
-      const t1 = Math.min(d.p1.time, d.p2.time);
-      const t2 = Math.max(d.p1.time, d.p2.time);
+      const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+      const t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
       addHandle(timeToX(t1), priceToY(hi), id, 't1hi');
       addHandle(timeToX(t2), priceToY(lo), id, 't2lo');
       addHandle(timeToX(t1), priceToY(lo), id, 't1lo');
@@ -3744,7 +4076,7 @@ function highlightSelectedSvg(id) {
       addHandle(timeToX(t1), yMid, id, 'left');
       addHandle(timeToX(t2), yMid, id, 'right');
     } else if (d.type === 'vline') {
-      addHandle(timeToX(d.p1.time), container.clientHeight * 0.5, id, 'vtime');
+      addHandle(timeToX(safeLineTime(d.p1.time)), container.clientHeight * 0.5, id, 'vtime');
     } else if (d.type === 'long' || d.type === 'short') {
       // Mismo motivo que en isClickOnDrawing: usar los tiempos RENDERIZADOS
       // (ajustados a este panel), no los crudos — si no, las manijas de un
@@ -4017,6 +4349,19 @@ function initChart() {
   candleSeries = chart.addCandlestickSeries({});
   applyChartSettings();
 
+  // Serie invisible, aparte de candleSeries: solo lleva los puntos fantasma
+  // a futuro (futureWhitespace) que antes iban pegados a candleSeries. Están
+  // en serie propia para que candleSeries SIEMPRE termine en la vela real
+  // más nueva — así candleSeries.update(bar) (que lightweight-charts solo
+  // permite sobre el ÚLTIMO punto de la serie) puede actualizar la vela en
+  // formación en cada tick sin reconstruir toda la serie con setData(). El
+  // eje de tiempo del chart es compartido entre todas sus series, así que
+  // estos fantasmas siguen habilitando el snap a futuro de safeLineTime()
+  // aunque vivan en otra serie — ver updateFormingCandleLive más abajo.
+  futureAxisSeries = chart.addLineSeries({
+    visible:false, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false,
+  });
+
   volumeSeries = chart.addHistogramSeries({
     color:'#c9a84c22', priceFormat:{type:'volume'}, priceScaleId:'vol', visible:volumeVisible,
   });
@@ -4156,7 +4501,13 @@ function initChart() {
   }).observe(container);
 
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
-    if (range && range.from < 50) loadMoreHistory();
+    // 50 antes: a 8px/vela típico eso es apenas ~400px de margen — con el
+    // ida-y-vuelta al bridge (que a su vez le pide a MT5 y puede tardar)
+    // el usuario llegaba al borde y se quedaba ESPERANDO ahí antes de que
+    // aparecieran las velas nuevas, sintiéndose "a tramos". Disparando el
+    // pedido bastante antes (300 velas de margen) da tiempo a que la
+    // respuesta ya esté lista cuando el usuario realmente llega al borde.
+    if (range && range.from < 800) loadMoreHistory();
     renderWatchtower();
     renderSniper();
     renderSweeps();
@@ -4337,14 +4688,14 @@ function initDrawingLayer() {
       return Math.abs(my-y) < THRESH;
     }
     if (d.type === 'trendline') {
-      const x1=timeToX(d.p1.time), y1=priceToY(d.p1.price);
-      const x2=timeToX(d.p2.time), y2=priceToY(d.p2.price);
+      const x1=timeToX(safeLineTime(d.p1.time)), y1=priceToY(d.p1.price);
+      const x2=timeToX(safeLineTime(d.p2.time)), y2=priceToY(d.p2.price);
       if (x1===null||x2===null||y1===null||y2===null) return false;
       return distToSegment(x1,y1,x2,y2,mx,my) < THRESH;
     }
     if (d.type === 'rect' || d.type === 'fib') {
       const hi=Math.max(d.p1.price,d.p2.price), lo=Math.min(d.p1.price,d.p2.price);
-      const t1=Math.min(d.p1.time,d.p2.time),   t2=Math.max(d.p1.time,d.p2.time);
+      const t1=safeLineTime(Math.min(d.p1.time,d.p2.time)), t2=safeLineTime(Math.max(d.p1.time,d.p2.time));
       const x1=timeToX(t1), x2=timeToX(t2);
       const y1=priceToY(hi), y2=priceToY(lo);
       if (x1===null||x2===null||y1===null||y2===null) return false;
@@ -4366,7 +4717,7 @@ function initDrawingLayer() {
       return mx>=r.left-cr.left-4 && mx<=r.right-cr.left+4 && my>=r.top-cr.top-4 && my<=r.bottom-cr.top+4;
     }
     if (d.type === 'vline') {
-      const x = timeToX(d.p1.time);
+      const x = timeToX(safeLineTime(d.p1.time));
       return x!==null && Math.abs(mx-x) < THRESH;
     }
     if (d.type === 'long' || d.type === 'short') {
@@ -4893,6 +5244,72 @@ function updateWLPrice(sym,price) { const key=sym.replace(/[^a-z0-9]/gi,'_'); co
 document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==='Enter')addSymbol();if(e.key==='Escape')document.getElementById('add-sym-form').classList.remove('open');});
 
 // ══════════════════════════════════════════════════════════
+//  BUSCADOR DE SÍMBOLO — contra /symbols del bridge (la lista real que el
+//  broker tiene en Market Watch, ver ZentinelBridge.mq5 WriteCommonFile).
+//  Antes había que escribir el símbolo a ciegas y adivinar el nombre exacto
+//  que usa ESTE broker (p.ej. "BTCUSD", no "BTC" ni "BTC/USD" ni "BTC-USD").
+// ══════════════════════════════════════════════════════════
+let _brokerSymbolsCache = null;
+let _brokerSymbolsFetching = null;
+function fetchBrokerSymbols(){
+  if (_brokerSymbolsCache) return Promise.resolve(_brokerSymbolsCache);
+  if (_brokerSymbolsFetching) return _brokerSymbolsFetching;
+  _brokerSymbolsFetching = fetch(`${BRIDGE_URL}/symbols`).then(r=>r.json()).then(list => {
+    _brokerSymbolsCache = Array.isArray(list) ? list : [];
+    return _brokerSymbolsCache;
+  }).catch(() => []);
+  return _brokerSymbolsFetching;
+}
+// root: document (modo 1 gráfico) o shellSidebar (grilla) — ambos tienen
+// su propia copia de #add-sym-inp/#add-sym-suggestions. onAdd(): la
+// función que realmente empuja el símbolo al watchlist (addSymbol() o
+// shellAddSymbol()) — ésta solo corrige el VALOR del input antes de
+// llamarla, no duplica esa lógica.
+function wireSymbolSearch(input, box, onAdd){
+  if (!input || !box) return;
+  let matches = [], hlIdx = -1;
+  function position(){
+    const r = input.getBoundingClientRect();
+    box.style.left = r.left + 'px';
+    box.style.top = (r.bottom + 4) + 'px';
+    box.style.width = Math.max(r.width, 160) + 'px';
+  }
+  function renderMatches(){
+    box.innerHTML = matches.map((s,i) => `<div class="add-sym-suggestion-row${i===hlIdx?' hl':''}" data-sym="${s}">${s}</div>`).join('');
+  }
+  function close(){ box.classList.remove('open'); matches = []; hlIdx = -1; }
+  function pick(sym){ input.value = sym; close(); onAdd(); }
+  input.addEventListener('input', async () => {
+    const q = input.value.trim().toUpperCase();
+    if (!q) { close(); return; }
+    const all = await fetchBrokerSymbols();
+    if (input.value.trim().toUpperCase() !== q) return; // siguió tipeando mientras esperaba el fetch
+    matches = all.filter(s => s.toUpperCase().includes(q)).slice(0, 30);
+    hlIdx = -1;
+    if (!matches.length) { close(); return; }
+    position();
+    box.classList.add('open');
+    renderMatches();
+  });
+  // mousedown, no click: dispara ANTES del blur del input — con click, el
+  // blur (que cierra el dropdown) llegaba primero y el click nunca le
+  // pegaba a nada (la fila ya no estaba ahí).
+  box.addEventListener('mousedown', (e) => {
+    const row = e.target.closest('[data-sym]');
+    if (row) { e.preventDefault(); pick(row.dataset.sym); }
+  });
+  input.addEventListener('keydown', (e) => {
+    if (!box.classList.contains('open')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); hlIdx = Math.min(matches.length-1, hlIdx+1); renderMatches(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); hlIdx = Math.max(0, hlIdx-1); renderMatches(); }
+    else if (e.key === 'Enter' && hlIdx >= 0) { e.preventDefault(); pick(matches[hlIdx]); }
+    else if (e.key === 'Escape') close();
+  });
+  document.addEventListener('click', (e) => { if (e.target !== input && !box.contains(e.target)) close(); });
+}
+wireSymbolSearch(document.getElementById('add-sym-inp'), document.getElementById('add-sym-suggestions'), addSymbol);
+
+// ══════════════════════════════════════════════════════════
 //  TIMEFRAME
 // ══════════════════════════════════════════════════════════
 function renderTfBar() {
@@ -4939,6 +5356,7 @@ document.getElementById('tf-bar-tfs').addEventListener('click', (e) => {
   if (!btn) return;
   document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
+  if (window._replay) { changeReplayTimeframe(btn.dataset.tf); return; }
   STATE.timeframe = btn.dataset.tf;
   saveState();
   loadChart(STATE.symbol,STATE.timeframe);
@@ -5002,10 +5420,11 @@ function closeTfFavPopup(){
     if (star) { e.stopPropagation(); toggleTfFav(star.dataset.star); return; }
     const row = e.target.closest('.tf-fav-row');
     if (row) {
+      closeTfFavPopup();
+      if (window._replay) { changeReplayTimeframe(row.dataset.tf); return; }
       STATE.timeframe = row.dataset.tf;
       saveState();
       loadChart(STATE.symbol, STATE.timeframe);
-      closeTfFavPopup();
     }
   });
   document.addEventListener('click', (e) => {
@@ -5116,6 +5535,7 @@ function setTool(btn, name) {
   document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend')b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   STATE.activeTool = name;
+  refreshToolDefaultsFor(name);
   if (name !== 'cursor') deselectDrawing();
 }
 
@@ -5470,10 +5890,76 @@ function openIndicatorSettings(name) {
         <input type="number" id="ind-style-width" min="1" max="5" step="1" value="${style.lineWidth}" style="width:56px">
       </div>`;
   }
+  renderIndTemplateSelect();
   openModal('modal-ind-settings');
 }
 
+// Releer del storage en vez de confiar en STATE.indicatorTemplates: se
+// cargó una sola vez al abrir este panel — si se guardó un template nuevo
+// desde OTRO panel de la grilla después, no estaría todavía en memoria
+// acá (mismo criterio que applyPreset con STATE.presets).
+function rereadIndicatorTemplates(){
+  try { STATE.indicatorTemplates = JSON.parse(lsGet('td_ind_templates') || '{}'); } catch(e){}
+}
+function renderIndTemplateSelect(){
+  const sel = document.getElementById('ind-settings-template-select');
+  if (!sel || !_indSettingsTarget) return;
+  rereadIndicatorTemplates();
+  const current = sel.value;
+  const templates = STATE.indicatorTemplates[_indSettingsTarget] || {};
+  const names = Object.keys(templates).sort();
+  sel.innerHTML = '<option value="">— choose template —</option>'
+    + names.map(n => `<option value="${n}">${n}</option>`).join('');
+  if (names.includes(current)) sel.value = current;
+}
+function applySelectedIndTemplate(){
+  const name = document.getElementById('ind-settings-template-select').value;
+  if (!name || !_indSettingsTarget) return;
+  rereadIndicatorTemplates();
+  const templates = STATE.indicatorTemplates[_indSettingsTarget] || {};
+  const tpl = templates[name];
+  if (!tpl) return;
+  setIndSettingsObject(_indSettingsTarget, JSON.parse(JSON.stringify(tpl)));
+  openIndicatorSettings(_indSettingsTarget); // refresca el formulario con los valores del template
+}
+function saveCurrentAsIndTemplate(){
+  if (!_indSettingsTarget) return;
+  // Guarda lo que está TIPEADO en el formulario ahora mismo (no lo último
+  // guardado) — mismo criterio que el botón "Save" del modal: primero
+  // vuelca el form a STATE, recién de ahí lo captura.
+  applyIndSettingsForm();
+  rereadIndicatorTemplates();
+  const existing = Object.keys(STATE.indicatorTemplates[_indSettingsTarget] || {}).sort();
+  const target = _indSettingsTarget;
+  promptSaveAsName(`Save "${target}" template as…`, existing, (name) => {
+    rereadIndicatorTemplates();
+    if (!STATE.indicatorTemplates[target]) STATE.indicatorTemplates[target] = {};
+    STATE.indicatorTemplates[target][name] = JSON.parse(JSON.stringify(getIndSettingsObject(target)));
+    saveIndicatorTemplatesState();
+    renderIndTemplateSelect();
+    document.getElementById('ind-settings-template-select').value = name;
+  });
+}
+function deleteSelectedIndTemplate(){
+  const sel = document.getElementById('ind-settings-template-select');
+  const name = sel.value;
+  if (!name || !_indSettingsTarget) return;
+  if (!confirm(`Delete template "${name}"?`)) return;
+  rereadIndicatorTemplates();
+  delete STATE.indicatorTemplates[_indSettingsTarget][name];
+  saveIndicatorTemplatesState();
+  renderIndTemplateSelect();
+}
+
 function saveIndicatorSettings() {
+  applyIndSettingsForm();
+  closeModal('modal-ind-settings');
+}
+// Mismo cuerpo que antes tenía saveIndicatorSettings(), separado del
+// closeModal() — "Save as template" necesita volcar el form a STATE (para
+// guardar lo que el usuario tiene tipeado AHORA, no lo último persistido)
+// sin cerrar el modal debajo del prompt() del nombre.
+function applyIndSettingsForm() {
   if (_indSettingsTarget === 'Watchtower') {
     document.querySelectorAll('#ind-settings-body [data-wt-key]').forEach(inp => {
       STATE.watchtower[inp.dataset.wtKey] = inp.checked;
@@ -5565,7 +6051,6 @@ function saveIndicatorSettings() {
       }
     }
   }
-  closeModal('modal-ind-settings');
 }
 
 function removeIndicator(name){
@@ -6520,11 +7005,13 @@ function snReplay(candles, cfg, p){
 //  cada frame de drag/scroll, carísimo).
 // ══════════════════════════════════════════════════════════
 const _snFvgCache = {};
+const _snFvgReplayCache = {}; // ver snGetFvgData — una entrada por símbolo, atada al cutTime actual del replay
 const SN_FVG_REFRESH_MS = 5*60*1000;
 
-async function snFetchTf(symbol, interval, bars){
+async function snFetchTf(symbol, interval, bars, before){
   try {
-    const res = await fetch(`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}`);
+    const beforeParam = before ? `&before=${before}` : '';
+    const res = await fetch(`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}${beforeParam}`);
     const json = await res.json();
     if (json.error || !Array.isArray(json.bars)) return null;
     return json.bars;
@@ -6549,7 +7036,65 @@ async function snEnsureFvgData(symbol){
   entry.pending = false;
   renderSniper();
 }
+
+async function snEnsureFvgDataReplay(symbol, cutTime, entry, targetBucket){
+  const [m15, h4] = await Promise.all([
+    snFetchTf(symbol, '15min', 1000, cutTime),
+    snFetchTf(symbol, '4h', 1000, cutTime),
+  ]);
+  // Si para cuando esto contesta el replay ya pidió un bucket más nuevo
+  // (o se apagó, o cambió de símbolo), esta respuesta ya no corresponde a
+  // nada que se esté mostrando — descartarla.
+  if (!window._replay || entry.cutBucket !== targetBucket) return;
+  if (m15) entry.m15 = m15;
+  if (h4) entry.h4 = h4;
+  entry.m15Fvgs = entry.m15.length ? snDetectFvgs(entry.m15) : {bull:[],bear:[]};
+  entry.h4Fvgs  = entry.h4.length  ? snDetectFvgs(entry.h4)  : {bull:[],bear:[]};
+  entry.fetchedAt = Date.now();
+  entry.pending = false;
+  renderSniper();
+}
+
+const _snFvgReplayTimers = {}; // ver snGetFvgData — un debounce por símbolo
+
 function snGetFvgData(symbol){
+  // En replay, el FVG de M15/H4 NO puede venir del fetch "en vivo" de
+  // siempre (_snFvgCache): ese siempre trae las últimas 1000 velas REALES,
+  // sin importar en qué punto del pasado está cortado el replay — mostraba
+  // FVG detectados con velas que, para el instante que se está reproduciendo,
+  // todavía no existían ("quedan pegados" / aparecen antes de tiempo).
+  // Acá se pide la misma M15/H4 pero con before=cutTime (el cierre de la
+  // última vela real del replay, mismo criterio que usa _applyReplayFrame
+  // para "ahora"), y se cachea por (symbol, cutTime) — determinístico, así
+  // que no hace falta reintentar/expirar como el cache en vivo.
+  if (window._replay){
+    const candles = window._lastCandles||[];
+    const lastTime = candles.length ? candles[candles.length-1].time : 0;
+    const cutTime = lastTime + tfToSeconds(STATE.timeframe);
+    // Redondeado al bucket de M15 (900s): el FVG de M15 no puede cambiar
+    // más seguido que eso de todas formas.
+    const cutBucket = Math.floor(cutTime/900)*900;
+    let entry = _snFvgReplayCache[symbol];
+    if (!entry){
+      entry = _snFvgReplayCache[symbol] = { cutBucket:null, cutTime, m15:[], h4:[], m15Fvgs:{bull:[],bear:[]}, h4Fvgs:{bull:[],bear:[]}, fetchedAt:0, pending:true };
+    }
+    if (entry.cutBucket !== cutBucket){
+      entry.cutBucket = cutBucket;
+      entry.cutTime = cutTime;
+      // Debounce: en reproducción rápida el replay cruza varios buckets de
+      // 15min por segundo — pedirle al puente (lento, serializado por
+      // archivo+lock con MT5) en CADA uno encola pedidos que ya van a estar
+      // obsoletos apenas el replay siga avanzando, y la data termina más
+      // atrasada que el replay mismo. Esperar un respiro corto antes de
+      // pedir evita ese atasco; el chequeo de más abajo (entry.cutBucket)
+      // descarta cualquier pedido viejo que conteste tarde.
+      clearTimeout(_snFvgReplayTimers[symbol]);
+      _snFvgReplayTimers[symbol] = setTimeout(()=>{
+        if (window._replay && entry.cutBucket === cutBucket) snEnsureFvgDataReplay(symbol, cutTime, entry, cutBucket);
+      }, 400);
+    }
+    return entry;
+  }
   let entry = _snFvgCache[symbol];
   if (!entry){
     entry = _snFvgCache[symbol] = { m15:[], h4:[], m15Fvgs:{bull:[],bear:[]}, h4Fvgs:{bull:[],bear:[]}, fetchedAt:0, pending:true };
@@ -6886,6 +7431,16 @@ function startReplay(idx){
 function _applyReplayFrame(){
   const r = window._replay; if (!r) return;
   window._lastCandles = r.full.slice(0, r.idx + 1);
+  // NO usar el camino liviano (candleSeries.update()) acá — probado DOS
+  // veces esta sesión, las dos rompió el replay a los pocos segundos
+  // (error silencioso que congelaba el contador mientras el estado interno
+  // seguía avanzando). Primera vez: el fantasma a futuro chocando con las
+  // velas reales reveladas — arreglado y probó seguir fallando igual, así
+  // que hay algo más sin identificar. renderSeries() completo es la única
+  // versión que se probó estable (300+ pasos sin un solo error) — NO
+  // reintentar la optimización sin poder ver el error real (acá queda
+  // enmascarado como "Script error." por venir de un script de un CDN
+  // externo, lightweight-charts, sin poder leer el stack).
   renderSeries(STATE.timeframe);
   const last = window._lastCandles[window._lastCandles.length - 1];
   const prev = window._lastCandles[window._lastCandles.length - 2];
@@ -6953,6 +7508,62 @@ function setReplaySpeed(ms){
 function exitReplay(){
   if (!window._replay) return;
   loadChart(STATE.symbol, STATE.timeframe);
+}
+
+// Cambiar de TF con el botón ✕/TF-bar mientras hay un replay cortado:
+// antes esto pasaba por loadChart(), que al detectar window._replay
+// simplemente lo apaga (vuelve a vivo) — para el usuario se veía como si
+// cambiar de TF fuera lo mismo que salir del replay. Acá en cambio se
+// guarda el instante exacto del corte, se trae el historial del TF nuevo,
+// se ubica ese mismo instante ahí y se re-entra al replay en ese punto
+// (mismo fallback de finishReplayPick si el TF nuevo no tiene una vela
+// exacta en ese segundo: la última real a la izquierda).
+async function changeReplayTimeframe(newTf){
+  const r = window._replay;
+  if (!r) return;
+  const cutTime = r.full[r.idx].time;
+  const wasPlaying = r.playing;
+  const speedMs = r.speedMs;
+  replayPause();
+  STATE.timeframe = newTf;
+  saveState();
+  setActiveTF(newTf);
+  // Sin este loader, el chart se queda mudo (sin ningún cambio visible)
+  // mientras llega el historial del TF nuevo — con el puente (archivo+lock
+  // con MT5) tardando varios segundos, eso se ve y se siente igual que si
+  // el botón no hubiera hecho nada.
+  setLoaderMsg(`Replay: cargando ${newTf}…`); showOverlay(true);
+  try {
+    // 1500 en vez de los 5000 de antes: con el puente de MT5 (archivo+lock,
+    // nada rápido) 5000 velas tardaban 5-7s reales — demasiado cerca del
+    // timeout de 8s que tiene bridge_server, y alguna vez lo pasaba: el
+    // fetch fallaba, el catch de abajo sacaba del replay sin avisar nada,
+    // y se sentía como "cambiar de TF en replay no funciona".
+    // before=cutTime+step (BUG real encontrado después: sin esto, el pedido
+    // traía las últimas velas EN VIVO del TF nuevo —no las que había hasta
+    // el instante del corte— así que si el corte estaba lejos del presente,
+    // el buscador de índice de abajo no encontraba ninguna vela <= cutTime
+    // y se quedaba en idx=0 ("una sola vela, no carga nada más"). Y como esa
+    // única vela queda siendo la "última" del replay, el PRÓXIMO cambio de
+    // TF calculaba su propio cutTime a partir de esa vela en vivo en vez
+    // de la original — de ahí la fecha posterior a la que se había cortado.
+    const beforeCut = cutTime + tfToSeconds(newTf);
+    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${newTf}&bars=1500&before=${beforeCut}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error || !Array.isArray(json.bars) || json.bars.length===0) throw new Error(json.error||'no data');
+    const candles = json.bars;
+    let idx = 0;
+    for (let i=0; i<candles.length; i++){ if (candles[i].time <= cutTime) idx = i; else break; }
+    window._lastCandles = candles;
+    startReplay(idx);
+    window._replay.speedMs = speedMs;
+    if (wasPlaying) replayPlay();
+  } catch(e){
+    exitReplay();
+  } finally {
+    showOverlay(false);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -7094,6 +7705,62 @@ function _exitFollowReplay(){
 // ══════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// Reemplaza prompt() nativo para pedir un nombre (presets/templates) —
+// mismo modal para los 3 lugares que antes usaban prompt(): el Preset de
+// todo el chart, los templates de indicador y los de dibujo.
+function promptSaveAsName(title, existingNames, onConfirm){
+  document.getElementById('save-as-title').textContent = title;
+  const existingEl = document.getElementById('save-as-existing');
+  if (existingNames && existingNames.length) {
+    existingEl.textContent = 'Already exist: ' + existingNames.join(', ');
+    existingEl.style.display = '';
+  } else {
+    existingEl.style.display = 'none';
+  }
+  const input = document.getElementById('save-as-input');
+  input.value = '';
+  const btn = document.getElementById('save-as-confirm-btn');
+  function submit(){
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    closeModal('modal-save-as');
+    onConfirm(name);
+  }
+  // onclick/onkeydown en vez de addEventListener: este modal se reusa para
+  // varios llamadores distintos (preset de chart, template de indicador,
+  // template de dibujo) — asignar reemplaza el handler anterior en vez de
+  // ir apilando uno nuevo por cada vez que se abrió.
+  btn.onclick = submit;
+  input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  openModal('modal-save-as');
+  setTimeout(() => input.focus(), 50);
+}
+
+// Reemplaza prompt() nativo para 1-2 campos sueltos (volumen, SL/TP…).
+// fields: [{id, label, value, type, placeholder}]. onConfirm recibe un
+// objeto {id: valorCrudoDelInput} — la validación/parseo queda del lado
+// de quien llama, igual que antes con el string que devolvía prompt().
+function promptFields(title, fields, onConfirm){
+  document.getElementById('prompt-fields-title').textContent = title;
+  const body = document.getElementById('prompt-fields-body');
+  body.innerHTML = fields.map(f => `
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;">${f.label}</label>
+      <input type="${f.type||'text'}" id="pf-${f.id}" class="topbar-input" style="width:100%;" value="${f.value!=null?f.value:''}" placeholder="${f.placeholder||''}" autocomplete="off">
+    </div>`).join('');
+  const btn = document.getElementById('prompt-fields-confirm-btn');
+  function submit(){
+    const values = {};
+    fields.forEach(f => { values[f.id] = document.getElementById('pf-'+f.id).value; });
+    closeModal('modal-prompt-fields');
+    onConfirm(values);
+  }
+  btn.onclick = submit;
+  body.querySelectorAll('input').forEach(inp => { inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); }; });
+  openModal('modal-prompt-fields');
+  setTimeout(() => { const first = body.querySelector('input'); if (first) { first.focus(); first.select(); } }, 50);
+}
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);});});
 
 function fillChartSettingsForm(cs){
@@ -7179,6 +7846,14 @@ function applyChartSettings(){
   if (indChips) {
     indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
   }
+  // Reloj de la barra de abajo — mismo color de texto que precio/horario del
+  // chart. #sb-clock tiene su propio color en el CSS (más específico que
+  // heredar del padre), así que hay que pisarlo directo; #sb-tz-label no
+  // tiene color propio, hereda del trigger.
+  const sbTzTrigger = document.getElementById('sb-tz-trigger');
+  const sbClock = document.getElementById('sb-clock');
+  if (sbTzTrigger) sbTzTrigger.style.color = cs.textColor;
+  if (sbClock) sbClock.style.color = cs.textColor;
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
   chart.applyOptions({
     layout: { background: buildChartBackground(cs), textColor: cs.textColor },
@@ -7212,6 +7887,14 @@ function captureCurrentDesign(){
     watchtower: STATE.watchtower,
     sniper: STATE.sniper,
     sweeps: STATE.sweeps,
+    // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
+    // tal cual quedan en pantalla, con sus horarios/precios crudos — igual
+    // que la sincronización entre paneles (ver zentinelDrawingsSync),
+    // pensado para volver a aplicarse sobre el MISMO símbolo/TF en el que
+    // se guardó (en otro TF cada panel los va a snapear a su propia grilla
+    // igual que ya hace con cualquier dibujo sincronizado).
+    drawings: serializeDrawings(),
+    toolDefaults: { ...toolDefaults },
   };
 }
 
@@ -7229,12 +7912,13 @@ function renderPresetSelect(){
 function saveCurrentAsPreset(){
   commitChartSettingsForm();
   const existing = Object.keys(STATE.presets).sort();
-  const name = prompt('Preset name:' + (existing.length ? '\n(already exist: ' + existing.join(', ') + ')' : ''));
-  if (!name) return;
-  STATE.presets[name] = JSON.parse(JSON.stringify(captureCurrentDesign()));
-  savePresetsState();
-  renderPresetSelect();
-  document.getElementById('cs-preset-select').value = name;
+  promptSaveAsName('Save preset as…', existing, (name) => {
+    try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
+    STATE.presets[name] = JSON.parse(JSON.stringify(captureCurrentDesign()));
+    savePresetsState();
+    renderPresetSelect();
+    document.getElementById('cs-preset-select').value = name;
+  });
 }
 
 function applySelectedPreset(){
@@ -7260,6 +7944,18 @@ function applyPreset(name){
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
+
+  // Dibujos: solo si el preset los trae — uno guardado antes de esto no
+  // tiene drawings, y aplicarlo no debería borrar los que el usuario ya
+  // tiene puestos en el panel. captureUndoSnapshot() ANTES de reemplazar:
+  // aplicar un preset de dibujos es tan "destructivo" como cualquier otro
+  // cambio de dibujos, tiene que poder deshacerse con Ctrl+Z igual que el resto.
+  if (Array.isArray(p.drawings)) {
+    captureUndoSnapshot();
+    applyExternalDrawings(JSON.parse(JSON.stringify(p.drawings)));
+    markDrawingsDirty();
+  }
+  if (p.toolDefaults) Object.assign(toolDefaults, p.toolDefaults);
 
   saveChartSettingsState();
   saveIndicatorStylesState();
@@ -7313,14 +8009,200 @@ function updateTopbarOHLCV(d){
   document.getElementById('ohlc-v').textContent=d.volume?(d.volume>=1e6?(d.volume/1e6).toFixed(1)+'M':Math.round(d.volume).toLocaleString()):'—';
 }
 
-function updateStatusBar(sym,tf,bars,first,last){
-  document.getElementById('sb-sym').textContent=sym;
-  document.getElementById('sb-tf').textContent=tf;
-  document.getElementById('sb-bars').textContent=bars;
-  const d1=new Date(first.time*1000).toLocaleDateString('en-US');
-  const d2=new Date(last.time*1000).toLocaleDateString('en-US');
-  document.getElementById('sb-range').textContent=`${d1} – ${d2}`;
+// ══════════════════════════════════════════════════════════
+//  RELOJ / ZONA HORARIA de la barra de abajo — popup emergente tipo TV,
+//  mismo patrón que initLayoutPicker (trigger + .tf-fav-popup, toggle
+//  'open', cierra con click afuera). Preferencia de PANTALLA solamente:
+//  no toca los timestamps crudos de las velas (que killzones/ORB/PDH-PDL
+//  siguen leyendo con getUTCHours() asumiendo hora NY, ver comentario de
+//  fmtCrosshairTime) — Intl.DateTimeFormat con la IANA tz elegida se
+//  aplica solo acá, sobre el reloj de pared real del navegador.
+const SB_TZ_OPTIONS = [
+  { id:'local', label:'Local', tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
+  { id:'utc',   label:'UTC',           tz:'UTC' },
+  { id:'ny',    label:'New York',      tz:'America/New_York' },
+  { id:'bsas',  label:'Buenos Aires',  tz:'America/Argentina/Buenos_Aires' },
+  { id:'ldn',   label:'London',        tz:'Europe/London' },
+  { id:'tok',   label:'Tokyo',         tz:'Asia/Tokyo' },
+  { id:'syd',   label:'Sydney',        tz:'Australia/Sydney' },
+];
+function sbGetTzChoice(){
+  const saved = lsGet('td_statusbar_tz');
+  return SB_TZ_OPTIONS.find(o=>o.id===saved) || SB_TZ_OPTIONS[0];
 }
+function sbTzOffsetLabel(tz){
+  // "GMT-3"/"GMT+9" etc. — shortOffset da justo eso sin tener que calcular
+  // el offset a mano (y ya contempla DST si esa tz lo tiene).
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone:tz, timeZoneName:'shortOffset' }).formatToParts(new Date());
+    const tzPart = parts.find(p=>p.type==='timeZoneName');
+    return tzPart ? tzPart.value.replace('GMT','UTC') : tz;
+  } catch(e) { return tz; }
+}
+(function initStatusbarClock(){
+  const trigger = document.getElementById('sb-tz-trigger');
+  const popup = document.getElementById('sb-tz-popup');
+  const clockEl = document.getElementById('sb-clock');
+  const labelEl = document.getElementById('sb-tz-label');
+  if (!trigger || !popup || !clockEl || !labelEl) return;
+
+  function renderPopup(){
+    const current = sbGetTzChoice();
+    popup.innerHTML = SB_TZ_OPTIONS.map(o =>
+      `<div class="tf-fav-row${o.id===current.id?' active-tf':''}" data-tz-id="${o.id}"><span class="tf-fav-label">${o.label}</span></div>`
+    ).join('');
+  }
+  function tick(){
+    const { tz } = sbGetTzChoice();
+    try {
+      clockEl.textContent = new Intl.DateTimeFormat('en-GB', { timeZone:tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).format(new Date());
+    } catch(e) { clockEl.textContent = '--:--:--'; }
+    labelEl.textContent = sbTzOffsetLabel(tz);
+  }
+
+  renderPopup();
+  tick();
+  setInterval(tick, 1000);
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    renderPopup();
+    const willOpen = !popup.classList.contains('open');
+    if (willOpen) {
+      const r = trigger.getBoundingClientRect();
+      popup.style.left = r.left + 'px';
+      popup.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+    }
+    popup.classList.toggle('open', willOpen);
+    trigger.classList.toggle('active', willOpen);
+  });
+  popup.addEventListener('click', (e) => {
+    const row = e.target.closest('.tf-fav-row');
+    if (!row) return;
+    lsSet('td_statusbar_tz', row.dataset.tzId);
+    renderPopup();
+    tick();
+    popup.classList.remove('open');
+    trigger.classList.remove('active');
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('sb-tz-wrap').contains(e.target)) {
+      popup.classList.remove('open');
+      trigger.classList.remove('active');
+    }
+  });
+})();
+
+// ══════════════════════════════════════════════════════════
+//  DTB TEMPLATE POPUP — templates nombrados por tipo de dibujo (ver
+//  captureDrawingStyle/DRAWING_TEMPLATES más arriba). Mismo patrón de
+//  popup que el reloj de la barra de abajo (fixed + posición calculada a
+//  mano, por el overflow-y:auto de #draw-toolbar).
+// ══════════════════════════════════════════════════════════
+function currentDtbTemplateType(){
+  const d = getSelected();
+  return d ? d.type : STATE.activeTool;
+}
+function renderDtbTemplatePopup(){
+  const popup = document.getElementById('dtb-template-popup');
+  const type = currentDtbTemplateType();
+  if (!type || type === 'cursor') { popup.innerHTML = '<div class="tf-fav-row" style="opacity:.6;cursor:default;">Select or arm a drawing tool</div>'; return; }
+  // Releer fresco (sin sufijo de panel: compartido entre toda la grilla,
+  // ver el comentario de rereadIndicatorTemplates para el mismo motivo).
+  try { DRAWING_TEMPLATES = JSON.parse(lsGet('td_drawing_templates') || '{}'); } catch(e){}
+  const templates = DRAWING_TEMPLATES[type] || {};
+  const names = Object.keys(templates).sort();
+  popup.innerHTML =
+    (names.length ? names.map(n => `
+      <div class="tf-fav-row dtb-template-row" data-tpl-name="${n}">
+        <span class="tf-fav-label">${n}</span>
+        <span class="dtb-template-del" data-tpl-del="${n}" title="Delete">✕</span>
+      </div>`).join('') : '<div class="tf-fav-row" style="opacity:.6;cursor:default;">No templates saved for ' + type + '</div>')
+    + `<div class="tf-fav-sep"></div>`
+    + `<div class="dtb-template-save-row" id="dtb-template-save-row">+ Save current as…</div>`;
+}
+function openDtbTemplatePopup(){
+  const trigger = document.getElementById('dtb-template-trigger');
+  const popup = document.getElementById('dtb-template-popup');
+  renderDtbTemplatePopup();
+  const r = trigger.getBoundingClientRect();
+  popup.style.left = (r.right + 8) + 'px';
+  popup.style.top = r.top + 'px';
+  popup.classList.add('open');
+  trigger.classList.add('active');
+}
+function closeDtbTemplatePopup(){
+  document.getElementById('dtb-template-popup').classList.remove('open');
+  document.getElementById('dtb-template-trigger').classList.remove('active');
+}
+function applyDtbTemplate(type, name){
+  const style = DRAWING_TEMPLATES[type] && DRAWING_TEMPLATES[type][name];
+  if (!style) return;
+  const d = getSelected();
+  if (d && d.type === type) {
+    applyStyleObjectToDrawing(d, JSON.parse(JSON.stringify(style)));
+  } else {
+    // Nada seleccionado (o seleccionado de OTRO tipo): queda como el
+    // default para el PRÓXIMO dibujo nuevo de este tipo, no toca nada ya
+    // puesto en el chart.
+    TOOL_STYLE_STORE[type] = JSON.parse(JSON.stringify(style));
+    saveToolStyleStore();
+    if (STATE.activeTool === type) refreshToolDefaultsFor(type);
+  }
+}
+function saveDtbTemplateAs(type){
+  const d = getSelected();
+  // Si hay un dibujo seleccionado de este tipo, guarda SU estilo actual
+  // (lo más probable: el usuario lo acaba de personalizar). Si no, guarda
+  // el default actual de la herramienta (toolDefaults ya armado para
+  // `type` — ver refreshToolDefaultsFor).
+  const style = (d && d.type === type) ? captureDrawingStyle(d) : Object.assign({}, toolDefaults);
+  try { DRAWING_TEMPLATES = JSON.parse(lsGet('td_drawing_templates') || '{}'); } catch(e){}
+  const existing = Object.keys(DRAWING_TEMPLATES[type] || {}).sort();
+  closeDtbTemplatePopup();
+  promptSaveAsName(`Save "${type}" template as…`, existing, (name) => {
+    try { DRAWING_TEMPLATES = JSON.parse(lsGet('td_drawing_templates') || '{}'); } catch(e){}
+    if (!DRAWING_TEMPLATES[type]) DRAWING_TEMPLATES[type] = {};
+    DRAWING_TEMPLATES[type][name] = JSON.parse(JSON.stringify(style));
+    saveDrawingTemplatesStore();
+  });
+}
+(function initDtbTemplatePopup(){
+  const trigger = document.getElementById('dtb-template-trigger');
+  const popup = document.getElementById('dtb-template-popup');
+  if (!trigger || !popup) return;
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (popup.classList.contains('open')) { closeDtbTemplatePopup(); return; }
+    openDtbTemplatePopup();
+  });
+  popup.addEventListener('click', (e) => {
+    const delEl = e.target.closest('[data-tpl-del]');
+    const type = currentDtbTemplateType();
+    if (delEl) {
+      e.stopPropagation();
+      const name = delEl.dataset.tplDel;
+      if (confirm(`Delete template "${name}"?`)) {
+        delete DRAWING_TEMPLATES[type][name];
+        saveDrawingTemplatesStore();
+        renderDtbTemplatePopup();
+      }
+      return;
+    }
+    if (e.target.id === 'dtb-template-save-row') {
+      saveDtbTemplateAs(type);
+      return;
+    }
+    const row = e.target.closest('[data-tpl-name]');
+    if (row) {
+      applyDtbTemplate(type, row.dataset.tplName);
+      closeDtbTemplatePopup();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('dtb-template-wrap').contains(e.target)) closeDtbTemplatePopup();
+  });
+})();
 
 function setStatus(cls,txt){const el=document.getElementById('status-conn');el.className=cls;el.textContent=txt;}
 function showOverlay(show){document.getElementById('loading-overlay').classList.toggle('hidden',!show);}
@@ -7328,29 +8210,57 @@ function setLoaderMsg(msg){document.getElementById('loader-msg').textContent=msg
 function showLoader(msg){setLoaderMsg(msg);showOverlay(true);}
 function saveState(){lsSet(lsKey('td_symbol'),STATE.symbol);lsSet(lsKey('td_tf'),STATE.timeframe);lsSet(lsKey('td_watchlist'),JSON.stringify(STATE.watchlist));lsSet(lsKey('td_indicators'),JSON.stringify(STATE.indicators));}
 
-document.getElementById('symbol-input').addEventListener('keydown',e=>{
-  if(e.key!=='Enter')return;
-  const sym=e.target.value.trim();if(!sym)return;
+function applySymbolInputValue(){
+  const inp = document.getElementById('symbol-input');
+  const sym = inp.value.trim(); if(!sym) return;
   if(!STATE.watchlist.includes(sym))STATE.watchlist.push(sym);
   STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
+}
+document.getElementById('symbol-input').addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  applySymbolInputValue();
 });
+wireSymbolSearch(document.getElementById('symbol-input'), document.getElementById('symbol-input-suggestions'), applySymbolInputValue);
 
 // ══════════════════════════════════════════════════════════
 //  loadChart  (vía mt5_bridge/bridge_server.py -> MT5/Axi)
 // ══════════════════════════════════════════════════════════
 const BRIDGE_URL = 'http://localhost:8787';
 
-// Redibuja toda la serie (velas reales + puntos fantasma a futuro para el
-// eje de horas). series.update() no sirve acá: exige que cada actualización
-// vaya hacia adelante en el tiempo, y los fantasmas quedan después de la
-// vela en formación, así que "actualizar in place" la vela actual rompía
-// silenciosamente. setData() no tiene ese problema y no mueve el zoom.
+// Redibuja toda la serie (velas reales + puntos fantasma a futuro, en su
+// propia serie invisible — ver futureAxisSeries). Para cambios ESTRUCTURALES
+// del array (nuevo símbolo/TF, cerró una vela, se cargó más historial): cara
+// a propósito, reconstruye todo. Para un tick de precio que solo mueve la
+// vela en formación, usar updateFormingCandleLive() en su lugar — mucho más
+// liviano (ver su comentario).
 function renderSeries(timeframe){
   const candles=window._lastCandles;
   const last=candles[candles.length-1];
-  candleSeries.setData(candles.concat(futureWhitespace(last.time, timeframe, 15)));
+  candleSeries.setData(candles);
+  futureAxisSeries.setData(futureWhitespace(last.time, timeframe, 15));
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
+  renderWatchtower();
+  renderSniper();
+  renderSweeps();
+  renderTradeMarkers();
+}
+
+// Contraparte liviana de renderSeries(), para un tick de precio que solo
+// cambió la vela EN FORMACIÓN (el caso de refreshFormingCandle, que corre
+// ~1 vez por segundo todo el tiempo que esa vela sigue abierta). Antes esto
+// llamaba a renderSeries() entero: setData() de TODA la serie de velas
+// (pueden ser miles, con Watchtower activo) + volumen + 4 overlays SVG
+// recalculados desde cero, en cada tick — el costo real detrás del
+// "temblequeo"/lentitud que reportó el usuario. candleSeries.update() SÍ
+// puede actualizar in place el último punto de la serie ahora que los
+// fantasmas a futuro viven en futureAxisSeries aparte (candleSeries ya
+// termina siempre en la vela real más nueva) — ver el comentario de
+// futureAxisSeries más arriba sobre por qué antes esto no funcionaba.
+function updateFormingCandleLive(bar){
+  candleSeries.update(bar);
+  volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
+  refreshOverlays(window._lastCandles);
   renderWatchtower();
   renderSniper();
   renderSweeps();
@@ -7402,6 +8312,135 @@ function scrollToRealTimeReliably(maxAttempts){
   attempt();
 }
 
+// ══════════════════════════════════════════════════════════
+//  GO TO DATE/TIME — como el buscador de fecha de TV. dateStr "YYYY-MM-DD",
+//  timeStr "HH:MM" (24h), tal como los dan los <input type=date/time>.
+//  Se interpretan como horario del chart (NY, misma convención cruda que
+//  usa TODO lo demás — ver el comentario grande de fmtCrosshairTime), NO
+//  como hora local del navegador.
+// ══════════════════════════════════════════════════════════
+async function goToDateTime(dateStr, timeStr){
+  if (!dateStr) return;
+  const [y,m,day] = dateStr.split('-').map(Number);
+  const [hh,mm] = (timeStr||'00:00').split(':').map(Number);
+  const target = Date.UTC(y, m-1, day, hh, mm, 0) / 1000;
+  let candles = window._lastCandles;
+  if (!candles || !candles.length) return;
+
+  // Capturado ANTES de tocar window._lastCandles — si target está fuera de
+  // lo cargado y hace falta traer un lote nuevo (más abajo), ESE reemplazo
+  // reacomoda el rango visible solo al tamaño nuevo de datos, así que leer
+  // el ancho DESPUÉS daba un ancho sin relación con el zoom que tenía el
+  // usuario antes de pedir el salto. Por índice (logical range), no por
+  // tiempo: setVisibleRange({from,to}) quedaba pisado por el propio
+  // acomodo interno de candleSeries.setData() después de reemplazar
+  // window._lastCandles (probado a mano — terminaba centrado en la vela
+  // más nueva del lote, no en target) — setVisibleLogicalRange() es el
+  // mismo mecanismo ya probado confiable en ensureWeeklyHistoryForWatchtower
+  // y loadMoreHistory más arriba.
+  const prevLogicalRange = chart.timeScale().getVisibleLogicalRange();
+  const logicalHalfWidth = prevLogicalRange ? (prevLogicalRange.to - prevLogicalRange.from) / 2 : 60;
+
+  if (target < candles[0].time) {
+    // Más atrás de lo que este panel tiene cargado — pedir un lote nuevo
+    // centrado ahí en vez de encadenar loadMoreHistory() de a 1500 velas
+    // hasta llegar (mismo endpoint, un solo pedido con "before" apuntando
+    // bien pasado el target para que quede holgado a la izquierda).
+    showLoader(`Going to ${dateStr} ${timeStr||''}…`); showOverlay(true);
+    try {
+      // Lote grande (2000, target cerca del medio) a propósito: uno chico
+      // dejaba el target pegado al borde recién cargado, lo que disparaba
+      // DE NUEVO el prefetch automático de loadMoreHistory (ver su umbral
+      // de 800 velas más abajo) apenas terminaba de posicionar la vista —
+      // ese segundo fetch encima del primero era lo que terminaba
+      // descuadrando el rango visible que esta función recién había
+      // calculado.
+      const margin = 1000 * tfToSeconds(STATE.timeframe);
+      const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=2000&before=${target + margin}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!json.error && Array.isArray(json.bars) && json.bars.length) {
+        window._lastCandles = json.bars;
+        renderSeries(STATE.timeframe);
+        candles = window._lastCandles;
+      }
+    } catch(e) {
+    } finally {
+      showOverlay(false);
+    }
+  }
+
+  // Vela más cercana a target (scan simple — candles no pasa de unos
+  // miles, igual que safeLineTime). Centra la vista en SU índice,
+  // conservando el ancho lógico que ya tenía la ventana antes del salto
+  // — así no cambia el nivel de zoom, solo pana.
+  let idx = 0, bestDiff = Infinity;
+  for (let i = 0; i < candles.length; i++) {
+    const diff = Math.abs(candles[i].time - target);
+    if (diff < bestDiff) { bestDiff = diff; idx = i; }
+  }
+  // Mismo problema (y misma solución) que scrollToRealTimeReliably más
+  // abajo: posicionar la vista en el MISMO tick síncrono que acaba de
+  // reemplazar window._lastCandles no siempre "prende" — probado a mano,
+  // quedaba pisado por el propio acomodo interno de la librería después
+  // del setData(), terminando en la vela más nueva del lote en vez del
+  // índice pedido. Se reintenta verificando el resultado real, no un
+  // número fijo de frames.
+  (function applyReliably(attempts){
+    chart.timeScale().setVisibleLogicalRange({ from: idx - logicalHalfWidth, to: idx + logicalHalfWidth });
+    setTimeout(() => {
+      const r = chart.timeScale().getVisibleLogicalRange();
+      const onTarget = r && Math.abs((r.from+r.to)/2 - idx) < Math.max(5, logicalHalfWidth*0.1);
+      if (!onTarget && attempts < 10) applyReliably(attempts+1);
+    }, 60);
+  })(0);
+}
+function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn){
+  const trigger = document.getElementById(prefix+'goto-date-trigger');
+  const popup = document.getElementById(prefix+'goto-date-popup');
+  const dateInput = document.getElementById(prefix+'goto-date-input');
+  const timeInput = document.getElementById(prefix+'goto-time-input');
+  const goBtn = document.getElementById(prefix+'goto-date-go');
+  if (!trigger || !popup) return;
+  function submit(){
+    if (!dateInput.value) { dateInput.focus(); return; }
+    (submitFn || goToDateTime)(dateInput.value, timeInput.value);
+    popup.classList.remove('open');
+    trigger.classList.remove('active');
+  }
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = !popup.classList.contains('open');
+    if (willOpen && !dateInput.value) {
+      // Default: la fecha de la última vela cargada, no "hoy" del
+      // navegador — más útil al abrir (ya apunta a algo del gráfico).
+      try {
+        const lastTime = (getLastCandleTimeFn || (() => {
+          const c = window._lastCandles;
+          return c && c.length ? c[c.length-1].time : null;
+        }))();
+        if (lastTime != null) {
+          const d = new Date(lastTime * 1000);
+          dateInput.value = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+        }
+      } catch(e){}
+    }
+    popup.classList.toggle('open', willOpen);
+    trigger.classList.toggle('active', willOpen);
+  });
+  popup.addEventListener('click', (e) => e.stopPropagation());
+  goBtn.addEventListener('click', submit);
+  timeInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
+  dateInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById(prefix+'goto-date-wrap').contains(e.target)) {
+      popup.classList.remove('open');
+      trigger.classList.remove('active');
+    }
+  });
+}
+initGoToDatePopup('');
+
 // Scroll infinito hacia atrás: cuando te acercás al borde izquierdo de lo
 // ya cargado, pide más velas viejas al puente (que a su vez le pide a MT5
 // el tramo anterior) y las pega adelante sin mover la vista de un salto.
@@ -7419,24 +8458,38 @@ let _historyFetchBusy = false;
 async function loadMoreHistory(){
   if (_historyFetchBusy || window._replay) return;
   const candles = window._lastCandles;
-  if (!candles || !candles.length || candles.length > 8000) return;
+  if (!candles || !candles.length || candles.length > 20000) return;
+  // Mismo guard de generación que loadChart() (ver _loadChartGen): este
+  // fetch queda pedido para EL símbolo/TF de este instante — si para
+  // cuando vuelve el usuario ya cambió de símbolo/TF (loadChart corrió de
+  // nuevo mientras tanto), concatenar esta respuesta vieja a
+  // window._lastCandles la mezclaría con velas de OTRO instrumento.
+  const _myGen = _loadChartGen;
   _historyFetchBusy = true;
   try {
     const oldest = candles[0].time;
-    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=300&before=${oldest}`;
+    // 500 en vez de 300: menos viajes de ida y vuelta al bridge en un
+    // arrastre largo hacia atrás (cada uno tarda lo suyo — ver el comentario
+    // de ensureWeeklyHistoryForWatchtower sobre la latencia del bridge).
+    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=1500&before=${oldest}`;
     const res = await fetch(url);
     const json = await res.json();
     if (json.error || !Array.isArray(json.bars) || json.bars.length===0) return;
+    if (_myGen !== _loadChartGen) return; // superado por un loadChart() más nuevo
     const older = json.bars.filter(b => b.time < oldest);
     if (older.length===0) return;
 
-    const addedCount = older.length;
     window._lastCandles = older.concat(candles);
+    // candleSeries.setData() (adentro de renderSeries) ya reacomoda SOLO el
+    // logical range para que apunte a los mismos horarios de antes — probado
+    // a mano: el índice que marcaba el borde visible se corre exactamente
+    // por la cantidad de velas agregadas, sin que haga falta tocar nada más.
+    // Antes de acá había además un setVisibleLogicalRange manual sumando
+    // addedCount sobre ESE rango ya corregido — un doble corrimiento que
+    // pasaba de largo (el gráfico "saltaba" de más) cada vez que arrastrabas
+    // hacia atrás y se disparaba esta carga. Con setData() ya haciendo el
+    // trabajo, no hace falta (ni hay que) tocar el rango acá.
     renderSeries(STATE.timeframe);
-
-    // mismo bar en la misma posición de pantalla, aunque el array creció a la izquierda
-    const range = chart.timeScale().getVisibleLogicalRange();
-    if (range) chart.timeScale().setVisibleLogicalRange({ from: range.from+addedCount, to: range.to+addedCount });
   } catch(e) {
     // sin red/MT5 un instante: se reintenta solo la próxima vez que se scrollee
   } finally {
@@ -7485,6 +8538,12 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
   // saltear esta pasada entera (se reintenta solo en el próximo load/
   // refresh) que correr los dos en simultáneo y corromper el array.
   if (_historyFetchBusy || window._replay) return;
+  // Mismo guard de generación que loadChart()/loadMoreHistory() (ver
+  // _loadChartGen): este fetch (puede ser varias vueltas, ver el loop de
+  // abajo) queda atado al símbolo/TF de este instante — si el usuario
+  // cambia de símbolo/TF mientras tanto, cualquier respuesta que siga
+  // llegando después ya no tiene nada que ver con lo que el panel muestra.
+  const _myGen = _loadChartGen;
   _historyFetchBusy = true;
   const step = TF_SECONDS[STATE.timeframe];
   let fetchedMore = false;
@@ -7508,7 +8567,7 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
   // acertarle casi siempre de una.
   for (let guard=0; guard<5; guard++){
     const candles = window._lastCandles;
-    if (candles.length>8000) break;
+    if (candles.length>20000) break;
     // No alcanza con que haya UNA vela de la semana anterior metida en el
     // batch (eso daba un high/low de PW calculado con una semana incompleta,
     // que después "saltaba" a la posición correcta apenas el zoom traía el
@@ -7526,6 +8585,13 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
       const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=${extraBars}&before=${oldest}`;
       const res = await fetch(url);
       const json = await res.json();
+      if (_myGen !== _loadChartGen) { fetchedMore = false; break; } // superado por un loadChart() más nuevo — descartar todo
+      // Mismo motivo que el guard de entrada de arriba: este fetch pudo
+      // arrancar ANTES de que el usuario cortara el replay y recién
+      // contesta ahora, a mitad del loop — sin este chequeo seguía
+      // empujando velas viejas al array ya cortado del replay (o al nuevo
+      // array recién puesto por un cambio de TF en medio del replay).
+      if (window._replay) { fetchedMore = false; break; }
       if (json.error || !Array.isArray(json.bars) || json.bars.length===0) break;
       const older = json.bars.filter(b => b.time < oldest);
       if (older.length===0) break; // el bridge no tiene más historial — no insistir
@@ -7544,18 +8610,28 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
     // reacomodar — ver scrollToRealTimeReliably() más arriba (mismo helper
     // que usa loadChart) para el porqué de los reintentos.
     // (wasNearRealTime se capturó al principio de la función — ver arriba.)
+    // Antes: si wasNearRealTime, se llamaba a scrollToRealTimeReliably() de
+    // nuevo acá — pero eso reubica "a ciegas" buscando dónde quedó la vela
+    // real, reintentando hasta 10 veces cada 60ms si no la encuentra visible
+    // a la primera. Con miles de velas viejas recién pegadas adelante, rara
+    // vez acierta al primer intento, así que el chart se veía saltar 2-3
+    // veces por un par de segundos hasta asentarse (el "temblequeo" que
+    // reportó el usuario, visible en un screen recording). El shift de acá
+    // abajo (mismo truco que ya usa la rama "no estaba en vivo") es
+    // determinístico: el array creció `totalAdded` velas a la izquierda, así
+    // que correr el rango visible esa misma cantidad deja en pantalla
+    // EXACTAMENTE las mismas velas que había antes — incluida la vela en
+    // vivo en el borde derecho — sin ningún salto visible.
     const prevRange = chart.timeScale().getVisibleLogicalRange();
     renderSeries(STATE.timeframe);
-    if (wasNearRealTime) {
-      scrollToRealTimeReliably();
-    } else if (prevRange) {
-      // No estaba en el borde en vivo: mismo bar en la misma posición de
-      // pantalla aunque el array creció a la izquierda — igual que
-      // loadMoreHistory(), que usa este mismo truco para el mismo caso.
+    if (prevRange) {
       chart.timeScale().setVisibleLogicalRange({ from: prevRange.from+totalAdded, to: prevRange.to+totalAdded });
+    } else if (wasNearRealTime) {
+      // Sin rango previo que desplazar (p.ej. el primer paint de loadChart
+      // todavía no asentó) — único caso donde hace falta el método "a
+      // ciegas".
+      scrollToRealTimeReliably();
     }
-    const updated = window._lastCandles;
-    updateStatusBar(STATE.symbol, STATE.timeframe, updated.length, updated[0], updated[updated.length-1]);
   }
   } finally {
     _historyFetchBusy = false;
@@ -7565,6 +8641,14 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
 // Cierre de vela: pega solo la(s) vela(s) nueva(s) sin recargar todo el chart
 // (sin overlay, sin refit de zoom — eso es lo que se "notaba").
 async function appendNewBar(symbol, timeframe){
+  // Si este panel está en replay (lo arrancó él mismo o lo está siguiendo),
+  // NO hay que tocar window._lastCandles con datos en vivo: el array actual
+  // es el slice cortado del replay, no el historial real. El countdown que
+  // dispara esto sigue corriendo de fondo (bug: con el mercado cerrado,
+  // "remain" queda en 0 para siempre y esto se reintentaba cada segundo,
+  // empujando las últimas velas reales de la sesión al final del corte del
+  // replay — eso era el salto+velas-fantasma que reportó el usuario).
+  if (window._replay || window._replayFollow) return;
   // Igual que refreshFormingCandle: no lo pisamos en medio de un arrastre.
   // Acá sí hay que esperar (no saltear sin más) — el countdown ya se paró
   // para llamar a esto, así que si nos vamos sin hacer nada el reloj queda
@@ -7576,6 +8660,18 @@ async function appendNewBar(symbol, timeframe){
     const res=await fetch(url);
     const json=await res.json();
     if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'no data');
+    // Mismo motivo que el guard de arriba: este fetch pudo arrancar ANTES
+    // de que el usuario cortara el replay y recién contesta ahora — sin
+    // este segundo chequeo, el resultado se aplicaba igual apenas llegaba.
+    if (window._replay || window._replayFollow) return;
+    // Mismo chequeo que refreshFormingCandle, mismo motivo: si el usuario
+    // cambió de símbolo/TF mientras este fetch (pedido para el VIEJO)
+    // todavía estaba en vuelo, aplicar su resultado mezclaría velas (y el
+    // chequeo de SL/TP) de un instrumento distinto al que el panel
+    // muestra ahora. loadChart() ya hizo su propio renderSeries() con los
+    // datos correctos del símbolo nuevo — simplemente no hay nada más que
+    // hacer acá con esta respuesta vieja.
+    if (symbol !== STATE.symbol || timeframe !== STATE.timeframe) return;
 
     const prevLastTime=window._lastCandles[window._lastCandles.length-1].time;
     json.bars.forEach((bar,i)=>{
@@ -7604,7 +8700,6 @@ async function appendNewBar(symbol, timeframe){
     const prev=window._lastCandles[window._lastCandles.length-2];
     updateTopbarPrice(last,prev);
     updateTopbarOHLCV(last);
-    updateStatusBar(symbol,timeframe,window._lastCandles.length,window._lastCandles[0],last);
     updateWLPrice(symbol,last.close);
 
     startCountdown(timeframe, last.time, json.serverTime);
@@ -7672,7 +8767,21 @@ function _notifySymbolTfChange(symbol, timeframe){
   window.parent.postMessage({ type:'zentinel:paneSymbolTf', pane:PANE_ID, symbol, tf:timeframe, changedSymbol, changedTf }, '*');
 }
 
+// Contador de "generación": cada llamada a loadChart() se anota la suya
+// ANTES de pedir datos (await fetch). Si para cuando esa respuesta vuelve
+// ya hay una llamada MÁS NUEVA en curso (el usuario cambió de símbolo/TF
+// de nuevo mientras la primera todavía esperaba al bridge), la vieja se
+// descarta entera — no pisa window._lastCandles con datos de un símbolo
+// que el panel ya dejó de mostrar. Sin esto, cambiar rápido dos veces
+// (p.ej. NAS100 → BTCUSD → NAS100) podía dejar el panel "en NAS100" pero
+// con velas de Bitcoin (o viceversa) si las respuestas volvían fuera de
+// orden — la causa raíz real detrás del cierre con precio de Bitcoin
+// reportado en esta sesión, no solo un síntoma aislado del tick en vivo
+// (eso, en refreshFormingCandle/appendNewBar, ya se corrigió aparte, pero
+// esto cubre loadChart mismo, el punto más central de todos).
+let _loadChartGen = 0;
 async function loadChart(symbol, timeframe, _isUppercaseRetry) {
+  const _myGen = ++_loadChartGen;
   // Cambiar de símbolo/TF o refrescar en medio de un replay no tiene forma
   // sensata de "seguir" el replay (los datos de abajo cambian por completo),
   // así que directamente lo cerramos acá — cualquier camino que termine
@@ -7706,6 +8815,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     if(json.error)throw new Error(json.error);
     const candles=json.bars;
     if(!Array.isArray(candles)||candles.length===0)throw new Error('no data for '+symbol);
+    if (_myGen !== _loadChartGen) return; // superado por un loadChart() más nuevo — descartar
 
     window._lastCandles=candles;
     // Números enteros en el eje de precio (sin decimales) para símbolos
@@ -7771,7 +8881,6 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     const prev=candles[candles.length-2];
     updateTopbarPrice(last,prev);
     updateTopbarOHLCV(last);
-    updateStatusBar(symbol,timeframe,candles.length,candles[0],last);
     updateWLPrice(symbol,last.close);
 
     document.getElementById('symbol-input').value=symbol;
@@ -7889,6 +8998,7 @@ function positionCountdownBadge(lastClose, lastOpen){
 
 let _formingFetchInFlight=false;
 async function refreshFormingCandle(symbol, timeframe){
+  if (window._replay || window._replayFollow) return; // ver mismo guard en appendNewBar
   if(_formingFetchInFlight || !window._lastCandles) return;
   // Si el usuario está en medio de arrastrar un dibujo (mover el cuerpo o
   // estirar una manija), no lo interrumpimos con un refresh de precio acá
@@ -7906,21 +9016,31 @@ async function refreshFormingCandle(symbol, timeframe){
     const res=await fetch(url);
     const json=await res.json();
     if(json.error||!Array.isArray(json.bars)||json.bars.length===0)return;
+    if (window._replay || window._replayFollow) return; // ver mismo guard en appendNewBar
+    // Si el usuario cambió de símbolo/TF MIENTRAS este fetch estaba en
+    // vuelo (pedido para el símbolo VIEJO, recién contesta ahora), aplicar
+    // su resultado sería mezclar el precio de un instrumento con el chart
+    // de otro. El chequeo de abajo (bar.time!==last.time) NO alcanza para
+    // detectar esto: todos los símbolos en el mismo TF arrancan su vela en
+    // el mismo minuto redondo, así que el horario de una vela de BTCUSD
+    // puede coincidir con el de la vela de NAS100 que está viendo el panel
+    // ahora — pasaba el chequeo igual. Bug real: cambiar a otro símbolo y
+    // volver mientras había operaciones corriendo cerró dos operaciones
+    // (una larga, una corta) con un precio de Bitcoin mal interpretado
+    // como si fuera de NAS100, cada una a su propio SL/TP guardado.
+    if (symbol !== STATE.symbol || timeframe !== STATE.timeframe) return;
     const bar=json.bars[0];
     const last=window._lastCandles[window._lastCandles.length-1];
     if(bar.time!==last.time)return; // ya cerró — eso lo maneja appendNewBar
     // Este tick corre cada 1s todo el tiempo que la vela sigue en formación
     // — la mayoría de esos segundos el precio no se movió un tick siquiera.
-    // renderSeries() de acá abajo es caro: reconstruye TODAS las velas
-    // cargadas (miles, desde que Watchtower trae más historial), el
-    // volumen, los overlays y Watchtower/Sniper desde cero. Sin este
-    // chequeo se pagaba ese costo cada segundo aunque no hubiera nada
-    // nuevo que mostrar.
+    // Sin este chequeo se pagaba el costo de abajo cada segundo aunque no
+    // hubiera nada nuevo que mostrar.
     if (bar.open===last.open && bar.high===last.high && bar.low===last.low && bar.close===last.close && bar.volume===last.volume) return;
 
     window._lastCandles[window._lastCandles.length-1]=bar;
     checkOpenTradesAgainstBar(bar, true);
-    renderSeries(timeframe);
+    updateFormingCandleLive(bar);
     // Si esta vela en formación hizo un máximo/mínimo nuevo, el autoescalado
     // de precio se mueve — las velas y las LÍNEAS del dibujo (series reales
     // del chart) se reacomodan solas con el repintado de arriba, pero el
@@ -8357,42 +9477,42 @@ function renderTradesCountBadge(){
 function confirmTrade(){
   const d = getSelected();
   if (!d || (d.type !== 'long' && d.type !== 'short')) return;
-  const volStr = prompt('Volume (lots) for this trade:', '1');
-  if (volStr === null) return;
-  const volume = parseFloat(volStr);
-  if (!volume || volume <= 0) { alert('Invalid volume.'); return; }
-  captureUndoSnapshot();
-  // Confirmar ejecuta YA, al precio de mercado actual — como una orden a
-  // mercado real, no al nivel exacto que se dibujó (ese era solo para
-  // planificar la entrada). Se corre TODO el bloque (entry+SL+TP) la
-  // misma cantidad de puntos que se corrió el entry, preservando el RR
-  // que se armó visualmente — mismo mecanismo que arrastrar a mano la
-  // línea de entry (ver applyHandleDrag, role:'entry'), así el dibujo en
-  // pantalla queda consistente con la operación que realmente se abrió.
-  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
-  const marketPrice = lastBar ? lastBar.close : d.p1.price;
-  applyHandleDrag(d, 'entry', marketPrice, d.p1.time);
-  if (!updateDrawingGeometry(d)) redrawDrawing(d);
-  const trade = {
-    id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    symbol: normalizeSymbolForJournal(STATE.symbol),
-    side: d.type,
-    volume,
-    entry_price: d.p1.price,
-    stop_loss: (d.p2.price || d.p2.price === 0) ? d.p2.price : null,
-    take_profit: (d.targetPrice || d.targetPrice === 0) ? d.targetPrice : null,
-    open_time: getSimNow(),
-    source: window._replay ? 'replay' : 'live',
-  };
-  d.tradeId = trade.id;
-  const open = getOpenTrades();
-  open.push(trade);
-  saveOpenTrades(open);
-  markDrawingsDirty();
-  selectDrawing(d.id);
-  renderTradesCountBadge();
-  renderTradesModalIfOpen();
-  renderTradeMarkers();
+  promptFields('Confirm trade', [{ id:'volume', label:'Volume (lots)', type:'number', value:'1', placeholder:'1' }], (vals) => {
+    const volume = parseFloat(vals.volume);
+    if (!volume || volume <= 0) { alert('Invalid volume.'); return; }
+    captureUndoSnapshot();
+    // Confirmar ejecuta YA, al precio de mercado actual — como una orden a
+    // mercado real, no al nivel exacto que se dibujó (ese era solo para
+    // planificar la entrada). Se corre TODO el bloque (entry+SL+TP) la
+    // misma cantidad de puntos que se corrió el entry, preservando el RR
+    // que se armó visualmente — mismo mecanismo que arrastrar a mano la
+    // línea de entry (ver applyHandleDrag, role:'entry'), así el dibujo en
+    // pantalla queda consistente con la operación que realmente se abrió.
+    const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+    const marketPrice = lastBar ? lastBar.close : d.p1.price;
+    applyHandleDrag(d, 'entry', marketPrice, d.p1.time);
+    if (!updateDrawingGeometry(d)) redrawDrawing(d);
+    const trade = {
+      id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      symbol: normalizeSymbolForJournal(STATE.symbol),
+      side: d.type,
+      volume,
+      entry_price: d.p1.price,
+      stop_loss: (d.p2.price || d.p2.price === 0) ? d.p2.price : null,
+      take_profit: (d.targetPrice || d.targetPrice === 0) ? d.targetPrice : null,
+      open_time: getSimNow(),
+      source: window._replay ? 'replay' : 'live',
+    };
+    d.tradeId = trade.id;
+    const open = getOpenTrades();
+    open.push(trade);
+    saveOpenTrades(open);
+    markDrawingsDirty();
+    selectDrawing(d.id);
+    renderTradesCountBadge();
+    renderTradesModalIfOpen();
+    renderTradeMarkers();
+  });
 }
 
 function finalizeTradeClose(t, closePrice, closeTime, reason, triggerBar){
@@ -8547,7 +9667,18 @@ function checkOpenTradesAgainstBar(bar, formingLive){
     }
   }
   if (!changed) return;
-  saveOpenTrades(open);
+  // td_open_trades es GLOBAL (sin sufijo de panel): cualquier panel con el
+  // mismo símbolo corre este mismo chequeo en cada tick, todos contra el
+  // mismo storage. Guardar `open` tal cual (la copia leída al EMPEZAR esta
+  // pasada) pisaba entera la lista — si mientras tanto OTRO panel ya había
+  // cerrado/abierto algo, ese cambio se perdía, y de paso se arrastraba
+  // cualquier operación vieja que ESTE panel nunca evaluó como tocada. Se
+  // relee fresco recién acá y se sacan nada más que los ids que ESTA
+  // pasada decidió cerrar — así conviven los cambios de ambos paneles en
+  // vez de que el último en guardar gane y borre lo del otro.
+  const freshOpen = getOpenTrades();
+  const stillOpen = freshOpen.filter(t => !closedIds.includes(t.id));
+  saveOpenTrades(stillOpen);
   drawings.forEach(d => { if (closedIds.includes(d.tradeId)) delete d.tradeId; });
   if (selectedDrawingId) selectDrawing(selectedDrawingId);
   markDrawingsDirty();
@@ -8569,7 +9700,12 @@ function manualCloseTrade(){
   finalizeTradeClose(t, closePrice, getSimNow(), 'manual');
   open.splice(idx, 1);
   saveOpenTrades(open);
-  delete d.tradeId;
+  // drawings.forEach, no un delete suelto de `d`: por las dudas algún otro
+  // dibujo haya quedado apuntando al mismo tradeId (ver el fix de
+  // onDtbClone, que era justo esto) — soltarlos a TODOS, no solo al
+  // seleccionado.
+  const closedTid = d.tradeId;
+  drawings.forEach(x => { if (x.tradeId === closedTid) delete x.tradeId; });
   selectDrawing(d.id);
   markDrawingsDirty();
   renderTradesCountBadge();
@@ -8625,35 +9761,37 @@ function editTradeById(id){
   const open = getOpenTrades();
   const t = open.find(x => x.id === id);
   if (!t) return;
-  const slInput = prompt('Stop loss (empty = none):', t.stop_loss!=null ? fmt(t.stop_loss) : '');
-  if (slInput === null) return; // canceló
-  const tpInput = prompt('Take profit (empty = none):', t.take_profit!=null ? fmt(t.take_profit) : '');
-  if (tpInput === null) return;
-  // fmt() precarga el prompt con coma como separador de miles (ej.
-  // "29,050.50", convención en-US) — si el usuario apenas edita un dígito
-  // y confirma, esa coma le llega de vuelta a Number(), que no la entiende
-  // y devuelve NaN ("Invalid price" con un número perfectamente válido).
-  // Sacarla antes de parsear.
-  const parsePrice = (s) => Number(s.replace(/,/g, ''));
-  const newSl = slInput.trim() === '' ? null : parsePrice(slInput);
-  const newTp = tpInput.trim() === '' ? null : parsePrice(tpInput);
-  if ((slInput.trim() !== '' && !isFinite(newSl)) || (tpInput.trim() !== '' && !isFinite(newTp))) {
-    alert('Invalid price.');
-    return;
-  }
-  t.stop_loss = newSl;
-  t.take_profit = newTp;
-  saveOpenTrades(open);
-  // Si había un dibujo apuntando a esta operación, llevarlo al mismo
-  // nivel — para que no quede mostrando un SL/TP viejo en el chart.
-  const d = drawings.find(x => x.tradeId === id);
-  if (d) {
-    if (newSl != null) d.p2.price = newSl;
-    if (newTp != null) d.targetPrice = newTp;
-    if (!updateDrawingGeometry(d)) redrawDrawing(d);
-    markDrawingsDirty();
-  }
-  renderTradesModalIfOpen();
+  promptFields('Edit stop loss / take profit', [
+    { id:'sl', label:'Stop loss (empty = none)', type:'text', value: t.stop_loss!=null ? fmt(t.stop_loss) : '' },
+    { id:'tp', label:'Take profit (empty = none)', type:'text', value: t.take_profit!=null ? fmt(t.take_profit) : '' },
+  ], (vals) => {
+    // fmt() precarga el campo con coma como separador de miles (ej.
+    // "29,050.50", convención en-US) — si el usuario apenas edita un dígito
+    // y confirma, esa coma le llega de vuelta a Number(), que no la entiende
+    // y devuelve NaN ("Invalid price" con un número perfectamente válido).
+    // Sacarla antes de parsear.
+    const parsePrice = (s) => Number(s.replace(/,/g, ''));
+    const slInput = vals.sl, tpInput = vals.tp;
+    const newSl = slInput.trim() === '' ? null : parsePrice(slInput);
+    const newTp = tpInput.trim() === '' ? null : parsePrice(tpInput);
+    if ((slInput.trim() !== '' && !isFinite(newSl)) || (tpInput.trim() !== '' && !isFinite(newTp))) {
+      alert('Invalid price.');
+      return;
+    }
+    t.stop_loss = newSl;
+    t.take_profit = newTp;
+    saveOpenTrades(open);
+    // Si había un dibujo apuntando a esta operación, llevarlo al mismo
+    // nivel — para que no quede mostrando un SL/TP viejo en el chart.
+    const d = drawings.find(x => x.tradeId === id);
+    if (d) {
+      if (newSl != null) d.p2.price = newSl;
+      if (newTp != null) d.targetPrice = newTp;
+      if (!updateDrawingGeometry(d)) redrawDrawing(d);
+      markDrawingsDirty();
+    }
+    renderTradesModalIfOpen();
+  });
 }
 
 function fmtTradeTime(epochSeconds){ return fmtReplayTime(epochSeconds); }
@@ -8703,7 +9841,7 @@ function renderTradesModal(){
       const meta = `${fmt(t.entry_price)}→${fmt(t.close_price)} · ${t.pips}p · ${t.duration_minutes}m · ${t.close_reason}`;
       const tb = t.trigger_bar;
       const triggerInfo = tb ? ` · Vela disparo: O${fmt(tb.open)} H${fmt(tb.high)} L${fmt(tb.low)} C${fmt(tb.close)} ${fmtTradeTime(tb.time)}${tb.formingLive?' (en formación)':''}` : '';
-      const fullInfo = `Entry ${fmt(t.entry_price)} → Close ${fmt(t.close_price)} · ${t.pips} pips · ${t.duration_minutes} min · Closed by ${t.close_reason} · ${t.source==='replay'?'Replay':'Live'} · ${fmtTradeTime(t.close_time)}${triggerInfo}`;
+      const fullInfo = `Entry ${fmt(t.entry_price)} (${fmtTradeTime(t.open_time)}) → Close ${fmt(t.close_price)} (${fmtTradeTime(t.close_time)}) · ${t.pips} pips · ${t.duration_minutes} min · Closed by ${t.close_reason} · ${t.source==='replay'?'Replay':'Live'}${triggerInfo}`;
       return `<div class="trade-row" title="${fullInfo}">
         <span class="trade-side ${t.side}">${t.side==='long'?'L':'S'}</span>
         <span class="trade-src-dot ${t.source}"></span>
@@ -8721,6 +9859,32 @@ function clearClosedTrades(){
   renderTradesModal();
   renderTradeMarkers();
 }
+// El horario crudo de un trade (open_time/close_time, como el de TODAS las
+// velas del chart) está codificado como "hora de pared NY leída con
+// getUTC*" — no es un instante UTC real (ver el comentario grande de
+// fmtCrosshairTime). new Date(t.open_time*1000).toISOString() exportaba
+// ese número tal cual con sufijo "Z", etiquetándolo como UTC siendo en
+// realidad NY — el dashboard del usuario, al confiar en el "Z", lo
+// mostraba corrido varias horas. Esto reconstruye el instante UTC real
+// sumándole el offset de NY de ESE día (-4h EDT / -5h EST, según
+// corresponda) antes de exportar.
+function csvRealUtcIso(rawEpochSeconds){
+  // No se puede pedirle el offset directo a Intl sobre `raw` (no es un
+  // instante UTC real, así que formatearlo en tz NY aplicaría un segundo
+  // corrimiento equivocado) — se arma un mediodía UTC "neutro" con la
+  // MISMA fecha calendario (ese día nunca cruza la transición de DST a
+  // mediodía) solo para preguntar qué offset tenía NY ese día.
+  const raw = new Date(rawEpochSeconds * 1000);
+  const noonUtcSameDate = Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate(), 12, 0, 0);
+  let offsetHours = -4; // fallback EDT si Intl fallara
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', timeZoneName:'shortOffset' }).formatToParts(new Date(noonUtcSameDate));
+    const tzPart = parts.find(p => p.type === 'timeZoneName');
+    const m = tzPart && /GMT([+-]\d+)/.exec(tzPart.value);
+    if (m) offsetHours = parseInt(m[1], 10);
+  } catch(e){}
+  return new Date((rawEpochSeconds - offsetHours*3600) * 1000).toISOString();
+}
 // Formato CSV = fingerprint "Hyperprop" del importador del dashboard
 // (entry_time/exit_time + net_pnl/gross_pnl) — entra directo sin pasar
 // por el asistente de mapeo manual. "side" tiene que ser 'long'/'short'
@@ -8730,8 +9894,8 @@ function downloadTradesCsv(){
   if (!closed.length) { alert('No closed trades to export.'); return; }
   const header = ['entry_time','exit_time','account','contract','side','quantity','entry_price','exit_price','duration','gross_pnl','fees','commission','net_pnl','pnl_ticks','entry_time_utc','exit_time_utc'];
   const rows = closed.map(t => {
-    const entryIso = new Date(t.open_time * 1000).toISOString();
-    const exitIso = new Date(t.close_time * 1000).toISOString();
+    const entryIso = csvRealUtcIso(t.open_time);
+    const exitIso = csvRealUtcIso(t.close_time);
     const account = 'ChartZentinel ' + (t.source === 'replay' ? 'Replay' : 'Live');
     return [entryIso, exitIso, account, t.symbol, t.side, t.volume, t.entry_price, t.close_price, t.duration_minutes, t.profit, 0, 0, t.profit, t.pips, entryIso, exitIso];
   });
