@@ -1473,6 +1473,10 @@
       </div>
     </div>
   </div>
+  <button class="dtb-btn active" id="dtb-pos-labels" title="Show/hide labels (RR/TP/SL)" onclick="onDtbTogglePositionLabels()" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
+    <span class="dtb-btn-text">Labels</span>
+  </button>
   <button class="dtb-btn" id="dtb-confirm-trade" title="Register this position as an open trade (paper trading)" onclick="confirmTrade()" style="display:none;color:var(--gold);">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l3.5 3.5L14 3"/></svg>
     Confirm trade
@@ -3405,6 +3409,8 @@ function selectDrawing(id) {
   document.getElementById('dtb-rect-fill').style.display   = d.type==='rect' ? '' : 'none';
   document.getElementById('dtb-rect-border').classList.toggle('active', d.showBorder !== false);
   document.getElementById('dtb-rect-fill').classList.toggle('active', d.showFill !== false);
+  document.getElementById('dtb-pos-labels').style.display = isPosition ? '' : 'none';
+  document.getElementById('dtb-pos-labels').classList.toggle('active', d.showLabels !== false);
   document.getElementById('dtb-lock').classList.toggle('active', !!d.locked);
   document.getElementById('dtb-confirm-trade').style.display = (isPosition && !d.tradeId) ? '' : 'none';
   document.getElementById('dtb-close-trade').style.display = (isPosition && d.tradeId) ? '' : 'none';
@@ -3534,6 +3540,18 @@ function onDtbToggleRectPart(field) {
   const btnId = field === 'showBorder' ? 'dtb-rect-border' : 'dtb-rect-fill';
   document.getElementById(btnId).classList.toggle('active', d[field] !== false);
   redrawDrawing(d);
+}
+// Solo para 'long'/'short': apaga/prende las 3 etiquetas de texto (RR/TP/SL)
+// sin tocar el relleno de ganancia/pérdida ni las líneas — mismo patrón que
+// onDtbToggleRectPart, pero no hace falta reconstruir el dibujo entero
+// (syncPositionTool ya resuelve mostrar/ocultar los textos).
+function onDtbTogglePositionLabels() {
+  const d = getSelected(); if (!d || (d.type!=='long' && d.type!=='short')) return;
+  captureUndoSnapshot();
+  d.showLabels = (d.showLabels === false) ? true : false;
+  document.getElementById('dtb-pos-labels').classList.toggle('active', d.showLabels !== false);
+  syncPositionTool(d);
+  markDrawingsDirty();
 }
 // ══════════════════════════════════════════════════════════
 //  NIVELES DE FIBONACCI (editable por dibujo: agregar/sacar/editar)
@@ -3800,7 +3818,9 @@ function syncPositionTool(d) {
   const yStop  = candleSeries.priceToCoordinate(stop);
   const yTarget= candleSeries.priceToCoordinate(target);
   const hidden = x1===null||x2===null||yEntry===null||yStop===null||yTarget===null;
-  [d.profitFillEl, d.lossFillEl, d.entryTextEl, d.tpTextEl, d.slTextEl].forEach(el=>{ if(el) el.style.display = hidden?'none':''; });
+  const labelsHidden = hidden || d.showLabels === false;
+  [d.profitFillEl, d.lossFillEl].forEach(el=>{ if(el) el.style.display = hidden?'none':''; });
+  [d.entryTextEl, d.tpTextEl, d.slTextEl].forEach(el=>{ if(el) el.style.display = labelsHidden?'none':''; });
   if (hidden) return;
 
   const xL = Math.min(x1,x2), xR = Math.max(x1,x2), w = xR-xL;
@@ -5162,7 +5182,7 @@ function initDrawingLayer() {
       const DEFAULT_RR = 2;
       const stop   = tool === 'long' ? entry - risk        : entry + risk;
       const target = tool === 'long' ? entry + risk*DEFAULT_RR : entry - risk*DEFAULT_RR;
-      d = { id:genId(), type:tool, series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:0, extLeft:false, extRight:false, p1:{price:entry,time:t1}, p2:{price:stop,time:t2}, targetPrice:target };
+      d = { id:genId(), type:tool, series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:0, extLeft:false, extRight:false, p1:{price:entry,time:t1}, p2:{price:stop,time:t2}, targetPrice:target, showLabels:true };
     }
 
     if (d) {
