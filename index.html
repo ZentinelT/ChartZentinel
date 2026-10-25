@@ -6441,79 +6441,92 @@ async function wtEnsureOrgBoundaries(cacheKey, symbol, prevEndTime, todayStartTi
 }
 
 function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
+  // Mismo historial visual que las killzones (STATE.watchtower.histDays):
+  // antes esta función solo dibujaba el ORG de HOY; ahora recorre los
+  // últimos N días igual que renderWtKillzones, un box por día.
+  const histDays=Math.max(1, STATE.watchtower.histDays||3);
   const todayKey=wtDayKey(lastTime);
-  const idx=dateKeys.indexOf(todayKey);
-  if(idx<=0) return;
-  const prevDayCandles=byDate.get(dateKeys[idx-1])||[];
-  const todayDayCandles=byDate.get(todayKey)||[];
-  if(!prevDayCandles.length || !todayDayCandles.length) return;
-  // OJO: la primera vela de cada "día del bróker" (dateKeys) cae a las
-  // 18:00 del día de calendario ANTERIOR (así arranca el D1 de MT5) — usarla
-  // directo como referencia de fecha para "hoy a las 9:30" tomaba el día de
-  // calendario equivocado. +20h desde el límite del día (18:00) cae bien
-  // adentro del día de trading correcto, sin depender de qué vela haya.
-  const prevEndTime=wtTimestampSameCalDay(dateKeys[idx-1]+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
-  const todayStartTime=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.start[0], ORG_SESSION.start[1]);
-  // En TF grandes (8H, 12H...) la última vela puede abrir ANTES de las
-  // 9:30 pero seguir cubriendo ese horario (p.ej. una vela de 8H que
-  // arranca a las 9:00 llega hasta las 17:00) — comparar solo contra el
-  // horario de apertura de esa vela decía "todavía no abrió" por error.
-  // Pero ese mismo razonamiento se vuelve un problema al revés (1H, 30m,
-  // 15m): mientras la vela que CUBRE las 9:30 todavía se está formando
-  // (p.ej. son las 9:10 y la vela de 1H 9:00-10:00 recién arrancó), esta
-  // comparación decía "ya abrió" aunque en la hora real todavía no — y
-  // terminaba dibujando la caja anclada a esa vela de 9:00, antes de la
-  // apertura real. Si tenemos la hora real del servidor (wtApproxNow),
-  // usarla en vez de los bordes de vela saca la ambigüedad del todo.
-  // wtApproxNow() es el reloj REAL (extrapolado desde que cargó la página),
-  // no el instante simulado del replay — usarlo acá sin más hacía que, en
-  // medio de un replay, el ORG de HOY se dibujara apenas la sesión real ya
-  // había abierto, sin importar en qué punto del pasado estuviera parado
-  // el replay (que puede ser bien antes de las 9:30). Durante cualquier
-  // replay (el panel maestro, o un panel que lo sigue — ver "REPLAY — SYNC
-  // MULTI-PANEL") la única noción de "ahora" válida es lastTime.
-  const inReplay = !!(window._replay || window._replayFollow);
-  const approxNow = inReplay ? null : wtApproxNow();
-  const sessionStarted = approxNow!=null ? (approxNow >= todayStartTime) : (todayStartTime <= lastTime + barStep);
-  if (!sessionStarted) return; // la sesión de hoy todavía no abrió
+  dateKeys.slice(-histDays).forEach(dayKey=>{
+    const idx=dateKeys.indexOf(dayKey);
+    if(idx<=0) return;
+    const isCurrentDay = dayKey===todayKey;
+    const prevDayCandles=byDate.get(dateKeys[idx-1])||[];
+    const todayDayCandles=byDate.get(dayKey)||[];
+    if(!prevDayCandles.length || !todayDayCandles.length) return;
+    // OJO: la primera vela de cada "día del bróker" (dateKeys) cae a las
+    // 18:00 del día de calendario ANTERIOR (así arranca el D1 de MT5) — usarla
+    // directo como referencia de fecha para "ese día a las 9:30" tomaba el
+    // día de calendario equivocado. +20h desde el límite del día (18:00) cae
+    // bien adentro del día de trading correcto, sin depender de qué vela haya.
+    const prevEndTime=wtTimestampSameCalDay(dateKeys[idx-1]+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
+    const dayStartTime=wtTimestampSameCalDay(dayKey+20*3600, ORG_SESSION.start[0], ORG_SESSION.start[1]);
+    // En TF grandes (8H, 12H...) la última vela puede abrir ANTES de las
+    // 9:30 pero seguir cubriendo ese horario (p.ej. una vela de 8H que
+    // arranca a las 9:00 llega hasta las 17:00) — comparar solo contra el
+    // horario de apertura de esa vela decía "todavía no abrió" por error.
+    // Pero ese mismo razonamiento se vuelve un problema al revés (1H, 30m,
+    // 15m): mientras la vela que CUBRE las 9:30 todavía se está formando
+    // (p.ej. son las 9:10 y la vela de 1H 9:00-10:00 recién arrancó), esta
+    // comparación decía "ya abrió" aunque en la hora real todavía no — y
+    // terminaba dibujando la caja anclada a esa vela de 9:00, antes de la
+    // apertura real. Si tenemos la hora real del servidor (wtApproxNow),
+    // usarla en vez de los bordes de vela saca la ambigüedad del todo.
+    // wtApproxNow() es el reloj REAL (extrapolado desde que cargó la página),
+    // no el instante simulado del replay — usarlo acá sin más hacía que, en
+    // medio de un replay, el ORG de HOY se dibujara apenas la sesión real ya
+    // había abierto, sin importar en qué punto del pasado estuviera parado
+    // el replay (que puede ser bien antes de las 9:30). Durante cualquier
+    // replay (el panel maestro, o un panel que lo sigue — ver "REPLAY — SYNC
+    // MULTI-PANEL") la única noción de "ahora" válida es lastTime. Para días
+    // viejos (no el actual) la sesión ya cerró hace rato, sin ambigüedad.
+    let sessionStarted;
+    if (isCurrentDay) {
+      const inReplay = !!(window._replay || window._replayFollow);
+      const approxNow = inReplay ? null : wtApproxNow();
+      sessionStarted = approxNow!=null ? (approxNow >= dayStartTime) : (dayStartTime <= lastTime + barStep);
+    } else {
+      sessionStarted = true;
+    }
+    if (!sessionStarted) return; // la sesión de hoy todavía no abrió
 
-  const cacheKey = `${STATE.symbol}|${todayKey}`;
-  let cached = _wtOrgCache[cacheKey];
-  if (cached === undefined) {
-    _wtOrgCache[cacheKey] = null; // evita disparar el mismo fetch de nuevo mientras llega
-    wtEnsureOrgBoundaries(cacheKey, STATE.symbol, prevEndTime, todayStartTime);
-  }
-  // Mientras no llegó (o si falló) la vela de 1min exacta, se aproxima por
-  // interpolación para no dejar el indicador sin dibujar ni un segundo.
-  const prevClose = cached ? cached.prevClose : wtPriceAtBoundary(prevDayCandles, prevEndTime, barStep);
-  const todayOpen  = cached ? cached.todayOpen  : wtPriceAtBoundary(todayDayCandles, todayStartTime, barStep);
-  if(prevClose==null || todayOpen==null) return;
-  const top=Math.max(prevClose,todayOpen), bottom=Math.min(prevClose,todayOpen), ce=(prevClose+todayOpen)/2;
-  const gap=todayOpen-prevClose;
-  // Proyectar hasta el cierre de la sesión (16:15) se cae del rango de
-  // coordenadas mientras esa hora sigue en el futuro (el chart solo tiene
-  // "whitespace" acotado para el eje). Mientras la sesión sigue abierta, la
-  // caja crece hasta "ahora"; al cerrar, se fija en el horario real.
-  const sessionEnd=wtTimestampSameCalDay(todayKey+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
-  const endTime=Math.min(sessionEnd, lastTime);
-  // "Dónde" dibujar (enganchado a velas reales) — el precio (top/bottom/ce)
-  // ya quedó resuelto arriba con precisión real, esto no lo toca. Mientras la
-  // sesión sigue abierta (endTime===lastTime) la caja tiene que seguir
-  // proyectándose un poco más allá de la última vela, no cortar justo ahí.
-  const plotStart = wtNearestCandleTimeAtOrAfter(todayDayCandles, todayStartTime);
-  const plotEnd = endTime===lastTime ? (lastTime+LEVEL_EXTEND_BARS*barStep) : wtNearestCandleTime(todayDayCandles, endTime);
-  const col=STATE.watchtower.orgColor||'#ffeb3b';
-  const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
-  // Como en Pine: solo 2 líneas horizontales (H/L, sin bordes verticales) +
-  // relleno entre ellas (linefill, intensidad = transparencia global de cajas)
-  // + línea CE punteada al 50%.
-  if(fillOpacity>0) wtRect(svg, plotStart, plotEnd, top, bottom, col, fillOpacity, 'none');
-  wtLine(svg, plotStart, plotEnd, top, col, 1);
-  wtLine(svg, plotStart, plotEnd, bottom, col, 1);
-  wtLine(svg, plotStart, plotEnd, ce, '#ffb74d', 1, '4,3');
-  wtLabel(svg, plotEnd, top, 'ORG H', col);
-  wtLabel(svg, plotEnd, bottom, 'ORG L', col);
-  wtLabel(svg, plotEnd, ce, `ORG CE  ${gap>=0?'+':''}${gap.toFixed(1)} pts`, '#ffb74d');
+    const cacheKey = `${STATE.symbol}|${dayKey}`;
+    let cached = _wtOrgCache[cacheKey];
+    if (cached === undefined) {
+      _wtOrgCache[cacheKey] = null; // evita disparar el mismo fetch de nuevo mientras llega
+      wtEnsureOrgBoundaries(cacheKey, STATE.symbol, prevEndTime, dayStartTime);
+    }
+    // Mientras no llegó (o si falló) la vela de 1min exacta, se aproxima por
+    // interpolación para no dejar el indicador sin dibujar ni un segundo.
+    const prevClose = cached ? cached.prevClose : wtPriceAtBoundary(prevDayCandles, prevEndTime, barStep);
+    const dayOpen  = cached ? cached.todayOpen  : wtPriceAtBoundary(todayDayCandles, dayStartTime, barStep);
+    if(prevClose==null || dayOpen==null) return;
+    const top=Math.max(prevClose,dayOpen), bottom=Math.min(prevClose,dayOpen), ce=(prevClose+dayOpen)/2;
+    const gap=dayOpen-prevClose;
+    // Proyectar hasta el cierre de la sesión (16:15) se cae del rango de
+    // coordenadas mientras esa hora sigue en el futuro (el chart solo tiene
+    // "whitespace" acotado para el eje). Mientras la sesión sigue abierta, la
+    // caja crece hasta "ahora"; al cerrar, se fija en el horario real.
+    const sessionEnd=wtTimestampSameCalDay(dayKey+20*3600, ORG_SESSION.end[0], ORG_SESSION.end[1]);
+    const endTime = isCurrentDay ? Math.min(sessionEnd, lastTime) : sessionEnd;
+    // "Dónde" dibujar (enganchado a velas reales) — el precio (top/bottom/ce)
+    // ya quedó resuelto arriba con precisión real, esto no lo toca. Mientras la
+    // sesión sigue abierta (endTime===lastTime) la caja tiene que seguir
+    // proyectándose un poco más allá de la última vela, no cortar justo ahí.
+    const plotStart = wtNearestCandleTimeAtOrAfter(todayDayCandles, dayStartTime);
+    const plotEnd = (isCurrentDay && endTime===lastTime) ? (lastTime+LEVEL_EXTEND_BARS*barStep) : wtNearestCandleTime(todayDayCandles, endTime);
+    const col=STATE.watchtower.orgColor||'#ffeb3b';
+    const fillOpacity=(STATE.watchtower.boxOpacity??10)/100;
+    // Como en Pine: solo 2 líneas horizontales (H/L, sin bordes verticales) +
+    // relleno entre ellas (linefill, intensidad = transparencia global de cajas)
+    // + línea CE punteada al 50%.
+    if(fillOpacity>0) wtRect(svg, plotStart, plotEnd, top, bottom, col, fillOpacity, 'none');
+    wtLine(svg, plotStart, plotEnd, top, col, 1);
+    wtLine(svg, plotStart, plotEnd, bottom, col, 1);
+    wtLine(svg, plotStart, plotEnd, ce, '#ffb74d', 1, '4,3');
+    wtLabel(svg, plotEnd, top, 'ORG H', col);
+    wtLabel(svg, plotEnd, bottom, 'ORG L', col);
+    wtLabel(svg, plotEnd, ce, `ORG CE  ${gap>=0?'+':''}${gap.toFixed(1)} pts`, '#ffb74d');
+  });
 }
 
 function renderWtBias(byDate, dateKeys, lastTime){
