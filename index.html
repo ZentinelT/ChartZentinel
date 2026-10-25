@@ -6315,53 +6315,77 @@ function renderWtKillzones(svg, byDate, dateKeys, barStep){
   });
 }
 
+// PDH/PDL/PDM — igual que killzones/ORG: recorre los últimos histDays días
+// (en vez de dibujar solo el de HOY), un nivel "día anterior" por cada día
+// del historial visual configurado.
 function renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep){
+  const histDays=Math.max(1, STATE.watchtower.histDays||3);
   const todayKey=wtDayKey(lastTime);
-  const idx=dateKeys.indexOf(todayKey);
-  if(idx<=0) return;
-  const prevCandles=byDate.get(dateKeys[idx-1]);
-  const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
-  const x1=byDate.get(todayKey)[0].time;
-  const x2=lastTime+LEVEL_EXTEND_BARS*barStep;
-  wtLine(svg, x1, x2, high, '#ffffff', 1);
-  wtLine(svg, x1, x2, low,  '#ffffff', 1);
-  wtLine(svg, x1, x2, mid,  '#ffffff', 1, '4,3');
-  wtLabel(svg, x2, high, 'PDH', '#ffffff');
-  wtLabel(svg, x2, low,  'PDL', '#ffffff');
-  wtLabel(svg, x2, mid,  'PDM', '#ffffff');
+  dateKeys.slice(-histDays).forEach(dayKey=>{
+    const idx=dateKeys.indexOf(dayKey);
+    if(idx<=0) return;
+    const prevCandles=byDate.get(dateKeys[idx-1]);
+    const dayCandles=byDate.get(dayKey);
+    if(!prevCandles.length || !dayCandles.length) return;
+    const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
+    const isCurrentDay = dayKey===todayKey;
+    const x1=dayCandles[0].time;
+    const x2 = isCurrentDay ? (lastTime+LEVEL_EXTEND_BARS*barStep) : dayCandles[dayCandles.length-1].time;
+    wtLine(svg, x1, x2, high, '#ffffff', 1);
+    wtLine(svg, x1, x2, low,  '#ffffff', 1);
+    wtLine(svg, x1, x2, mid,  '#ffffff', 1, '4,3');
+    wtLabel(svg, x2, high, 'PDH', '#ffffff');
+    wtLabel(svg, x2, low,  'PDL', '#ffffff');
+    wtLabel(svg, x2, mid,  'PDM', '#ffffff');
+  });
 }
 
-function renderWtPrevWeek(svg, candles, lastTime, barStep){
+// PWH/PWL/PWM — mismo criterio: en vez de contar semanas aparte, se dibuja
+// una por cada semana que toque los últimos histDays días (mismo contador
+// que killzones/ORG/PD, sin un parámetro de historial propio).
+function renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep){
+  const histDays=Math.max(1, STATE.watchtower.histDays||3);
   const byWeek=new Map();
   candles.forEach(c=>{ const wk=wtWeekKey(c.time); if(!byWeek.has(wk))byWeek.set(wk,[]); byWeek.get(wk).push(c); });
   const weekKeys=[...byWeek.keys()].sort((a,b)=>a-b);
   const curWeek=wtWeekKey(lastTime);
-  const idx=weekKeys.indexOf(curWeek);
-  if(idx<=0) return;
-  const prevCandles=byWeek.get(weekKeys[idx-1]);
-  const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
-  const x1=byWeek.get(curWeek)[0].time;
-  const x2=lastTime+LEVEL_EXTEND_BARS*barStep;
-  wtLine(svg, x1, x2, high, '#c99cd0', 1);
-  wtLine(svg, x1, x2, low,  '#c99cd0', 1);
-  wtLine(svg, x1, x2, mid,  '#c99cd0', 1, '4,3');
-  wtLabel(svg, x2, high, 'PWH', '#c99cd0');
-  wtLabel(svg, x2, low,  'PWL', '#c99cd0');
-  wtLabel(svg, x2, mid,  'PWM', '#c99cd0');
+  const recentWeekKeys=[...new Set(dateKeys.slice(-histDays).map(dk=>wtWeekKey(dk)))].sort((a,b)=>a-b);
+  recentWeekKeys.forEach(wk=>{
+    const idx=weekKeys.indexOf(wk);
+    if(idx<=0) return;
+    const prevCandles=byWeek.get(weekKeys[idx-1]);
+    const curCandles=byWeek.get(wk);
+    if(!prevCandles.length || !curCandles.length) return;
+    const high=Math.max(...prevCandles.map(c=>c.high)), low=Math.min(...prevCandles.map(c=>c.low)), mid=(high+low)/2;
+    const isCurrentWeek = wk===curWeek;
+    const x1=curCandles[0].time;
+    const x2 = isCurrentWeek ? (lastTime+LEVEL_EXTEND_BARS*barStep) : curCandles[curCandles.length-1].time;
+    wtLine(svg, x1, x2, high, '#c99cd0', 1);
+    wtLine(svg, x1, x2, low,  '#c99cd0', 1);
+    wtLine(svg, x1, x2, mid,  '#c99cd0', 1, '4,3');
+    wtLabel(svg, x2, high, 'PWH', '#c99cd0');
+    wtLabel(svg, x2, low,  'PWL', '#c99cd0');
+    wtLabel(svg, x2, mid,  'PWM', '#c99cd0');
+  });
 }
 
-function renderWtMNO(svg, byDate, lastTime, barStep){
+// MNO (midnight open) — ídem: un nivel por cada día de los últimos histDays.
+function renderWtMNO(svg, byDate, dateKeys, lastTime, barStep){
+  const histDays=Math.max(1, STATE.watchtower.histDays||3);
   const todayKey=wtDayKey(lastTime);
-  const dayCandles=byDate.get(todayKey);
-  if(!dayCandles || !dayCandles.length) return;
-  // El día-broker (18:00->18:00) contiene la medianoche NY 6h después de su
-  // apertura; buscamos la primera vela a partir de ese punto exacto.
-  const midnightTs=todayKey+6*3600;
-  const mnoCandle=dayCandles.find(c=>c.time>=midnightTs);
-  if(!mnoCandle) return;
-  const x2=lastTime+LEVEL_EXTEND_BARS*barStep;
-  wtLine(svg, mnoCandle.time, x2, mnoCandle.open, '#80deea', 1, '2,2');
-  wtLabel(svg, x2, mnoCandle.open, 'MNO', '#80deea');
+  dateKeys.slice(-histDays).forEach(dayKey=>{
+    const dayCandles=byDate.get(dayKey);
+    if(!dayCandles || !dayCandles.length) return;
+    // El día-broker (18:00->18:00) contiene la medianoche NY 6h después de su
+    // apertura; buscamos la primera vela a partir de ese punto exacto.
+    const midnightTs=dayKey+6*3600;
+    const mnoCandle=dayCandles.find(c=>c.time>=midnightTs);
+    if(!mnoCandle) return;
+    const isCurrentDay = dayKey===todayKey;
+    const x2 = isCurrentDay ? (lastTime+LEVEL_EXTEND_BARS*barStep) : dayCandles[dayCandles.length-1].time;
+    wtLine(svg, mnoCandle.time, x2, mnoCandle.open, '#80deea', 1, '2,2');
+    wtLabel(svg, x2, mnoCandle.open, 'MNO', '#80deea');
+  });
 }
 
 // lightweight-charts se niega a ubicar una coordenada X para un horario que
@@ -6572,8 +6596,8 @@ function renderWatchtower(){
 
   if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
   if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep);
-  if(wt.pwLevels)  renderWtPrevWeek(svg, candles, lastTime, barStep);
-  if(wt.mno)       renderWtMNO(svg, byDate, lastTime, barStep);
+  if(wt.pwLevels)  renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep);
+  if(wt.mno)       renderWtMNO(svg, byDate, dateKeys, lastTime, barStep);
   if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
   if(wt.bias)      renderWtBias(byDate, dateKeys, lastTime);
 }
