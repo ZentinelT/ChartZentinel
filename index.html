@@ -371,7 +371,12 @@
   /* Sección "Sync across panels" al pie del mismo popup de layout (solo en
      la grilla multi-chart) — mismo lenguaje visual que el resto del picker,
      pero más ancho (160px se quedaba corto para nombre + switch). */
-  .layout-picker-popup.with-sync { min-width: 248px; }
+  /* max-height propio, más alto que el default de .tf-fav-popup (340px):
+     con la sección "Sync across panels" + "Panel border color" el
+     contenido real mide ~400px, así que con el máximo genérico quedaba SIEMPRE
+     recortado (no solo en ventanas chicas) y la sección de color terminaba
+     invisible sin que se notara que había que scrollear para verla. */
+  .layout-picker-popup.with-sync { min-width: 248px; max-height: min(460px, calc(100vh - 80px)); }
 
   /* ─── Go to date/time (popup tipo TV, junto a Undo/Redo) ─────── */
   .goto-date-wrap { position: relative; flex-shrink: 0; }
@@ -1175,16 +1180,21 @@
   .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
 
   /* ─── Divisores arrastrables entre paneles (modo 2×/4⊞) ──── */
+  /* Mismo color que el anillo del panel activo (var(--pane-active), ver
+     applyGridAccentColor en renderLayoutGrid) — un solo toggle de color
+     para las dos cosas, como pidió el usuario. En reposo queda atenuado
+     (opacity .35) para no competir visualmente con el chart; al pasar el
+     mouse o arrastrar sube a opacidad completa, mismo color siempre. */
   .grid-divider { background: var(--bg-primary); position: relative; }
   .grid-divider::after {
-    content: ''; position: absolute; background: var(--border);
-    transition: background .1s;
+    content: ''; position: absolute; background: var(--pane-active); opacity: .35;
+    transition: opacity .1s, background .1s;
   }
   .grid-divider-col::after { top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); }
   .grid-divider-row::after { left: 0; right: 0; top: 50%; height: 1px; transform: translateY(-50%); }
   .grid-divider-col { cursor: col-resize; }
   .grid-divider-row { cursor: row-resize; }
-  .grid-divider:hover::after, .grid-divider.dragging::after { background: var(--gold); }
+  .grid-divider:hover::after, .grid-divider.dragging::after { opacity: 1; }
 </style>
 </head>
 <body>
@@ -1669,6 +1679,14 @@
 
     <div class="cs-section">
       <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="1"/></svg>
+        Axis lines
+      </div>
+      <div class="cs-field"><input type="color" id="cs-axis-color" class="cs-swatch"><span class="cs-field-label">Price/time axis border</span></div>
+    </div>
+
+    <div class="cs-section">
+      <div class="cs-section-title">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8.5l3.5 3.5L14 3"/></svg>
         Trade Markers
       </div>
@@ -1926,13 +1944,47 @@ function renderLayoutGrid(n){
   document.body.innerHTML = '';
   document.body.style.cssText = 'margin:0;height:100vh;display:flex;flex-direction:column;background:var(--bg-primary);';
 
-  // Panel "activo": el que tiene el borde dorado. Como cada panel es un
-  // iframe aparte, un click adentro no genera un evento que el padre pueda
-  // escuchar directamente — el truco estándar es mirar document.activeElement
-  // en el 'blur' de la ventana principal (se dispara cuando el foco pasa a
-  // un iframe hijo) y fijarse cuál de los iframes lo tiene.
+  // Panel "activo": el que tiene el anillo de color (ver applyGridAccentColor
+  // más abajo). Como cada panel es un iframe aparte, un click adentro no
+  // genera un evento que el padre pueda escuchar directamente — el truco
+  // estándar es mirar document.activeElement en el 'blur' de la ventana
+  // principal (se dispara cuando el foco pasa a un iframe hijo) y fijarse
+  // cuál de los iframes lo tiene. Declarado ANTES del bloque de color de
+  // abajo porque applyGridAccentColor necesita iterarlo (aunque esté vacío
+  // en su primera llamada, antes de crear los iframes).
   const iframeEls = [];
   let activePane = 1;
+
+  // Color del anillo del panel activo, de los divisores entre paneles, Y del
+  // crosshair (las líneas que "encuadran" el precio/horario bajo el cursor)
+  // de cada panel — un solo toggle para las tres cosas (ver input
+  // #gc-accent-color más abajo, en el popup del layout-picker). Las dos
+  // primeras viven en este documento (CSS vars); el crosshair vive adentro
+  // de cada panel (su propio STATE.chartSettings.crosshairColor), así que
+  // hay que empujarlo con paneEval — no hay forma de pisarlo desde afuera
+  // con CSS. Se guarda sin sufijo de panel: una sola preferencia para toda
+  // la grilla, no por panel.
+  function gridAccentRgba(hex, alpha){
+    const h = hex.replace('#','');
+    const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  const DEFAULT_GRID_ACCENT = '#5b9cf6';
+  let gridAccentColor = lsGet('td_grid_accent_color') || DEFAULT_GRID_ACCENT;
+  function applyGridAccentColor(color){
+    gridAccentColor = color;
+    document.documentElement.style.setProperty('--pane-active', color);
+    document.documentElement.style.setProperty('--pane-active-glow', gridAccentRgba(color, 0.3));
+    lsSet('td_grid_accent_color', color);
+    iframeEls.forEach(el => pushAccentToPane(el));
+  }
+  // Separado de applyGridAccentColor para poder llamarlo también desde el
+  // 'load' de cada iframe (recién creado, todavía no estaba en iframeEls
+  // cuando se llamó applyGridAccentColor la primera vez).
+  function pushAccentToPane(el){
+    paneEval(el, `STATE.chartSettings.crosshairColor=${JSON.stringify(gridAccentColor)}; STATE.chartSettings.axisColor=${JSON.stringify(gridAccentColor)}; saveChartSettingsState(); applyChartSettings();`);
+  }
+  applyGridAccentColor(gridAccentColor);
   let scope = 'active'; // 'active' | 'all' — a quién les llegan los controles globales
   // ─── Sync entre paneles (Símbolo/TF/Indicadores/Dibujos/Crosshair) ──
   // Distinto de `scope` de arriba: scope decide a quién le llegan las
@@ -2213,6 +2265,13 @@ function renderLayoutGrid(n){
           <span class="sync-row-label">${r.label}</span>
           <span class="sync-switch"><input type="checkbox" ${syncConfig[r.key]?'checked':''}><span class="track"><span class="thumb"></span></span></span>
         </label>`).join('')}
+    </div>
+    <div class="sync-section">
+      <div class="sync-section-label">Panel border color</div>
+      <label class="sync-row" style="cursor:default;">
+        <span class="sync-row-label">Border, dividers &amp; crosshair</span>
+        <input type="color" id="gc-accent-color" value="${gridAccentColor}" style="width:26px;height:20px;border:none;border-radius:4px;cursor:pointer;background:none;padding:0;">
+      </label>
     </div>`;
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2235,6 +2294,9 @@ function renderLayoutGrid(n){
       syncConfig[key] = e.target.checked;
       saveSyncConfig();
       if (key === 'crosshair') pushCrosshairSyncToAllPanes();
+    });
+    popup.addEventListener('input', (e) => {
+      if (e.target.id === 'gc-accent-color') applyGridAccentColor(e.target.value);
     });
     document.addEventListener('click', (e) => {
       if (!gbar.querySelector('#layout-picker-wrap').contains(e.target)) {
@@ -2818,6 +2880,7 @@ function renderLayoutGrid(n){
         // puede no coincidir con el toggle central de Sync — alinearlo apenas
         // termina de cargar, no recién cuando alguien toque el toggle.
         paneEval(iframe, `STATE.chartSettings.syncCrosshair=${!!syncConfig.crosshair}; saveChartSettingsState();`);
+        pushAccentToPane(iframe); // mismo color de crosshair que el resto de la grilla desde el arranque
       });
       grid.appendChild(iframe);
       iframeEls.push(iframe);
@@ -3061,6 +3124,7 @@ const CHART_SETTINGS_DEFAULTS = {
   wickUpColor:'#8a8a8a', wickDownColor:'#8a8a8a',
   priceLineVisible:true, priceLineColor:'', priceLineStyle:2,
   crosshairColor:'#c9a84c', crosshairStyle:2, syncCrosshair:true,
+  axisColor:'#222230', // borde del eje de precio (derecha) y de tiempo (abajo) — las líneas que "encuadran" esos niveles
   showOhlcv:true,
   tradeMarkersMode:'full', // 'full' (flechas + precio/P-L en texto) | 'arrows' (solo flechas, sin texto)
 };
@@ -4430,8 +4494,8 @@ function initChart() {
       vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
       horzLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
     },
-    rightPriceScale: { borderColor:'#222230', scaleMargins:{top:0.08,bottom:0.18} },
-    timeScale: { borderColor:'#222230', timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
+    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, scaleMargins:{top:0.08,bottom:0.18} },
+    timeScale: { borderColor:STATE.chartSettings.axisColor, timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
     localization: { timeFormatter: fmtCrosshairTime },
     watermark: { visible:false },
   });
@@ -7909,6 +7973,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-crosshair-color').value=cs.crosshairColor;
   document.getElementById('cs-crosshair-style').value=String(cs.crosshairStyle);
   document.getElementById('cs-crosshair-sync-on').checked=cs.syncCrosshair;
+  document.getElementById('cs-axis-color').value=cs.axisColor||CHART_SETTINGS_DEFAULTS.axisColor;
   document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
 }
 function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); openModal('modal-chart-settings'); }
@@ -7932,6 +7997,7 @@ function commitChartSettingsForm(){
     crosshairColor: document.getElementById('cs-crosshair-color').value,
     crosshairStyle: Number(document.getElementById('cs-crosshair-style').value),
     syncCrosshair: document.getElementById('cs-crosshair-sync-on').checked,
+    axisColor: document.getElementById('cs-axis-color').value,
     tradeMarkersMode: document.getElementById('cs-trade-markers-mode').value,
   };
   saveChartSettingsState();
@@ -7988,6 +8054,11 @@ function applyChartSettings(){
       vertLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
       horzLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
     },
+    // Las líneas que "encuadran" los niveles de precio (borde derecho) y de
+    // tiempo (borde inferior) — antes venían fijas en '#222230' (ver la
+    // creación del chart más abajo), sin ningún toggle para cambiarlas.
+    rightPriceScale: { borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor },
+    timeScale: { borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor },
   });
   candleSeries.applyOptions({
     upColor: cs.upColor, downColor: cs.downColor,
