@@ -20,6 +20,15 @@
     --gold-bright:  #f0c060;
     --gold-dim:     #7a6030;
     --gold-glow:    rgba(201,168,76,0.15);
+    /* Fijo a propósito (NO se redefine en html[data-theme="light"], a
+       diferencia de --gold): el anillo del panel activo en la grilla
+       necesita el MISMO color sin importar el tema — si sigue a --gold,
+       en claro se vuelve un dorado oscuro apagado que se confunde con
+       --border y el anillo deja de notarse (ver borderColor en
+       renderLayoutGrid). Elegido para contrastar bien tanto sobre
+       --bg-primary oscuro como sobre el claro. */
+    --pane-active:      #5b9cf6;
+    --pane-active-glow: rgba(91,156,246,0.3);
     --text-primary: #e8e8f0;
     --text-secondary:#8888a8;
     --text-dim:     #55556a;
@@ -430,6 +439,12 @@
      de cada panel gana esa altura. */
   html.embed-mode #tf-bar,
   html.embed-mode #header-row { display: none !important; }
+  /* Mismo criterio para la barra de abajo (reloj/status/replay): en grilla
+     hay una sola, unificada, arriba de todos los paneles (ver #shell-statusbar
+     en renderLayoutGrid) — la de cada panel individual se oculta entera y el
+     chart de ESE panel gana esa altura, llegando hasta su propio eje de
+     tiempo en vez de dejar una franja repetida debajo de cada uno. */
+  html.embed-mode #statusbar { display: none !important; }
   #tf-bar-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
   #api-badge {
@@ -1937,8 +1952,18 @@ function renderLayoutGrid(n){
   function saveSyncConfig(){ lsSet('td_grid_sync', JSON.stringify(syncConfig)); }
   function setActivePane(idx){
     activePane = idx;
-    iframeEls.forEach((el,i) => { el.style.borderColor = (i+1===idx) ? 'var(--gold)' : 'transparent'; });
+    // var(--pane-active), NO var(--gold): --gold cambia de tono con el tema
+    // (en claro queda un dorado oscuro apagado que se pierde contra
+    // --border) — --pane-active es fijo a propósito para que el anillo se
+    // note igual en los dos temas. El glow de afuera (box-shadow) suma
+    // contraste extra sobre cualquier fondo, no solo el color del borde.
+    iframeEls.forEach((el,i) => {
+      const active = (i+1===idx);
+      el.style.borderColor = active ? 'var(--pane-active)' : 'transparent';
+      el.style.boxShadow = active ? '0 0 0 1px var(--pane-active), 0 0 10px var(--pane-active-glow)' : 'none';
+    });
     syncShellControls();
+    renderShellStatus();
   }
   // Aviso explícito de cada panel al clickearlo — más confiable que el
   // 'blur' de abajo, que solo agarra bien el primer salto de foco.
@@ -1964,8 +1989,26 @@ function renderLayoutGrid(n){
     } else if (msg.type === 'zentinel:paneIndicators' && syncConfig.indicators) {
       const others = iframeEls.filter((el, i) => String(i+1) !== String(msg.pane));
       others.forEach(el => el.contentWindow.postMessage({ type:'zentinel:setIndicators', indicators: msg.indicators }, '*'));
+    } else if (msg.type === 'zentinel:paneStatus') {
+      // Cada panel avisa SU estado de conexión (ver setStatus en el script
+      // de cada panel) — la barra de abajo unificada (shellStatusbar, más
+      // abajo) solo muestra el del panel ACTIVO, igual que ya hace con la
+      // herramienta de dibujo o el magnet.
+      paneStatuses[String(msg.pane)] = { cls: msg.cls, txt: msg.txt };
+      if (String(msg.pane) === String(activePane)) renderShellStatus();
     }
   });
+  const paneStatuses = {};
+  function renderShellStatus(){
+    // Mismo id que usa cada panel individual (#status-conn) — acá no hay
+    // colisión porque la grilla es un documento aparte del de cada iframe;
+    // reusar el id trae gratis el CSS .ok/.err/.loading ya definido para él.
+    const el = document.getElementById('status-conn');
+    if (!el) return;
+    const st = paneStatuses[String(activePane)];
+    el.className = st ? st.cls : 'loading';
+    el.textContent = st ? st.txt : '● connecting…';
+  }
   // Fallback por si el panel todavía no cargó el script que manda el aviso
   // de arriba (primer instante tras crear los iframes).
   window.addEventListener('blur', () => {
@@ -2903,6 +2946,28 @@ function renderLayoutGrid(n){
 
   setActivePane(1);
   row.appendChild(grid);
+
+  // ─── Barra de abajo UNIFICADA (reloj + status del panel activo) ──
+  // Antes cada panel (iframe) mostraba su propia #statusbar — en grilla
+  // quedaban N franjas idénticas repetidas, una por panel, y el chart de
+  // cada uno no llegaba hasta el borde inferior real. Ahora hay una sola,
+  // a nivel de la grilla, y cada panel individual oculta la suya (ver
+  // html.embed-mode #statusbar en el CSS) así su chart gana esa altura y
+  // llega hasta su propio eje de tiempo.
+  const shellStatusbar = document.createElement('div');
+  shellStatusbar.id = 'statusbar';
+  shellStatusbar.innerHTML = `
+    <div id="sb-tz-wrap">
+      <button id="sb-tz-trigger" title="Click to change timezone">
+        <span id="sb-clock">--:--:--</span><span id="sb-tz-label">—</span>
+      </button>
+      <div id="sb-tz-popup" class="tf-fav-popup sb-tz-popup"></div>
+    </div>
+    <span id="status-conn" class="loading">● connecting…</span>
+  `;
+  document.body.appendChild(shellStatusbar);
+  initStatusbarClock();
+  renderShellStatus();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -8101,7 +8166,12 @@ function sbTzOffsetLabel(tz){
     return tzPart ? tzPart.value.replace('GMT','UTC') : tz;
   } catch(e) { return tz; }
 }
-(function initStatusbarClock(){
+// Función con nombre (no IIFE) — en modo grilla, renderLayoutGrid la llama
+// de nuevo para enganchar el reloj de la barra unificada de afuera (ver
+// shellStatusbar), que tiene sus propios #sb-tz-trigger/#sb-clock/etc en
+// ese documento (la grilla es un documento aparte de cada panel/iframe, así
+// que reusar los mismos ids no choca con nada).
+function initStatusbarClock(){
   const trigger = document.getElementById('sb-tz-trigger');
   const popup = document.getElementById('sb-tz-popup');
   const clockEl = document.getElementById('sb-clock');
@@ -8153,7 +8223,8 @@ function sbTzOffsetLabel(tz){
       trigger.classList.remove('active');
     }
   });
-})();
+}
+initStatusbarClock();
 
 // ══════════════════════════════════════════════════════════
 //  DTB TEMPLATE POPUP — templates nombrados por tipo de dibujo (ver
@@ -8266,7 +8337,14 @@ function saveDtbTemplateAs(type){
   });
 })();
 
-function setStatus(cls,txt){const el=document.getElementById('status-conn');el.className=cls;el.textContent=txt;}
+// En grilla (EMBED_MODE) el status de ESTE panel se avisa afuera — la
+// barra de abajo unificada (ver renderLayoutGrid) muestra el del panel
+// activo, igual que ya hace con la herramienta de dibujo activa o el
+// estado del magnet.
+function setStatus(cls,txt){
+  const el=document.getElementById('status-conn');el.className=cls;el.textContent=txt;
+  if (EMBED_MODE && PANE_ID) window.parent.postMessage({ type:'zentinel:paneStatus', pane:PANE_ID, cls, txt }, '*');
+}
 function showOverlay(show){document.getElementById('loading-overlay').classList.toggle('hidden',!show);}
 function setLoaderMsg(msg){document.getElementById('loader-msg').textContent=msg;}
 function showLoader(msg){setLoaderMsg(msg);showOverlay(true);}
