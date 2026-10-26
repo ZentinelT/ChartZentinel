@@ -9655,12 +9655,19 @@ function renderTradeMarkers(){
     if (inRange(t.open_time)) markers.push(entryMarker(t));
     if (inRange(t.close_time)) {
       const label = t.close_reason === 'tp' ? 'TP' : t.close_reason === 'sl' ? 'SL' : 'Close';
+      // Flecha OPUESTA a la de entrada (entrada arrowUp -> cierre arrowDown
+      // y viceversa, "entra/sale"), más chica para no confundirla con una
+      // entrada nueva, y con "×" adelante del texto aunque esté en modo
+      // 'arrows' (que normalmente no muestra texto) — así incluso sin el
+      // label completo queda claro que esa marca puntual es un CIERRE, no
+      // otra entrada. Antes era un círculo suelto sin esa distinción.
       markers.push({
         time: snapToBar(t.close_time),
         position: t.side === 'long' ? 'aboveBar' : 'belowBar',
         color: t.profit >= 0 ? '#26a69a' : '#ef5350',
-        shape: 'circle',
-        text: arrowsOnly ? '' : `${label} ${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}`,
+        shape: t.side === 'long' ? 'arrowDown' : 'arrowUp',
+        size: 0.7,
+        text: arrowsOnly ? '×' : `× ${label} ${t.profit >= 0 ? '+' : ''}${t.profit.toFixed(2)}`,
       });
     }
   });
