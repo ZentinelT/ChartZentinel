@@ -149,7 +149,14 @@
 
   #price-display { display: flex; align-items: baseline; gap: 8px; }
   #price-last { font-family: var(--font-mono); font-size: 18px; font-weight: 500; color: var(--text-primary); }
-  #price-change { font-family: var(--font-mono); font-size: 12px; }
+  /* min-width + align left: fijar los decimales en updateTopbarPrice ya
+     evitaba el salto de "2 ó 4 decimales", pero la CANTIDAD de dígitos
+     enteros (ej. "+5.00" vs "+150.00") sigue variando con cada tick — sin
+     reservar un ancho fijo acá, todo lo que viene DESPUÉS en la misma fila
+     (Indicators, Replay, Undo/Redo...) se corría para un lado y para el
+     otro igual que antes. ch = ancho de un carácter en esta fuente
+     monoespaciada, así que el cálculo es exacto, no un número inventado. */
+  #price-change { font-family: var(--font-mono); font-size: 12px; display: inline-block; min-width: 19ch; text-align: left; }
   #price-change.up { color: var(--green); }
   #price-change.dn { color: var(--red); }
 
@@ -3095,7 +3102,12 @@ function tfToSeconds(tf){
 // del gráfico (ORG, ejes, killzones).
 function fmtReplayTime(epochSeconds){
   const d = new Date(epochSeconds * 1000);
-  const date = d.toLocaleDateString('en-US', { timeZone:'UTC' });
+  // D/M/A a mano (no toLocaleDateString('en-US',...), que da M/D/A) — mismo
+  // orden día-mes-año que el resto del gráfico (ver dateStr en renderWtBias
+  // y fmtCrosshairTime, ambos ya día primero).
+  const day = String(d.getUTCDate()).padStart(2,'0');
+  const mon = String(d.getUTCMonth()+1).padStart(2,'0');
+  const date = `${day}/${mon}/${d.getUTCFullYear()}`;
   const time = d.toLocaleTimeString('en-US', { timeZone:'UTC', hour:'2-digit', minute:'2-digit' });
   return `${date} ${time}`;
 }
@@ -8195,7 +8207,12 @@ function updateTopbarPrice(last,prev){
   const chg=last.close-(prev?.close??last.close);
   const pct=prev?.close?(chg/prev.close*100):0;
   const el=document.getElementById('price-change');
-  el.textContent=`${chg>=0?'+':''}${fmt(chg)}  (${pct.toFixed(2)}%)`;
+  // Cantidad fija de decimales (no fmt(chg), que decide 2 o 4 según la
+  // MAGNITUD del cambio) — con precio en vivo el cambio cruza ese umbral
+  // todo el tiempo, y el ancho del texto saltaba de 2 a 4 decimales y de
+  // vuelta en cada tick, corriendo el símbolo/precio de al lado.
+  const chgDecimals = last.close>=1000 ? 2 : 4;
+  el.textContent=`${chg>=0?'+':''}${chg.toFixed(chgDecimals)}  (${pct.toFixed(2)}%)`;
   el.className=chg>=0?'up':'dn';
 }
 
