@@ -8920,10 +8920,19 @@ async function appendNewBar(symbol, timeframe){
   }
 }
 
+// "Refresh" ya NO vuelve a pedir las velas al bridge (eso es lo que hacía
+// loadChart) — el usuario lo pidió así: es un reset de POSICIÓN nada más,
+// deja el chart acomodado como recién abierto (zoom/scroll por defecto,
+// autoScale de precio prendido) sin tocar los datos ya cargados. Mismas 3
+// líneas que loadChart usa para dejar la vista "de apertura" la primera vez.
 function refreshChart(){
   const btn = document.getElementById('btn-refresh');
+  if (!chart || !candleSeries) return;
   btn.classList.add('spinning');
-  loadChart(STATE.symbol, STATE.timeframe).finally(()=>btn.classList.remove('spinning'));
+  chart.priceScale('right').applyOptions({ autoScale: true });
+  chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
+  scrollToRealTimeReliably();
+  setTimeout(() => btn.classList.remove('spinning'), 400); // ya no hay fetch que esperar — spin breve, solo de feedback
 }
 
 // Ver uso en loadChart: reaplica el tamaño real del contenedor (y re-scrollea
