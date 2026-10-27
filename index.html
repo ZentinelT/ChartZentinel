@@ -1604,6 +1604,16 @@
     </svg>
     <span class="dtb-btn-text">Right</span>
   </button>
+  <!-- Solo para hline/trendline/fib: las únicas herramientas cuyas líneas
+       muestran su precio como etiqueta en el eje (lastValueVisible) — antes
+       siempre prendido, sin forma de apagarlo. -->
+  <button class="dtb-btn active" id="dtb-price-label" title="Show/hide price on the right axis" onclick="onDtbTogglePriceLabel()" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="1.5" y1="8" x2="10" y2="8"/>
+      <path d="M10 4.5h3.2c.4 0 .6.2.8.5l1 2c.2.3.2.7 0 1l-1 2c-.2.3-.4.5-.8.5H10z"/>
+    </svg>
+    <span class="dtb-btn-text">Price</span>
+  </button>
   <!-- Solo para 'rect': hoy borde y relleno comparten color y siempre están
        los dos prendidos — esto permite apagar uno sin el otro. -->
   <button class="dtb-btn active" id="dtb-rect-border" title="Show/hide border" onclick="onDtbToggleRectPart('showBorder')" style="display:none">
@@ -3407,14 +3417,24 @@ function captureDrawingStyle(d){
     // El on/off y color de cada nivel (lo que de verdad se personaliza en
     // un Fibonacci) vivía SOLO en d.levels — nunca entraba acá, así que
     // guardar/cargar un template de Fib no tocaba nada de eso (el bug
-    // reportado: "no carga los presets guardados").
-    return Object.assign(base, { levels: JSON.parse(JSON.stringify(d.levels || cloneFibLevels())) });
+    // reportado: "no carga los presets guardados"). showPriceLabel: ver
+    // comentario en 'hline'/'trendline' más abajo.
+    return Object.assign(base, {
+      levels: JSON.parse(JSON.stringify(d.levels || cloneFibLevels())),
+      showPriceLabel: d.showPriceLabel !== false,
+    });
   }
   if (d.type === 'rect') {
     // Mismo caso que showLabels arriba: mostrar/ocultar borde y relleno por
     // separado son toggles reales (ver onDtbToggleRectPart) que tampoco
     // entraban en el template.
     return Object.assign(base, { color: d.color, showBorder: d.showBorder !== false, showFill: d.showFill !== false });
+  }
+  if (d.type === 'hline' || d.type === 'trendline') {
+    // showPriceLabel: si la línea muestra su precio como etiqueta en el eje
+    // derecho (lastValueVisible) — antes no existía como campo, siempre
+    // quedaba prendido sin forma de apagarlo ni de guardarlo en un template.
+    return Object.assign(base, { color: d.color, showPriceLabel: d.showPriceLabel !== false });
   }
   return Object.assign(base, { color: d.color });
 }
@@ -3436,10 +3456,11 @@ function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringi
 // ya existente Y lo deja como el "último usado" de su tipo.
 // Tipos cuyo template puede traer un campo "estructural" (no solo color) —
 // niveles de Fib, borde/relleno de un rect, labels de la herramienta de
-// posición — que restyleDrawingAppearance() no sabe aplicar porque no
-// cambia CUÁNTAS series/qué visibilidad tiene el dibujo, solo les pisa el
-// color a las que YA existen. Para estos hace falta reconstruir entero.
-const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'rect', 'long', 'short']);
+// posición, la etiqueta de precio en el eje de hline/trendline/fib — que
+// restyleDrawingAppearance() no sabe aplicar porque no toca visibilidad/
+// opciones por fuera de color-ancho-estilo, solo repinta las series que YA
+// existen. Para estos hace falta reconstruir entero.
+const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'rect', 'long', 'short', 'hline', 'trendline']);
 function applyStyleObjectToDrawing(d, style){
   captureUndoSnapshot();
   Object.assign(d, style);
@@ -3637,6 +3658,9 @@ function selectDrawing(id) {
   document.getElementById('dtb-width').value = d.width;
   document.getElementById('dtb-style').value = d.style;
   document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
+  const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'fib');
+  document.getElementById('dtb-price-label').style.display = hasPriceLabel ? '' : 'none';
+  document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
   const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect');
   document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect') ? '' : 'none';
   document.getElementById('dtb-ext-right').style.display = extendApplies ? '' : 'none';
@@ -3781,6 +3805,21 @@ function onDtbPosColorChange(field, val, inputEl) {
   // "saltara" cada vez que se tocaba un color (mismo motivo documentado
   // arriba de updateDrawingGeometry para el arrastre).
   restylePositionToolColors(d);
+}
+// Para hline/trendline/fib: apaga/prende la etiqueta de precio que la línea
+// deja en el eje derecho (lastValueVisible de la librería) — antes siempre
+// estaba prendida, sin forma de sacarla. No hace falta reconstruir el
+// dibujo (no cambia cuántas series tiene), alcanza con pisarle la opción a
+// cada serie ya existente.
+function onDtbTogglePriceLabel() {
+  const d = getSelected();
+  if (!d || (d.type !== 'hline' && d.type !== 'trendline' && d.type !== 'fib')) return;
+  captureUndoSnapshot();
+  d.showPriceLabel = (d.showPriceLabel === false) ? true : false;
+  document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
+  d.series.forEach(s => { try { s.applyOptions({ lastValueVisible: d.showPriceLabel !== false }); } catch(e){} });
+  markDrawingsDirty();
+  rememberToolStyle(d);
 }
 // Solo para 'rect': apaga/prende el borde o el relleno sin tocar el otro.
 function onDtbToggleRectPart(field) {
@@ -4146,7 +4185,7 @@ function buildDrawingOnChart(d) {
     // TODO el gráfico un lugar — cada vez que esta serie se recreaba (p.ej.
     // al cambiar el color) se insertaba de nuevo, así que se notaba como un
     // corrimiento acumulativo en cada cambio.
-    mkLine([{time:safeLineTime(d.p1.time), value:d.p1.price},{time:tFuture, value:d.p1.price}]);
+    mkLine([{time:safeLineTime(d.p1.time), value:d.p1.price},{time:tFuture, value:d.p1.price}], { lastValue: d.showPriceLabel !== false });
 
   } else if (d.type === 'trendline') {
     const rawT1  = d.p1.time;
@@ -4164,7 +4203,7 @@ function buildDrawingOnChart(d) {
     if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1);   }
     if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
 
-    mkLine([{time:t1,value:p1},{time:t2,value:p2}]);
+    mkLine([{time:t1,value:p1},{time:t2,value:p2}], { lastValue: d.showPriceLabel !== false });
 
   } else if (d.type === 'rect') {
     const hi = Math.max(d.p1.price, d.p2.price);
@@ -4211,7 +4250,7 @@ function buildDrawingOnChart(d) {
     const t2 = d.extRight ? tFuture : rawT2;
     d.levels.filter(lv => lv.on).forEach(lv => {
       const val = hi - (hi - lo) * lv.value;
-      const s = mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: true });
+      const s = mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: d.showPriceLabel !== false });
       s.applyOptions({ title: `${(lv.value*100).toFixed(1)}%` });
     });
 
