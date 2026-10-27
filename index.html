@@ -9979,17 +9979,25 @@ function checkOpenTradesAgainstBar(bar, formingLive){
     let hitPrice = null, reason = null;
     // La vela EN FORMACIÓN en vivo (refreshFormingCandle) trae su high/low
     // de TODO lo que lleva formada esa vela hasta ahora — si el usuario
-    // confirma una operación a mitad de esa vela con un SL/TP cerca, el
-    // rango que la vela YA tenía antes de confirmar (antes de que la
+    // confirma una operación a mitad de ESA MISMA vela con un SL/TP cerca,
+    // el rango que la vela YA tenía antes de confirmar (antes de que la
     // operación existiera) podía "tocar" el nivel y cerrarla al toque, sin
     // que el precio se hubiera movido un solo tick desde que se confirmó.
-    // Para ese caso puntual (bar recién llegado, sigue en formación) se
-    // compara solo contra el último precio (bar.close) — lo único que
-    // representa de verdad "ahora". Velas ya cerradas (nueva vela real,
-    // replay) sí llevan high/low completo: ahí el rango entero es
-    // posterior a la confirmación, no hay nada que contaminar.
-    const hi = formingLive ? bar.close : bar.high;
-    const lo = formingLive ? bar.close : bar.low;
+    // Ese riesgo de "mecha vieja contaminando" solo existe cuando la
+    // operación se abrió DENTRO del mismo bucket que esta vela en formación
+    // (open_time cae en el bucket actual, bar.time): ahí sí hay que
+    // comparar solo contra bar.close (lo único que representa "ahora").
+    // Si la operación ya venía de ANTES (se abrió en una vela previa, ya
+    // cerrada), todo el rango de la vela en formación es posterior a que
+    // la operación existiera — no hay nada que contaminar, y usar solo
+    // bar.close ahí era el bug real: una mecha que tocaba el SL/TP y volvía
+    // sin estar justo en el segundo del poll (1 vez por segundo) quedaba
+    // sin detectar hasta que la vela cerraba de verdad y recién entonces
+    // se usaba su high/low completo — "cierra cuando cierra la vela, no
+    // cuando toca el nivel", reportado por el usuario.
+    const sameBucketAsOpen = formingLive && bar.time != null && t.open_time != null && t.open_time >= bar.time;
+    const hi = sameBucketAsOpen ? bar.close : bar.high;
+    const lo = sameBucketAsOpen ? bar.close : bar.low;
     if (t.side === 'long') {
       if (t.stop_loss != null && lo <= t.stop_loss) { hitPrice = t.stop_loss; reason = 'sl'; }
       else if (t.take_profit != null && hi >= t.take_profit) { hitPrice = t.take_profit; reason = 'tp'; }
