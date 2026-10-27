@@ -2976,11 +2976,11 @@ function renderLayoutGrid(n){
   // (level snap a la vela más cercana) mientras el mouse real lo sigue
   // moviendo a upa, y el resultado visual es el precio saltando entre dos
   // valores todo el tiempo. Comparar por ID es inequívoco.
-  window.zentinelCrosshairBroadcast = function(time, sourcePaneId){
+  window.zentinelCrosshairBroadcast = function(time, sourcePaneId, price){
     if (!syncConfig.crosshair) return; // apagado desde Sync (popup de layout)
     iframeEls.forEach((el, i) => {
       if (String(i+1) === String(sourcePaneId)) return;
-      try { el.contentWindow.setExternalCrosshair(time); } catch(e){}
+      try { el.contentWindow.setExternalCrosshair(time, price); } catch(e){}
     });
   };
   // El toggle de Sync es la autoridad; cada panel además tiene su propio
@@ -4745,7 +4745,8 @@ function initChart() {
 
   let _suppressCrosshairBroadcast = false;
   let _lastExternalCandleTime = undefined;
-  window.setExternalCrosshair = function(time){
+  let _lastExternalPrice = undefined;
+  window.setExternalCrosshair = function(time, price){
     if (!STATE.chartSettings.syncCrosshair) return;
     try {
       if (time == null) {
@@ -4753,6 +4754,7 @@ function initChart() {
         // de más abajo sobre por qué una llamada redundante es un problema.
         if (_lastExternalCandleTime === null) return;
         _lastExternalCandleTime = null;
+        _lastExternalPrice = null;
         _suppressCrosshairBroadcast = true;
         chart.clearCrosshairPosition();
         // clearCrosshairPosition() no dispara subscribeCrosshairMove (solo
@@ -4799,10 +4801,15 @@ function initChart() {
       // panel, que viaja de vuelta al de origen si el timing no da justo
       // con la bandera de supresión — eso es lo que se veía como el precio
       // prendiéndose y apagándose entre dos valores sin tocar el mouse.
-      if (resolvedTime === _lastExternalCandleTime) return;
+      if (resolvedTime === _lastExternalCandleTime && price === _lastExternalPrice) return;
       _lastExternalCandleTime = resolvedTime;
+      _lastExternalPrice = price;
       _suppressCrosshairBroadcast = true;
-      if (candle) chart.setCrosshairPosition(candle.close, candle.time, candleSeries);
+      // Precio real recibido del panel de origen (mismo nivel en los dos,
+      // en vez del close de la vela de ESTE panel — ver el comentario en
+      // subscribeCrosshairMove, lado emisor). Si por lo que sea no vino
+      // (versión vieja de otro pane, o null), cae en el close como antes.
+      if (candle) chart.setCrosshairPosition(price != null ? price : candle.close, candle.time, candleSeries);
       else chart.clearCrosshairPosition();
     } finally {
       requestAnimationFrame(() => { _suppressCrosshairBroadcast = false; });
@@ -4830,7 +4837,7 @@ function initChart() {
   let _realMouseOverChart = false;
   container.addEventListener('mousemove', () => { _realMouseOverChart = true; }, { passive:true, capture:true });
   container.addEventListener('mouseleave', () => { _realMouseOverChart = false; }, { passive:true, capture:true });
-  let _chmPending = null, _chmRaf = null, _lastBroadcastTime = undefined;
+  let _chmPending = null, _chmRaf = null, _lastBroadcastTime = undefined, _lastBroadcastPrice = undefined;
   function _applyChmLocal(){
     _chmRaf = null;
     const param = _chmPending; _chmPending = null;
@@ -4861,6 +4868,14 @@ function initChart() {
     // de precio al pasar por una vela con el sync prendido.
     if (_suppressCrosshairBroadcast || !EMBED_MODE || !STATE.chartSettings.syncCrosshair || !window.top.zentinelCrosshairBroadcast) return;
     const nextTime = param.point ? param.time : null;
+    // Precio REAL bajo el cursor (coordenada Y → precio de ESTE panel), no
+    // el close de la vela resueltas — antes cada panel sincronizado dibujaba
+    // su línea de precio en el close de SU PROPIA vela (casi nunca el mismo
+    // número que lo que el mouse está señalando en el panel de origen), así
+    // que la línea horizontal no quedaba alineada entre paneles aunque la
+    // vertical (tiempo) sí. Con el precio real, cada panel sincronizado
+    // apunta al MISMO nivel de precio, no a uno arbitrario de su propia vela.
+    const nextPrice = param.point ? candleSeries.coordinateToPrice(param.point.y) : null;
     // El "se fue" (null) siempre se deja pasar — recién al dejar el chart
     // es cuando más importa que el eco llegue y limpie el synced de los
     // demás paneles. El bloqueo de abajo es solo para un nivel CONCRETO
@@ -4874,10 +4889,14 @@ function initChart() {
     // panel estaba en un TF distinto y el "más cercano" le resolvía a una
     // vela vecina distinta a la que tenía antes por un pelo, el precio de
     // ESE panel terminaba prendiéndose/apagándose entre dos velas al
-    // compás del refresco de 1s, sin que nadie tocara el mouse.
-    if (nextTime === _lastBroadcastTime) return;
+    // compás del refresco de 1s, sin que nadie tocara el mouse. Ahora
+    // también se compara el precio: moverse VERTICALMENTE sin cambiar de
+    // vela (tiempo igual) sí tiene que reenviar, para que la línea de
+    // precio siga al mouse dentro de la misma vela.
+    if (nextTime === _lastBroadcastTime && nextPrice === _lastBroadcastPrice) return;
     _lastBroadcastTime = nextTime;
-    window.top.zentinelCrosshairBroadcast(nextTime, PANE_ID);
+    _lastBroadcastPrice = nextPrice;
+    window.top.zentinelCrosshairBroadcast(nextTime, PANE_ID, nextPrice);
   });
 
   new ResizeObserver(() => {
