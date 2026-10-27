@@ -10074,7 +10074,11 @@ async function confirmLiveTrade(d){
   const tp = (d.targetPrice || d.targetPrice === 0) ? d.targetPrice : null;
   let result;
   try {
-    result = await sendOrder({ action:'open', symbol: normalizeSymbolForJournal(STATE.symbol), side: d.type==='long'?'buy':'sell', sl, tp });
+    // STATE.symbol tal cual (NO normalizeSymbolForJournal, que le saca el
+    // sufijo de broker, ej. ".fs" — eso es solo para agrupar en el diario
+    // de trades; MT5 necesita el nombre EXACTO del símbolo para encontrarlo
+    // con SymbolSelect, sufijo incluido).
+    result = await sendOrder({ action:'open', symbol: STATE.symbol, side: d.type==='long'?'buy':'sell', sl, tp });
   } catch(e) {
     alert('No se pudo abrir la operación real: ' + e.message);
     return;
