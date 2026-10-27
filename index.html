@@ -773,7 +773,16 @@
 
   /* ─── CHART AREA ──────────────────────────────────────── */
   #chart-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-  #chart-container { flex: 1; position: relative; }
+  /* transform:translateZ(0) fuerza su propia capa de composición GPU,
+     estable — sin esto, el <canvas> del chart comparte capa con lo que
+     tenga encima (el overlay de un modal, que SÍ anima opacity/transform
+     al abrir/cerrar), y Chromium puede reconstruir esa capa de golpe al
+     togglear la animación, dejando el canvas en negro/vacío por un frame.
+     Quitarle el backdrop-filter al overlay (intento anterior) no alcanzó
+     porque el disparador real era cualquier capa compuesta encima del
+     canvas, no el blur puntualmente — aislar el canvas en su propia capa
+     ataca la causa de raíz en vez de cambiar lo que hay arriba. */
+  #chart-container { flex: 1; position: relative; transform: translateZ(0); }
 
   #loading-overlay {
     position: absolute; inset: 0;
