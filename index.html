@@ -8912,7 +8912,21 @@ async function appendNewBar(symbol, timeframe){
   // seguimos.
   while (window._dragSession) { await new Promise(r=>setTimeout(r,200)); }
   try{
-    const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=3`;
+    // bars=3 alcanza en el caso normal (una vela recién cerró, la próxima
+    // está arrancando) — pero si este tick se retrasó más de un par de
+    // velas (pestaña en segundo plano/throttleada, notebook dormida: el
+    // setInterval de 1s de startCountdown no corre confiable ahí), pedir
+    // solo 3 hacía que el bridge devolviera nada más que las últimas 3,
+    // sin pasar las velas intermedias — ya cerradas, con SL/TP ya tocado
+    // y nunca chequeado — por checkOpenTradesAgainstBar(). Mismo bug de
+    // fondo que loadChart() (ver commit "Fix open trades missing their
+    // real SL/TP touch after a full chart reload"), acá en el camino que
+    // SÍ sigue corriendo con la pestaña abierta. Pedimos lo que haga falta
+    // según cuánto tiempo real pasó desde la última vela conocida.
+    const _prevLastTimeForGap = window._lastCandles[window._lastCandles.length-1].time;
+    const _gapBars = Math.ceil(Math.max(0, (getSimNow() - _prevLastTimeForGap)) / tfToSeconds(timeframe)) + 2;
+    const barsToFetch = Math.min(500, Math.max(3, _gapBars));
+    const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=${barsToFetch}`;
     const res=await fetch(url);
     const json=await res.json();
     if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'no data');
@@ -8929,7 +8943,7 @@ async function appendNewBar(symbol, timeframe){
     // hacer acá con esta respuesta vieja.
     if (symbol !== STATE.symbol || timeframe !== STATE.timeframe) return;
 
-    const prevLastTime=window._lastCandles[window._lastCandles.length-1].time;
+    const prevLastTime=_prevLastTimeForGap;
     json.bars.forEach((bar,i)=>{
       if(bar.time<prevLastTime)return; // vela vieja, ya la tenemos
       if(bar.time===window._lastCandles[window._lastCandles.length-1].time){
