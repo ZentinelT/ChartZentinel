@@ -9083,6 +9083,24 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     if (_myGen !== _loadChartGen) return; // superado por un loadChart() más nuevo — descartar
 
     window._lastCandles=candles;
+    // El único lugar que corría checkOpenTradesAgainstBar() era el polling
+    // incremental (de a 3 velas, abajo) — esta carga completa (loadChart:
+    // primer load, cambio de símbolo/TF, Refresh si falla el polling) nunca
+    // pasaba las velas por ese chequeo. Si una operación quedaba abierta
+    // durante un tramo que el polling se perdió (pestaña en segundo plano
+    // throttleada, notebook dormida, cambiar de símbolo y volver...), la
+    // primera vela que de verdad tocaba el SL/TP no se detectaba acá — recién
+    // se cerraba cuando por fin llegaba el siguiente poll, usando la vela
+    // ACTUAL (mucho más tardía) como horario de cierre. El precio de cierre
+    // quedaba bien (siempre el nivel exacto de SL/TP), pero la hora/duración
+    // registrada terminaba siendo mucho mayor que el toque real — un trade
+    // reportado con 80 min en pantalla podía haber tocado TP a los 15.
+    // Recorrer acá TODAS las velas recién cargadas (en orden, como si
+    // llegaran una por una) contra las operaciones abiertas de este símbolo
+    // cierra ese agujero.
+    if (getOpenTrades().some(t => t.symbol === normalizeSymbolForJournal(symbol))) {
+      candles.forEach((bar, i) => checkOpenTradesAgainstBar(bar, i === candles.length - 1));
+    }
     // Números enteros en el eje de precio (sin decimales) para símbolos
     // tipo índice (NAS100, US30, US500...) donde el centavo no aporta nada
     // y solo ensucia la lectura — pero sin forzarlo en pares con precio
