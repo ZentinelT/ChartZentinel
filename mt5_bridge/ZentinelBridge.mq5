@@ -302,10 +302,13 @@ void HandleOrderRequest(const string &lines[], int n, const string respFile)
          WriteCommonFile(respFile, "{\"error\":\"symbol not found: "+symbol+"\"}");
          return;
       }
-      long ticksMode = SymbolInfoInteger(symbol, SYMBOL_TICKS_MODE);
-      string ticksModeStr = (ticksMode==SYMBOL_TICKS_MODE_TRADE) ? "TRADE (volumen real de operaciones)"
-         : (ticksMode==SYMBOL_TICKS_MODE_INFO) ? "INFO (solo precio, sin volumen real)"
-         : "UNKNOWN";
+      // SYMBOL_TICKS_MODE no existe en MQL5 (eso es un enum de otra
+      // plataforma) — la forma real de confirmar esto es mirar
+      // SYMBOL_VOLUME_REAL (último deal, con más precisión) y, sobre todo,
+      // el campo volume_real de los ticks mismos más abajo: si viene
+      // siempre en 0, el bróker no reporta volumen real operado para este
+      // símbolo, sin importar qué diga cualquier otra propiedad.
+      double lastDealVolumeReal = SymbolInfoDouble(symbol, SYMBOL_VOLUME_REAL);
 
       MqlTick ticks[];
       int copied = CopyTicks(symbol, ticks, COPY_TICKS_ALL, 0, 50);
@@ -323,8 +326,8 @@ void HandleOrderRequest(const string &lines[], int n, const string respFile)
       }
       ticksJson += "]";
       WriteCommonFile(respFile, StringFormat(
-         "{\"ok\":true,\"symbol\":\"%s\",\"ticksMode\":\"%s\",\"copied\":%d,\"ticks\":%s}",
-         symbol, ticksModeStr, copied, ticksJson));
+         "{\"ok\":true,\"symbol\":\"%s\",\"lastDealVolumeReal\":%.4f,\"copied\":%d,\"ticks\":%s}",
+         symbol, lastDealVolumeReal, copied, ticksJson));
       return;
    }
 
