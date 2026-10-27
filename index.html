@@ -903,19 +903,23 @@
   /* ─── MODALS ──────────────────────────────────────────── */
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,.65);
-    /* El blur arranca en 0 y pasa a 4px recién en .open, ANIMADO junto con
-       la opacidad (en vez de aparecer/desaparecer de un salto al togglear
-       la clase) — así el compositor de Chromium no reconstruye de golpe la
-       capa de backdrop-filter sobre el canvas del chart, que es lo que
-       producía un parpadeo/apagón de un frame al cerrar cualquier modal. */
-    backdrop-filter: blur(0px);
+    /* Antes llevaba backdrop-filter:blur(4px) — un bug conocido de Chromium
+       hace que un elemento con backdrop-filter superpuesto a un <canvas>
+       (el del chart, acá atrás) fuerce al compositor a reconstruir esa capa
+       cuando el filtro aparece/desaparece, y el canvas se ve negro/vacío
+       por un frame: el "apagón"/parpadeo reportado al cerrar CUALQUIER
+       modal. Ya se probó animar el blur junto con la opacidad en vez de
+       togglearlo de un salto — no alcanzó, el bug es del compositor, no
+       del timing del CSS. Sacar el blur de raíz (fondo oscuro más opaco,
+       sin vidrio esmerilado) saca también la causa.
+    */
+    background: rgba(0,0,0,.8);
     z-index: 500;
     display: flex; align-items: center; justify-content: center;
     opacity: 0; pointer-events: none;
-    transition: opacity .2s, backdrop-filter .2s;
+    transition: opacity .2s;
   }
-  .modal-overlay.open { opacity: 1; pointer-events: all; backdrop-filter: blur(4px); }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
 
   .modal {
     background: var(--bg-panel);
