@@ -3810,14 +3810,27 @@ function onDtbPosColorChange(field, val, inputEl) {
 // deja en el eje derecho (lastValueVisible de la librería) — antes siempre
 // estaba prendida, sin forma de sacarla. No hace falta reconstruir el
 // dibujo (no cambia cuántas series tiene), alcanza con pisarle la opción a
-// cada serie ya existente.
+// cada serie ya existente. En Fib además hay que apagar el "title" (el
+// 61.8%, 50%, etc. que queda flotando pegado al final de cada línea DENTRO
+// del chart) — es una opción de la serie totalmente aparte de
+// lastValueVisible (esa solo tapa el cartelito del eje), así que apagar
+// nada más el precio dejaba los porcentajes igual de visibles.
 function onDtbTogglePriceLabel() {
   const d = getSelected();
   if (!d || (d.type !== 'hline' && d.type !== 'trendline' && d.type !== 'fib')) return;
   captureUndoSnapshot();
   d.showPriceLabel = (d.showPriceLabel === false) ? true : false;
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
-  d.series.forEach(s => { try { s.applyOptions({ lastValueVisible: d.showPriceLabel !== false }); } catch(e){} });
+  const on = d.showPriceLabel !== false;
+  if (d.type === 'fib') {
+    const onLevels = (d.levels || []).filter(lv => lv.on);
+    d.series.forEach((s, i) => {
+      const lv = onLevels[i];
+      try { s.applyOptions({ lastValueVisible: on, title: (on && lv) ? `${(lv.value*100).toFixed(1)}%` : '' }); } catch(e){}
+    });
+  } else {
+    d.series.forEach(s => { try { s.applyOptions({ lastValueVisible: on }); } catch(e){} });
+  }
   markDrawingsDirty();
   rememberToolStyle(d);
 }
@@ -3956,7 +3969,14 @@ function updateDrawingGeometry(d) {
   if (!candles.length) return false;
   const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
   const tFirst = candles[0].time, tLast = candles[candles.length-1].time;
-  const FUTURE_BARS = 50;
+  // 10, no más — el eje de tiempo solo tiene 15 velas "fantasma" cargadas
+  // de margen a futuro (ver futureWhitespace/clampPositionToolT2, mismo
+  // límite ya documentado ahí). Pasarse de esa marca (50 se pasaba de
+  // sobra) hacía que lightweight-charts tuviera que extender su eje de
+  // tiempo compartido apenas se agregaba el punto extendido, y el chart se
+  // veía "desacomodarse y reacomodarse" un instante después — reportado al
+  // usar Extender derecha/izquierda en hline/trendline/rect/fib.
+  const FUTURE_BARS = 10;
   const tFuture = tLast + barInterval * FUTURE_BARS;
   const tPast   = Math.max(0, tFirst - barInterval * FUTURE_BARS);
   let ok = false;
@@ -4146,7 +4166,14 @@ function buildDrawingOnChart(d) {
   const ls = lwStyle(d.style);
 
   const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
-  const FUTURE_BARS = 50;
+  // 10, no más — el eje de tiempo solo tiene 15 velas "fantasma" cargadas
+  // de margen a futuro (ver futureWhitespace/clampPositionToolT2, mismo
+  // límite ya documentado ahí). Pasarse de esa marca (50 se pasaba de
+  // sobra) hacía que lightweight-charts tuviera que extender su eje de
+  // tiempo compartido apenas se agregaba el punto extendido, y el chart se
+  // veía "desacomodarse y reacomodarse" un instante después — reportado al
+  // usar Extender derecha/izquierda en hline/trendline/rect/fib.
+  const FUTURE_BARS = 10;
 
   const tFirst  = candles[0].time;
   const tLast   = candles[candles.length-1].time;
@@ -4251,7 +4278,10 @@ function buildDrawingOnChart(d) {
     d.levels.filter(lv => lv.on).forEach(lv => {
       const val = hi - (hi - lo) * lv.value;
       const s = mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: d.showPriceLabel !== false });
-      s.applyOptions({ title: `${(lv.value*100).toFixed(1)}%` });
+      // El título (el "61.8%" flotando al final de la línea) es aparte de
+      // lastValueVisible (esa solo tapa el cartelito del eje) — mismo
+      // toggle, ver onDtbTogglePriceLabel.
+      s.applyOptions({ title: d.showPriceLabel !== false ? `${(lv.value*100).toFixed(1)}%` : '' });
     });
 
   } else if (d.type === 'vline') {
