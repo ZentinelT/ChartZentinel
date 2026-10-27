@@ -3375,7 +3375,12 @@ function saveToolStyleStore(){ lsSet('td_tool_styles', JSON.stringify(TOOL_STYLE
 // todavía no se personalizó ese tipo.
 function refreshToolDefaultsFor(type){
   try { TOOL_STYLE_STORE = JSON.parse(lsGet('td_tool_styles') || '{}'); } catch(e){}
-  Object.assign(toolDefaults, { color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false }, TOOL_STYLE_STORE[type] || {});
+  // levels:undefined en la base de reset — toolDefaults es UN solo objeto
+  // compartido por todos los tipos de herramienta, así que sin esto un
+  // d.levels guardado para 'fib' podía quedar pegado en toolDefaults al
+  // pasar por otro tipo que no lo pisa (rect, trendline...) y éste nunca
+  // lo limpia.
+  Object.assign(toolDefaults, { color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined }, TOOL_STYLE_STORE[type] || {});
 }
 // Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
 // existente — guarda ese mismo estilo como el default de su TIPO, para que
@@ -3392,6 +3397,13 @@ function captureDrawingStyle(d){
       profitColor: d.profitColor || '#26a69a',
       lossColor: d.lossColor || '#ef5350',
     });
+  }
+  if (d.type === 'fib') {
+    // El on/off y color de cada nivel (lo que de verdad se personaliza en
+    // un Fibonacci) vivía SOLO en d.levels — nunca entraba acá, así que
+    // guardar/cargar un template de Fib no tocaba nada de eso (el bug
+    // reportado: "no carga los presets guardados").
+    return Object.assign(base, { levels: JSON.parse(JSON.stringify(d.levels || cloneFibLevels())) });
   }
   return Object.assign(base, { color: d.color });
 }
@@ -3414,7 +3426,17 @@ function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringi
 function applyStyleObjectToDrawing(d, style){
   captureUndoSnapshot();
   Object.assign(d, style);
-  restyleDrawingAppearance(d);
+  if (style.levels) {
+    // Un template de Fibonacci puede cambiar CUÁLES niveles están
+    // encendidos, no solo sus colores — eso cambia la cantidad de series
+    // que el dibujo necesita, y restyleDrawingAppearance() solo le cambia
+    // el color a las que YA existen (no agrega/saca ninguna). Hace falta
+    // reconstruir el dibujo entero para que la cantidad de líneas quede
+    // bien si el set de niveles "on" cambió.
+    redrawDrawing(d);
+  } else {
+    restyleDrawingAppearance(d);
+  }
   markDrawingsDirty();
   rememberToolStyle(d);
   selectDrawing(d.id); // refresca los swatches/selects del DTB con el nuevo estilo
@@ -5348,7 +5370,11 @@ function initDrawingLayer() {
     } else if (tool === 'fib') {
       const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
       if (Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
-      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels:cloneFibLevels(), p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
+      // toolDefaults.levels: lo que haya quedado guardado como default de
+      // Fib (último usado, o un template aplicado sin nada seleccionado —
+      // ver refreshToolDefaultsFor/applyDtbTemplate) — si no hay nada
+      // guardado todavía, cae en los niveles de fábrica de siempre.
+      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels: toolDefaults.levels ? JSON.parse(JSON.stringify(toolDefaults.levels)) : cloneFibLevels(), p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
     } else if (tool === 'vline') {
       d = { id:genId(), type:'vline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:null,time:drawStart.time}, p2:{price:null,time:drawStart.time} };
     } else if (tool === 'long' || tool === 'short') {
