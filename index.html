@@ -3392,10 +3392,15 @@ function refreshToolDefaultsFor(type){
 function captureDrawingStyle(d){
   const base = { width: d.width, style: d.style, extLeft: !!d.extLeft, extRight: !!d.extRight };
   if (d.type === 'long' || d.type === 'short') {
+    // showLabels (mostrar/ocultar RR/TP/SL) es la otra personalización real
+    // de esta herramienta además del color — mismo motivo que showBorder/
+    // showFill en 'rect' más abajo: vivía afuera de lo que un template
+    // guardaba/restauraba.
     return Object.assign(base, {
       entryColor: d.entryColor || '#e8e8f0',
       profitColor: d.profitColor || '#26a69a',
       lossColor: d.lossColor || '#ef5350',
+      showLabels: d.showLabels !== false,
     });
   }
   if (d.type === 'fib') {
@@ -3404,6 +3409,12 @@ function captureDrawingStyle(d){
     // guardar/cargar un template de Fib no tocaba nada de eso (el bug
     // reportado: "no carga los presets guardados").
     return Object.assign(base, { levels: JSON.parse(JSON.stringify(d.levels || cloneFibLevels())) });
+  }
+  if (d.type === 'rect') {
+    // Mismo caso que showLabels arriba: mostrar/ocultar borde y relleno por
+    // separado son toggles reales (ver onDtbToggleRectPart) que tampoco
+    // entraban en el template.
+    return Object.assign(base, { color: d.color, showBorder: d.showBorder !== false, showFill: d.showFill !== false });
   }
   return Object.assign(base, { color: d.color });
 }
@@ -3423,16 +3434,16 @@ try { DRAWING_TEMPLATES = JSON.parse(lsGet('td_drawing_templates') || '{}'); } c
 function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringify(DRAWING_TEMPLATES)); }
 // Aplica un style object (mismo shape que captureDrawingStyle) a un dibujo
 // ya existente Y lo deja como el "último usado" de su tipo.
+// Tipos cuyo template puede traer un campo "estructural" (no solo color) —
+// niveles de Fib, borde/relleno de un rect, labels de la herramienta de
+// posición — que restyleDrawingAppearance() no sabe aplicar porque no
+// cambia CUÁNTAS series/qué visibilidad tiene el dibujo, solo les pisa el
+// color a las que YA existen. Para estos hace falta reconstruir entero.
+const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'rect', 'long', 'short']);
 function applyStyleObjectToDrawing(d, style){
   captureUndoSnapshot();
   Object.assign(d, style);
-  if (style.levels) {
-    // Un template de Fibonacci puede cambiar CUÁLES niveles están
-    // encendidos, no solo sus colores — eso cambia la cantidad de series
-    // que el dibujo necesita, y restyleDrawingAppearance() solo le cambia
-    // el color a las que YA existen (no agrega/saca ninguna). Hace falta
-    // reconstruir el dibujo entero para que la cantidad de líneas quede
-    // bien si el set de niveles "on" cambió.
+  if (DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE.has(d.type)) {
     redrawDrawing(d);
   } else {
     restyleDrawingAppearance(d);
@@ -3716,6 +3727,19 @@ function restyleDrawingAppearance(d) {
     });
   } else if (d.type === 'long' || d.type === 'short') {
     restylePositionToolColors(d, lw, ls);
+  } else if (d.type === 'text') {
+    // El texto no vive en d.series (no es una serie del chart, es un <div>
+    // posicionado encima) — por eso el color/tamaño quedaban PEGADOS al
+    // valor con el que se creó el cartel: cambiar el swatch o aplicar un
+    // template sobre un texto ya puesto no hacía nada en pantalla, acá era
+    // donde faltaba el caso. "width" se reusa como tamaño de fuente (mismo
+    // criterio que la creación del cartel, ver el handler de 'text' en el
+    // mousedown del canvas de dibujo).
+    if (d.label) {
+      d.label.style.color = C;
+      d.label.style.outlineColor = C + '88';
+      d.label.style.fontSize = (11 + lw) + 'px';
+    }
   } else {
     d.series.forEach(s => { try { s.applyOptions({ color: C, lineWidth: lw, lineStyle: ls }); } catch(e){} });
   }
