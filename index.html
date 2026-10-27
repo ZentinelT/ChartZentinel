@@ -4766,16 +4766,30 @@ function initChart() {
       // el array — con Watchtower activo puede haber miles cargadas, y esto
       // corre en cada movimiento del mouse del panel que SÍ se está
       // moviendo, para cada uno de los demás paneles.
+      //
+      // "Vela más cercana por valor absoluto" (como estaba antes) está MAL
+      // para esto: cada vela representa un RANGO [time, time+barStep), no un
+      // punto — pertenece a esa vela cualquier horario adentro del rango,
+      // sin importar si cae más cerca del abierto de la vela SIGUIENTE. Con
+      // paneles en el MISMO TF nunca se nota (el horario que llega siempre
+      // coincide exacto con una vela propia). El bug aparecía al sincronizar
+      // un panel en TF CHICO (ej. M5) hacia uno en TF más grande (ej. H1):
+      // pasada la mitad de la hora, el horario M5 (ej. :35) queda más cerca
+      // en valor absoluto del PRÓXIMO H1 (que recién va a abrir) que del H1
+      // actual (que sí lo contiene) — el cursor del panel grande saltaba a
+      // la vela de al lado, las líneas de crosshair quedaban visiblemente
+      // desalineadas entre paneles. Corregido: la vela que CONTIENE ese
+      // horario es la última cuyo horario de apertura es <= time (floor),
+      // nunca la más próxima por distancia.
       const candles = window._lastCandles || [];
       let candle = null;
-      if (candles.length) {
+      if (candles.length && candles[0].time <= time) {
         let lo = 0, hi = candles.length - 1;
         while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (candles[mid].time < time) lo = mid + 1; else hi = mid;
+          const mid = (lo + hi + 1) >> 1;
+          if (candles[mid].time <= time) lo = mid; else hi = mid - 1;
         }
         candle = candles[lo];
-        if (lo > 0 && Math.abs(candles[lo-1].time - time) < Math.abs(candle.time - time)) candle = candles[lo-1];
       }
       const resolvedTime = candle ? candle.time : null;
       // Dos tiempos "crudos" distintos (p.ej. de dos TF distintos) pueden
