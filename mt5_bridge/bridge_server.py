@@ -151,7 +151,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
 
             action = payload.get("action", "")
-            if action not in ("open", "close", "modify", "positions", "closedInfo"):
+            if action not in ("open", "close", "modify", "positions", "closedInfo", "tickInfo"):
                 self._send_json(400, json.dumps({"error": "action inválida: " + str(action)}))
                 return
 

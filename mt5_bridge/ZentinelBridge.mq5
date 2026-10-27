@@ -290,6 +290,44 @@ void HandleOrderRequest(const string &lines[], int n, const string respFile)
       return;
    }
 
+   if(action=="tickInfo")
+   {
+      // Diagnóstico puntual (no lo usa la app): confirma si el símbolo trae
+      // volumen REAL por operación en MT5 (necesario para una herramienta
+      // tipo "Big Trades") o si, como la mayoría de los CFD de índice, el
+      // bróker solo reporta ticks de precio sin volumen real operado.
+      string symbol = KeyValue(lines,n,"symbol");
+      if(symbol=="" || !SymbolSelect(symbol, true))
+      {
+         WriteCommonFile(respFile, "{\"error\":\"symbol not found: "+symbol+"\"}");
+         return;
+      }
+      long ticksMode = SymbolInfoInteger(symbol, SYMBOL_TICKS_MODE);
+      string ticksModeStr = (ticksMode==SYMBOL_TICKS_MODE_TRADE) ? "TRADE (volumen real de operaciones)"
+         : (ticksMode==SYMBOL_TICKS_MODE_INFO) ? "INFO (solo precio, sin volumen real)"
+         : "UNKNOWN";
+
+      MqlTick ticks[];
+      int copied = CopyTicks(symbol, ticks, COPY_TICKS_ALL, 0, 50);
+      string ticksJson = "[";
+      for(int i=0;i<copied;i++)
+      {
+         if(i>0) ticksJson += ",";
+         string flags = "";
+         if((ticks[i].flags & TICK_FLAG_BUY)!=0) flags += "BUY,";
+         if((ticks[i].flags & TICK_FLAG_SELL)!=0) flags += "SELL,";
+         ticksJson += StringFormat(
+            "{\"time\":%I64d,\"bid\":%.5f,\"ask\":%.5f,\"last\":%.5f,\"volume\":%I64u,\"volume_real\":%.4f,\"flags\":\"%s\"}",
+            (long)ticks[i].time, ticks[i].bid, ticks[i].ask, ticks[i].last,
+            ticks[i].volume, ticks[i].volume_real, flags);
+      }
+      ticksJson += "]";
+      WriteCommonFile(respFile, StringFormat(
+         "{\"ok\":true,\"symbol\":\"%s\",\"ticksMode\":\"%s\",\"copied\":%d,\"ticks\":%s}",
+         symbol, ticksModeStr, copied, ticksJson));
+      return;
+   }
+
    WriteCommonFile(respFile, "{\"error\":\"unknown action: "+action+"\"}");
 }
 
