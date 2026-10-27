@@ -904,13 +904,18 @@
   .modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,.65);
-    backdrop-filter: blur(4px);
+    /* El blur arranca en 0 y pasa a 4px recién en .open, ANIMADO junto con
+       la opacidad (en vez de aparecer/desaparecer de un salto al togglear
+       la clase) — así el compositor de Chromium no reconstruye de golpe la
+       capa de backdrop-filter sobre el canvas del chart, que es lo que
+       producía un parpadeo/apagón de un frame al cerrar cualquier modal. */
+    backdrop-filter: blur(0px);
     z-index: 500;
     display: flex; align-items: center; justify-content: center;
     opacity: 0; pointer-events: none;
-    transition: opacity .2s;
+    transition: opacity .2s, backdrop-filter .2s;
   }
-  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; backdrop-filter: blur(4px); }
 
   .modal {
     background: var(--bg-panel);
@@ -3646,7 +3651,7 @@ function restyleDrawingAppearance(d) {
       try { s.applyOptions({ color: lv.color+'cc', lineWidth: lw, lineStyle: ls }); } catch(e){}
     });
   } else if (d.type === 'long' || d.type === 'short') {
-    restylePositionToolColors(d);
+    restylePositionToolColors(d, lw, ls);
   } else {
     d.series.forEach(s => { try { s.applyOptions({ color: C, lineWidth: lw, lineStyle: ls }); } catch(e){} });
   }
@@ -3945,13 +3950,15 @@ function syncRectFill(d) {
 
 // Recolorea una herramienta de posición ya construida sin tocar las series
 // del chart (ver el comentario en onDtbPosColorChange).
-function restylePositionToolColors(d) {
+function restylePositionToolColors(d, lw, ls) {
   const entryColor = d.entryColor || '#e8e8f0';
   const profitColor = d.profitColor || '#26a69a';
   const lossColor = d.lossColor || '#ef5350';
-  if (d.series[0]) d.series[0].applyOptions({ color: entryColor });
-  if (d.series[1]) d.series[1].applyOptions({ color: profitColor });
-  if (d.series[2]) d.series[2].applyOptions({ color: lossColor });
+  const widthOpts = lw !== undefined ? { lineWidth: lw } : {};
+  const styleOpts = ls !== undefined ? { lineStyle: ls } : {};
+  if (d.series[0]) d.series[0].applyOptions(Object.assign({ color: entryColor }, widthOpts, styleOpts));
+  if (d.series[1]) d.series[1].applyOptions(Object.assign({ color: profitColor }, widthOpts, styleOpts));
+  if (d.series[2]) d.series[2].applyOptions(Object.assign({ color: lossColor }, widthOpts, styleOpts));
   if (d.profitFillEl) d.profitFillEl.setAttribute('fill', profitColor);
   if (d.lossFillEl) d.lossFillEl.setAttribute('fill', lossColor);
   if (d.entryTextEl) d.entryTextEl.setAttribute('fill', entryColor);
