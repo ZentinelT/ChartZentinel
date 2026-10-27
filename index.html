@@ -1027,6 +1027,27 @@
   .cs-switch input:checked ~ .track { background: var(--gold-glow); border-color: var(--gold-dim); }
   .cs-switch input:checked ~ .track .thumb { transform: translateX(16px); background: var(--gold); }
 
+  /* Mismo patrón que .cs-switch, pero en rojo — a propósito, para que el
+     modo de trading REAL (plata de verdad, vía MT5) se vea claramente
+     distinto de cualquier otro toggle gris/dorado de la app. Arranca
+     siempre apagado (STATE.liveTrading no se persiste — ver toggleLiveTrading). */
+  .live-trading-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); margin-bottom: 14px; cursor: pointer; }
+  .live-trading-row .cs-field-label { color: var(--text-primary); font-size: 12px; }
+  .live-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; display: inline-block; }
+  .live-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .live-switch .track {
+    position: absolute; inset: 0; background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 999px; transition: background .15s, border-color .15s;
+  }
+  .live-switch .thumb {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text-dim); transition: transform .15s, background .15s;
+  }
+  .live-switch input:checked ~ .track { background: rgba(239,83,80,.28); border-color: var(--red); }
+  .live-switch input:checked ~ .track .thumb { transform: translateX(16px); background: var(--red); }
+  #live-trading-status { font-size: 10px; letter-spacing: .5px; color: var(--text-dim); }
+  #live-trading-status.on { color: var(--red); font-weight: 600; }
+
   .cs-subrow { display: flex; gap: 8px; margin-top: 10px; }
   .cs-subrow .cs-swatch { width: 32px; height: 32px; margin: 0; }
   .cs-subrow .dtb-select { flex: 1; }
@@ -1824,6 +1845,10 @@
 <div class="modal-overlay" id="modal-trades">
   <div class="modal" style="max-height:85vh;overflow-y:auto;max-width:560px;">
     <h2>Trades</h2>
+    <label class="live-trading-row" for="live-trading-toggle" title="Cuando está prendido, Confirm/Close/Edit mandan órdenes reales a la cuenta de MT5 (via el bridge) en vez de simularlas acá. El volumen lo decide MT5, no esta app. Se apaga solo al recargar/cerrar la pestaña.">
+      <span class="cs-field-label">Real trading (MT5) — <span id="live-trading-status">OFF</span></span>
+      <span class="live-switch"><input type="checkbox" id="live-trading-toggle" onchange="toggleLiveTrading(this.checked)"><span class="track"><span class="thumb"></span></span></span>
+    </label>
     <label>USD per point, per lot (used to calculate profit)</label>
     <div class="cs-row" style="margin-bottom:14px;">
       <input type="number" id="trades-point-value" class="dtb-select" style="flex:1;" step="0.01" min="0" onchange="setTradesPointValue(this.value)">
@@ -9760,6 +9785,118 @@ function getClosedTrades(){ try { return JSON.parse(lsGet('td_closed_trades') ||
 function saveClosedTrades(list){ lsSet('td_closed_trades', JSON.stringify(list)); }
 function getTradesPointValue(){ const v = parseFloat(lsGet('td_point_value')); return (isFinite(v) && v > 0) ? v : 1; }
 function setTradesPointValue(v){ const n = parseFloat(v); lsSet('td_point_value', String((isFinite(n) && n > 0) ? n : 1)); }
+
+// ══════════════════════════════════════════════════════════
+//  TRADING REAL (vía ZentinelBridge.mq5 → MT5) — a propósito separado
+//  del papel-trading de arriba: LIVE_TRADING es una variable suelta, NO
+//  parte de STATE/localStorage, así que nunca sobrevive un reload — cada
+//  vez que se abre/recarga la app arranca en papel, y hay que prenderlo a
+//  mano. El volumen NUNCA sale de acá (pedido del usuario): lo decide
+//  DefaultVolume del lado del Service de MT5, nosotros solo mandamos
+//  símbolo/lado/SL/TP.
+// ══════════════════════════════════════════════════════════
+let LIVE_TRADING = false;
+let _livePollTimer = null;
+
+async function sendOrder(fields){
+  const res = await fetch(`${BRIDGE_URL}/order`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
+function toggleLiveTrading(on){
+  LIVE_TRADING = !!on;
+  const statusEl = document.getElementById('live-trading-status');
+  if (statusEl) { statusEl.textContent = LIVE_TRADING ? 'ON' : 'OFF'; statusEl.classList.toggle('on', LIVE_TRADING); }
+  const toggleEl = document.getElementById('live-trading-toggle');
+  if (toggleEl) toggleEl.checked = LIVE_TRADING;
+  _syncLivePollTimer();
+}
+
+// Prende/apaga el poll de posiciones reales según haga falta — corre
+// mientras el modo esté prendido O mientras quede alguna operación real
+// abierta sin confirmar su cierre (así, si lo apagás con una posición real
+// todavía corriendo, igual se sigue enterando cuándo cierra de verdad).
+function _syncLivePollTimer(){
+  const needed = LIVE_TRADING || getOpenTrades().some(t => t.real);
+  if (needed && !_livePollTimer) {
+    _livePollTimer = setInterval(pollLiveTrades, 3000);
+    pollLiveTrades();
+  } else if (!needed && _livePollTimer) {
+    clearInterval(_livePollTimer);
+    _livePollTimer = null;
+  }
+}
+
+// Compara el set de tickets reales conocido contra lo que YA reporta MT5
+// ahora mismo: actualiza P/L y SL/TP de los que siguen abiertos (el
+// bróker puede ajustar un SL/TP por distancia mínima, por ejemplo — mejor
+// reflejar la verdad que lo que la app pidió) y, al que desaparece, le
+// pide su cierre real (precio/hora/motivo) en vez de simularlo con velas.
+async function pollLiveTrades(){
+  const open = getOpenTrades();
+  const realTrades = open.filter(t => t.real);
+  if (!realTrades.length) { _syncLivePollTimer(); return; }
+  let positions;
+  try { positions = (await sendOrder({ action:'positions' })).positions || []; }
+  catch(e){ return; } // red/MT5 caído un momento: el próximo poll reintenta solo
+  const byTicket = new Map(positions.map(p => [String(p.ticket), p]));
+
+  let changed = false;
+  for (const t of realTrades) {
+    const p = byTicket.get(String(t.ticket));
+    if (p) {
+      // _liveProfit: P/L real que devuelve MT5 (incluye spread/swap/comisión
+      // reales) — getTradesBadgeInfo()/renderTradesModal() lo prefieren por
+      // sobre el cálculo propio (lastBar.close - entry) * volume * pointValue
+      // cuando está disponible, más preciso para una operación real.
+      t._liveProfit = p.profit;
+      if (t.stop_loss !== p.sl || t.take_profit !== p.tp || t.volume !== p.volume) {
+        t.stop_loss = p.sl > 0 ? p.sl : null; t.take_profit = p.tp > 0 ? p.tp : null; t.volume = p.volume;
+      }
+      changed = true;
+      continue;
+    }
+    // Ya no está entre las posiciones abiertas — cerró (SL, TP, o manual
+    // desde el celular/MT5 directo). Buscar el cierre real en el historial.
+    try {
+      const info = await sendOrder({ action:'closedInfo', ticket: t.ticket });
+      const closed = {
+        ...t, close_price: info.close_price, close_time: info.close_time, profit: info.profit,
+        pips: 0, duration_minutes: Math.max(0, Math.round((info.close_time - t.open_time)/60)),
+        result: info.profit > 0.01 ? 'win' : info.profit < -0.01 ? 'loss' : 'breakeven',
+        close_reason: info.reason,
+      };
+      const pip = TRADE_PIP_MAP[t.symbol] || 0.0001;
+      const sign = t.side === 'long' ? 1 : -1;
+      closed.pips = +(((info.close_price - t.entry_price) * sign) / pip).toFixed(1);
+      const closedList = getClosedTrades();
+      closedList.push(closed);
+      saveClosedTrades(closedList);
+    } catch(e) {
+      // Historial no disponible todavía (puede tardar un segundo tras el
+      // cierre) — no la sacamos de "open" todavía, el próximo poll reintenta.
+      continue;
+    }
+    const idx = open.findIndex(x => x.id === t.id);
+    if (idx >= 0) open.splice(idx, 1);
+    const d = drawings.find(x => x.tradeId === t.id);
+    if (d) { delete d.tradeId; markDrawingsDirty(); }
+    changed = true;
+  }
+  if (changed) {
+    saveOpenTrades(open);
+    renderTradesCountBadge();
+    renderTradesModalIfOpen();
+    renderTradeMarkers();
+  }
+  _syncLivePollTimer();
+}
 // "Ahora" simulado: en replay es el cierre de la vela donde está parado
 // el cursor del replay (no el reloj real de la máquina) — mismo criterio
 // que usa el sync entre paneles (ver _applyReplayFrame/zentinelCrosshairBroadcast).
@@ -9795,11 +9932,53 @@ function syncTradeFromDrawing(d){
   if (!t) return;
   const newSl = (d.p2.price || d.p2.price === 0) ? d.p2.price : null;
   const newTp = (d.targetPrice || d.targetPrice === 0) ? d.targetPrice : null;
+  if (t.real) {
+    // El entry de una operación real YA se ejecutó — arrastrar esa línea no
+    // puede cambiarlo retroactivamente (solo SL/TP, vía PositionModify), así
+    // que el entry del dibujo se ignora acá para un trade real. Si llegó a
+    // moverse igual en pantalla, se corrige solo (ver el redrawDrawing() de
+    // más abajo con el t.entry_price sin tocar).
+    if (t.stop_loss === newSl && t.take_profit === newTp) return;
+    syncRealTradeFromDrawing(d, t, newSl, newTp);
+    return;
+  }
   if (t.stop_loss === newSl && t.take_profit === newTp && t.entry_price === d.p1.price) return;
   t.stop_loss = newSl;
   t.take_profit = newTp;
   t.entry_price = d.p1.price;
   saveOpenTrades(open);
+  renderTradesCountBadge();
+  renderTradesModalIfOpen();
+}
+
+// Contraparte real de syncTradeFromDrawing(): manda el SL/TP nuevo a MT5
+// (PositionModify) y recién actualiza el dibujo/registro local con lo que
+// el bróker confirmó — si rechaza el nivel (muy cerca del precio, "Invalid
+// stops"), el dibujo vuelve a donde estaba en vez de quedar mostrando algo
+// que en los hechos no se aplicó.
+async function syncRealTradeFromDrawing(d, t, newSl, newTp){
+  let result;
+  try {
+    result = await sendOrder({ action:'modify', ticket: t.ticket, sl: newSl, tp: newTp });
+  } catch(e) {
+    alert('No se pudo modificar la operación real: ' + e.message);
+    d.p1.price = t.entry_price; d.p2.price = t.stop_loss; d.targetPrice = t.take_profit;
+    if (!updateDrawingGeometry(d)) redrawDrawing(d);
+    return;
+  }
+  const p = result.position;
+  // En MT5 un SL/TP "sin fijar" vuelve como precio 0.0 — ninguna posición
+  // real tiene un stop a precio 0, así que 0 acá siempre quiere decir
+  // "ninguno" (distinto de la convención de d.p2.price en el resto del
+  // código, donde 0 sí podría ser un precio válido de un dibujo cualquiera).
+  const slVal = p.sl > 0 ? p.sl : null;
+  const tpVal = p.tp > 0 ? p.tp : null;
+  const open = getOpenTrades();
+  const fresh = open.find(x => x.id === t.id);
+  if (fresh) { fresh.stop_loss = slVal; fresh.take_profit = tpVal; saveOpenTrades(open); }
+  if (slVal != null) d.p2.price = slVal;
+  if (tpVal != null) d.targetPrice = tpVal;
+  if (!updateDrawingGeometry(d)) redrawDrawing(d);
   renderTradesCountBadge();
   renderTradesModalIfOpen();
 }
@@ -9821,6 +10000,7 @@ function getTradesBadgeInfo(){
   const pointValue = getTradesPointValue();
   let pl = 0, havePrice = false;
   open.forEach(t => {
+    if (t.real && t._liveProfit != null) { havePrice = true; pl += t._liveProfit; return; }
     if (t.symbol !== sym || !lastBar) return;
     havePrice = true;
     const sign = t.side === 'long' ? 1 : -1;
@@ -9840,6 +10020,11 @@ function renderTradesCountBadge(){
 function confirmTrade(){
   const d = getSelected();
   if (!d || (d.type !== 'long' && d.type !== 'short')) return;
+  if (LIVE_TRADING) {
+    if (window._replay || window._replayFollow) { alert('No se puede mandar una orden real mientras estás en replay.'); return; }
+    confirmLiveTrade(d);
+    return;
+  }
   promptFields('Confirm trade', [{ id:'volume', label:'Volume (lots)', type:'number', value:'1', placeholder:'1' }], (vals) => {
     const volume = parseFloat(vals.volume);
     if (!volume || volume <= 0) { alert('Invalid volume.'); return; }
@@ -9876,6 +10061,54 @@ function confirmTrade(){
     renderTradesModalIfOpen();
     renderTradeMarkers();
   });
+}
+
+// Mismo flujo que confirmTrade() en papel, pero manda la orden de verdad a
+// MT5 (vía el bridge) y arma el registro del trade con lo que el bróker
+// realmente devolvió (precio de entrada, SL/TP — puede ajustarlos por
+// distancia mínima — y el volumen que MT5 usó, nunca el de la app). Sin
+// prompt de volumen: no tiene sentido pedirlo si de todos modos no se usa.
+async function confirmLiveTrade(d){
+  captureUndoSnapshot();
+  const sl = (d.p2.price || d.p2.price === 0) ? d.p2.price : null;
+  const tp = (d.targetPrice || d.targetPrice === 0) ? d.targetPrice : null;
+  let result;
+  try {
+    result = await sendOrder({ action:'open', symbol: normalizeSymbolForJournal(STATE.symbol), side: d.type==='long'?'buy':'sell', sl, tp });
+  } catch(e) {
+    alert('No se pudo abrir la operación real: ' + e.message);
+    return;
+  }
+  const p = result.position;
+  // Llevar el dibujo al precio de entrada REAL que MT5 dio (puede diferir
+  // un poco del último precio visto acá por slippage) — mismo ajuste que
+  // hace la rama de papel con applyHandleDrag, para que lo que se ve en
+  // pantalla coincida con la operación real.
+  applyHandleDrag(d, 'entry', p.price_open, d.p1.time);
+  if (!updateDrawingGeometry(d)) redrawDrawing(d);
+  const trade = {
+    id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    symbol: normalizeSymbolForJournal(STATE.symbol),
+    side: d.type,
+    volume: p.volume,
+    entry_price: p.price_open,
+    stop_loss: p.sl > 0 ? p.sl : null, // 0 en MT5 = sin SL/TP fijado
+    take_profit: p.tp > 0 ? p.tp : null,
+    open_time: p.time,
+    source: 'live',
+    real: true,
+    ticket: p.ticket,
+  };
+  d.tradeId = trade.id;
+  const open = getOpenTrades();
+  open.push(trade);
+  saveOpenTrades(open);
+  markDrawingsDirty();
+  selectDrawing(d.id);
+  renderTradesCountBadge();
+  renderTradesModalIfOpen();
+  renderTradeMarkers();
+  _syncLivePollTimer();
 }
 
 function finalizeTradeClose(t, closePrice, closeTime, reason, triggerBar){
@@ -9998,6 +10231,11 @@ function checkOpenTradesAgainstBar(bar, formingLive){
   for (let i = open.length - 1; i >= 0; i--) {
     const t = open[i];
     if (t.symbol !== sym) continue;
+    // Las operaciones reales (t.real) las cierra el BRÓKER server-side —
+    // simular acá su SL/TP contra las velas de este chart sería, en el
+    // mejor caso, redundante, y en el peor, una fuente de desincronización
+    // (ver pollLiveTrades(), que sí refleja la verdad real de MT5).
+    if (t.real) continue;
     // Si esta vela es anterior a cuando se abrió la operación (otro panel
     // en replay rebobinado, o atrasado, que vuelve a procesar historia
     // vieja), ignorarla: cerrar con una mecha previa al open_time sería
@@ -10098,11 +10336,24 @@ function manualCloseTrade(){
 // operación todavía corriendo, no había forma de cerrarla desde la UI.
 // Vive en el modal de Trades (botón ✕ en cada fila abierta), accesible
 // sin tener la herramienta de posición activa.
-function closeTradeById(id){
+async function closeTradeById(id){
   const open = getOpenTrades();
   const idx = open.findIndex(t => t.id === id);
   if (idx < 0) return;
   const t = open[idx];
+
+  if (t.real) {
+    // No se fabrica el cierre acá con el precio actual del chart — se le
+    // pide a MT5 que cierre de verdad y, apenas pollLiveTrades() note que
+    // el ticket ya no está entre las posiciones abiertas, va a buscar el
+    // precio/hora/profit REALES del cierre (ver closedInfo). Acá solo se
+    // dispara la orden.
+    try { await sendOrder({ action:'close', ticket: t.ticket }); }
+    catch(e) { alert('No se pudo cerrar la operación real: ' + e.message); return; }
+    pollLiveTrades();
+    return;
+  }
+
   const curSym = normalizeSymbolForJournal(STATE.symbol);
   const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
   // Sin confirm(): mismo criterio que el botón "Close trade" del toolbar
@@ -10156,6 +10407,26 @@ function editTradeById(id){
       alert('Invalid price.');
       return;
     }
+    if (t.real) {
+      sendOrder({ action:'modify', ticket: t.ticket, sl: newSl, tp: newTp }).then((result) => {
+        const p = result.position;
+        const freshOpen = getOpenTrades();
+        const fresh = freshOpen.find(x => x.id === id);
+        if (!fresh) return;
+        fresh.stop_loss = p.sl > 0 ? p.sl : null; // 0 en MT5 = sin SL/TP fijado
+        fresh.take_profit = p.tp > 0 ? p.tp : null;
+        saveOpenTrades(freshOpen);
+        const d = drawings.find(x => x.tradeId === id);
+        if (d) {
+          if (fresh.stop_loss != null) d.p2.price = fresh.stop_loss;
+          if (fresh.take_profit != null) d.targetPrice = fresh.take_profit;
+          if (!updateDrawingGeometry(d)) redrawDrawing(d);
+          markDrawingsDirty();
+        }
+        renderTradesModalIfOpen();
+      }).catch((e) => alert('No se pudo modificar la operación real: ' + e.message));
+      return;
+    }
     t.stop_loss = newSl;
     t.take_profit = newTp;
     saveOpenTrades(open);
@@ -10180,6 +10451,10 @@ function renderTradesModalIfOpen(){
 function openTradesModal(){
   const pv = document.getElementById('trades-point-value');
   if (pv) pv.value = getTradesPointValue();
+  const toggleEl = document.getElementById('live-trading-toggle');
+  if (toggleEl) toggleEl.checked = LIVE_TRADING;
+  const statusEl = document.getElementById('live-trading-status');
+  if (statusEl) { statusEl.textContent = LIVE_TRADING ? 'ON' : 'OFF'; statusEl.classList.toggle('on', LIVE_TRADING); }
   renderTradesModal();
   openModal('modal-trades');
 }
@@ -10193,12 +10468,15 @@ function renderTradesModal(){
   if (openList) {
     openList.innerHTML = !open.length ? '<div class="trades-empty">No open trades.</div>' : open.map(t => {
       let plHtml = '<span class="trade-pl">—</span>';
-      if (lastBar && t.symbol === curSym) {
+      if (t.real && t._liveProfit != null) {
+        const pl = t._liveProfit;
+        plHtml = `<span class="trade-pl ${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${pl.toFixed(2)}</span>`;
+      } else if (lastBar && t.symbol === curSym) {
         const sign = t.side === 'long' ? 1 : -1;
         const pl = (lastBar.close - t.entry_price) * sign * t.volume * pointValue;
         plHtml = `<span class="trade-pl ${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${pl.toFixed(2)}</span>`;
       }
-      const meta = `${fmt(t.entry_price)} SL${t.stop_loss!=null?fmt(t.stop_loss):'—'} TP${t.take_profit!=null?fmt(t.take_profit):'—'} · ${t.volume}L`;
+      const meta = `${t.real?'🔴 ':''}${fmt(t.entry_price)} SL${t.stop_loss!=null?fmt(t.stop_loss):'—'} TP${t.take_profit!=null?fmt(t.take_profit):'—'} · ${t.volume}L`;
       const fullInfo = `Entry ${fmt(t.entry_price)} · SL ${t.stop_loss!=null?fmt(t.stop_loss):'—'} · TP ${t.take_profit!=null?fmt(t.take_profit):'—'} · Vol ${t.volume} · ${t.source==='replay'?'Replay':'Live'} · Opened ${fmtTradeTime(t.open_time)}`;
       return `<div class="trade-row" title="${fullInfo}">
         <span class="trade-side ${t.side}">${t.side==='long'?'L':'S'}</span>
@@ -10303,6 +10581,13 @@ function downloadTradesCsv(){
   document.getElementById('symbol-input').value=STATE.symbol;
   updateTfBarSymbol(STATE.symbol);
   renderTradesCountBadge();
+  // LIVE_TRADING arranca siempre apagado (nunca se persiste, a propósito)
+  // pero si quedó una operación REAL abierta de una sesión anterior (el
+  // trade en sí sí persiste, con real:true), hay que seguir vigilando su
+  // cierre real igual, aunque el toggle esté apagado — si no, un reload
+  // con una posición real corriendo la dejaría sin seguimiento hasta
+  // prender el modo de nuevo a mano.
+  _syncLivePollTimer();
 
   const badge=document.getElementById('api-badge');
   fetch(`${BRIDGE_URL}/health`).then(r=>r.ok?r.json():Promise.reject()).then(()=>{

@@ -85,6 +85,42 @@ def fetch_ohlcv(symbol, interval, bars, before=None):
     return content
 
 
+# Mismo protocolo de archivos que fetch_ohlcv, pero con type=order — ver el
+# bloque HandleOrderRequest() en ZentinelBridge.mq5 para las acciones
+# soportadas (open/close/modify/positions/closedInfo) y sus campos.
+def fetch_order(fields):
+    if not os.path.isdir(ZENTINEL_DIR):
+        raise RuntimeError(
+            "No encuentro la carpeta de MT5 (Common/Files/zentinel). "
+            "¿MT5 está instalado/corrió al menos una vez?"
+        )
+
+    req_id = str(int(time.time() * 1000))
+    resp_path = os.path.join(ZENTINEL_DIR, f"resp_{req_id}.txt")
+
+    with _lock:
+        tmp_path = REQUEST_FILE + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(f"id={req_id}\ntype=order\n")
+            for key, value in fields.items():
+                if value is None or value == "":
+                    continue
+                f.write(f"{key}={value}\n")
+        os.replace(tmp_path, REQUEST_FILE)
+
+        # Una orden real puede tardar un poco más que un pedido de velas
+        # (ejecución de mercado + reintentos esperando a que la posición
+        # aparezca, ver HandleOrderRequest) — timeout más generoso.
+        content = _wait_for_response(resp_path, timeout=15.0)
+
+    if content is None:
+        raise RuntimeError(
+            "Timeout esperando a MT5. ¿Está MT5 abierto, logueado, y el Service "
+            "'ZentinelBridge' corriendo (Navegador > Services)?"
+        )
+    return content
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def _send_json(self, status, payload_str):
         body = payload_str.encode("utf-8")
@@ -98,8 +134,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/order":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length) if length else b"{}"
+                payload = json.loads(raw.decode("utf-8") or "{}")
+            except (ValueError, json.JSONDecodeError):
+                self._send_json(400, json.dumps({"error": "JSON inválido"}))
+                return
+
+            action = payload.get("action", "")
+            if action not in ("open", "close", "modify", "positions", "closedInfo"):
+                self._send_json(400, json.dumps({"error": "action inválida: " + str(action)}))
+                return
+
+            fields = {
+                "action": action,
+                "symbol": payload.get("symbol", ""),
+                "side": payload.get("side", ""),
+                "sl": payload.get("sl", ""),
+                "tp": payload.get("tp", ""),
+                "ticket": payload.get("ticket", ""),
+            }
+            try:
+                content = fetch_order(fields)
+                self._send_json(200, content)
+            except RuntimeError as e:
+                self._send_json(502, json.dumps({"error": str(e)}))
+            return
+
+        self._send_json(404, json.dumps({"error": "not found"}))
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)

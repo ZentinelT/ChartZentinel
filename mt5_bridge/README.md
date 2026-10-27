@@ -49,6 +49,34 @@ Reemplaza Twelve Data por datos reales de tu cuenta Axi en MT5. Dos piezas:
   broker ofrece (`SymbolsTotal(false)`), no solo los de tu Market Watch —
   disponible en `GET /symbols` para usar en el buscador de símbolos.
 
+## Trading real (abrir/cerrar/modificar en tu cuenta de MT5)
+
+Además de leer velas, el Service ahora también puede mandar órdenes reales
+a la cuenta que tengas logueada en esa instancia de MT5 — desde el toggle
+**"Real trading (MT5)"** en el modal de Trades de ChartZentinel.
+
+**Importante antes de usarlo:**
+
+- **Probalo primero en una cuenta DEMO**, no en la real, hasta confirmar que
+  abre/cierra/modifica bien.
+- El **volumen (lotaje) lo decide MT5, no la app** — a propósito. Después de
+  recompilar, en MT5 → Navegador → Services → click derecho sobre
+  `ZentinelBridge` → **Properties**, ajustá el input `DefaultVolume` al
+  tamaño que quieras usar. Todas las operaciones que abras desde
+  ChartZentinel van a usar ESE volumen, siempre.
+- Tenés que tener el **"Algo Trading"** (el botón grande de la barra de
+  herramientas de MT5) **prendido** — si está apagado, cualquier orden se
+  rechaza, igual que con un Expert Advisor.
+- Después de actualizar `ZentinelBridge.mq5`, hay que **recompilarlo**
+  (MetaEditor, F7) y reiniciar el Service (Stop → Start) para que tome los
+  cambios.
+- El toggle **arranca apagado siempre** que abrís o recargás la app — no
+  queda prendido solo. Mientras está apagado, todo sigue funcionando como
+  papel-trading (simulado), igual que antes.
+- Las operaciones que abre ChartZentinel quedan etiquetadas con un magic
+  number propio — nunca lista ni toca operaciones que hayas abierto a mano
+  directo en MT5.
+
 ## Troubleshooting
 
 - **"Timeout esperando a MT5"**: el Service no está corriendo, o MT5 está

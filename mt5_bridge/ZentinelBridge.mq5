@@ -1,16 +1,27 @@
 //+------------------------------------------------------------------+
 //| ZentinelBridge.mq5                                                |
 //| Service (background, no chart needed) that answers on-demand     |
-//| OHLCV requests from the local Python bridge for ChartZentinel.   |
+//| OHLCV + order requests from the local Python bridge for          |
+//| ChartZentinel.                                                    |
 //|                                                                    |
 //| Protocol (files inside Common\Files\zentinel\, FILE_COMMON):     |
 //|   request.txt   -> written by bridge_server.py:                  |
+//|     OHLCV (type vacío o "ohlcv"):                                 |
 //|       id=<ms timestamp>                                          |
 //|       symbol=<MT5 symbol name>                                   |
 //|       interval=<1min|3min|5min|15min|30min|1h|2h|4h|1day|1week|1month> |
 //|       bars=<int>                                                 |
-//|   resp_<id>.txt -> written by this service:                      |
-//|       JSON array [{"time":...,"open":...,...}] or {"error":"…"}  |
+//|     Órdenes (type=order):                                        |
+//|       id=<ms timestamp>                                          |
+//|       type=order                                                 |
+//|       action=open|close|modify|positions|closedInfo              |
+//|       symbol=<MT5 symbol name>        (open)                     |
+//|       side=buy|sell                   (open)                     |
+//|       sl=<price>                      (open, modify)             |
+//|       tp=<price>                      (open, modify)             |
+//|       ticket=<position id>            (close, modify, closedInfo)|
+//|   resp_<id>.txt -> written por este servicio: JSON (ver cada      |
+//|       handler más abajo), o {"error":"…"}                        |
 //|                                                                    |
 //| Time values are shifted -7h from broker/server time so the JSON  |
 //| carries New York time as plain epoch seconds (verified fixed      |
@@ -18,9 +29,21 @@
 //+------------------------------------------------------------------+
 #property service
 #property strict
+#include <Trade\Trade.mqh>
 
 #define ZDIR "zentinel/"
 #define BROKER_TO_NY_SECONDS (7*3600)
+// Identifica las posiciones que abrió ESTE puente (no se tocan/listan
+// operaciones manuales que el usuario haya abierto a mano en MT5).
+#define ZENTINEL_MAGIC 990099
+
+// El volumen/tamaño de posición es TODO responsabilidad de MT5, a propósito
+// (pedido del usuario: ChartZentinel nunca manda un número de lotes — así
+// un bug de cálculo del lado de la app no puede mandar una orden gigante).
+// Ajustar este valor en las propiedades del Service antes de correrlo.
+input double DefaultVolume = 0.01;
+
+CTrade trade;
 
 //--- ENUM_TIMEFRAMES mapping for the strings ChartZentinel's tf-bar uses
 ENUM_TIMEFRAMES MapInterval(const string s)
@@ -96,6 +119,180 @@ void WriteSymbolsList()
    WriteCommonFile(ZDIR+"symbols.json", json);
 }
 
+//--- JSON para una posición abierta (solo las de este puente, filtradas
+//    por ZENTINEL_MAGIC más abajo — nunca se listan/tocan operaciones
+//    manuales que el usuario haya abierto a mano en MT5).
+string PositionToJson()
+{
+   long nyTime = (long)PositionGetInteger(POSITION_TIME) - BROKER_TO_NY_SECONDS;
+   string side = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY) ? "buy" : "sell";
+   return StringFormat(
+      "{\"ticket\":%I64u,\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.2f,"
+      "\"price_open\":%.5f,\"sl\":%.5f,\"tp\":%.5f,\"profit\":%.2f,\"time\":%I64d}",
+      PositionGetInteger(POSITION_TICKET), PositionGetString(POSITION_SYMBOL), side,
+      PositionGetDouble(POSITION_VOLUME), PositionGetDouble(POSITION_PRICE_OPEN),
+      PositionGetDouble(POSITION_SL), PositionGetDouble(POSITION_TP),
+      PositionGetDouble(POSITION_PROFIT), nyTime);
+}
+
+void HandleOrderRequest(const string &lines[], int n, const string respFile)
+{
+   string action = KeyValue(lines,n,"action");
+
+   if(action=="open")
+   {
+      string symbol = KeyValue(lines,n,"symbol");
+      string side   = KeyValue(lines,n,"side");
+      double sl = StringToDouble(KeyValue(lines,n,"sl"));
+      double tp = StringToDouble(KeyValue(lines,n,"tp"));
+
+      if(symbol=="" || !SymbolSelect(symbol, true))
+      {
+         WriteCommonFile(respFile, "{\"error\":\"symbol not found: "+symbol+"\"}");
+         return;
+      }
+      if(side!="buy" && side!="sell")
+      {
+         WriteCommonFile(respFile, "{\"error\":\"invalid side: "+side+"\"}");
+         return;
+      }
+
+      trade.SetExpertMagicNumber(ZENTINEL_MAGIC);
+      bool sent = (side=="buy")
+         ? trade.Buy(DefaultVolume, symbol, 0.0, sl, tp, "Zentinel")
+         : trade.Sell(DefaultVolume, symbol, 0.0, sl, tp, "Zentinel");
+
+      if(!sent)
+      {
+         WriteCommonFile(respFile, StringFormat(
+            "{\"error\":\"order send failed: retcode=%d %s\"}",
+            trade.ResultRetcode(), trade.ResultRetcodeDescription()));
+         return;
+      }
+
+      ulong ticket = trade.ResultOrder(); // deal-based open: position ticket == order ticket acá
+      // Puede tardar un instante en aparecer como posición (ejecución async)
+      for(int attempt=0; attempt<10 && !PositionSelectByTicket(ticket); attempt++)
+         Sleep(200);
+
+      if(!PositionSelectByTicket(ticket))
+      {
+         WriteCommonFile(respFile, "{\"error\":\"order sent but position not found yet (ticket "+IntegerToString((long)ticket)+")\"}");
+         return;
+      }
+      WriteCommonFile(respFile, "{\"ok\":true,\"position\":"+PositionToJson()+"}");
+      return;
+   }
+
+   if(action=="close")
+   {
+      ulong ticket = (ulong)StringToInteger(KeyValue(lines,n,"ticket"));
+      if(ticket==0 || !PositionSelectByTicket(ticket))
+      {
+         WriteCommonFile(respFile, "{\"error\":\"position not found: "+IntegerToString((long)ticket)+"\"}");
+         return;
+      }
+      if(!trade.PositionClose(ticket))
+      {
+         WriteCommonFile(respFile, StringFormat(
+            "{\"error\":\"close failed: retcode=%d %s\"}",
+            trade.ResultRetcode(), trade.ResultRetcodeDescription()));
+         return;
+      }
+      WriteCommonFile(respFile, "{\"ok\":true}");
+      return;
+   }
+
+   if(action=="modify")
+   {
+      ulong ticket = (ulong)StringToInteger(KeyValue(lines,n,"ticket"));
+      if(ticket==0 || !PositionSelectByTicket(ticket))
+      {
+         WriteCommonFile(respFile, "{\"error\":\"position not found: "+IntegerToString((long)ticket)+"\"}");
+         return;
+      }
+      double sl = StringToDouble(KeyValue(lines,n,"sl"));
+      double tp = StringToDouble(KeyValue(lines,n,"tp"));
+      if(!trade.PositionModify(ticket, sl, tp))
+      {
+         WriteCommonFile(respFile, StringFormat(
+            "{\"error\":\"modify failed: retcode=%d %s\"}",
+            trade.ResultRetcode(), trade.ResultRetcodeDescription()));
+         return;
+      }
+      WriteCommonFile(respFile, "{\"ok\":true,\"position\":"+PositionToJson()+"}");
+      return;
+   }
+
+   if(action=="positions")
+   {
+      string json = "[";
+      int total = PositionsTotal();
+      bool first = true;
+      for(int i=0;i<total;i++)
+      {
+         ulong ticket = PositionGetTicket(i);
+         if(ticket==0) continue;
+         if(!PositionSelectByTicket(ticket)) continue;
+         if(PositionGetInteger(POSITION_MAGIC)!=ZENTINEL_MAGIC) continue; // no manuales
+         if(!first) json += ",";
+         json += PositionToJson();
+         first = false;
+      }
+      json += "]";
+      WriteCommonFile(respFile, "{\"ok\":true,\"positions\":"+json+"}");
+      return;
+   }
+
+   if(action=="closedInfo")
+   {
+      // Una posición que YA cerró (ticket desapareció de PositionsTotal) —
+      // buscar en el historial de deals la salida (DEAL_ENTRY_OUT) de esa
+      // misma posición para saber precio/hora/profit reales de cierre.
+      // Asume cierre total en un solo deal (sin parciales) — el caso común.
+      long ticket = StringToInteger(KeyValue(lines,n,"ticket"));
+      if(ticket==0)
+      {
+         WriteCommonFile(respFile, "{\"error\":\"missing ticket\"}");
+         return;
+      }
+      if(!HistorySelectByPosition((ulong)ticket))
+      {
+         WriteCommonFile(respFile, "{\"error\":\"no history for position "+IntegerToString(ticket)+"\"}");
+         return;
+      }
+      int deals = HistoryDealsTotal();
+      ulong outDeal = 0;
+      for(int i=deals-1; i>=0; i--)
+      {
+         ulong dealTicket = HistoryDealGetTicket(i);
+         if((long)HistoryDealGetInteger(dealTicket, DEAL_ENTRY)==DEAL_ENTRY_OUT)
+         {
+            outDeal = dealTicket;
+            break; // el más reciente OUT — el cierre final
+         }
+      }
+      if(outDeal==0)
+      {
+         WriteCommonFile(respFile, "{\"error\":\"no closing deal found for position "+IntegerToString(ticket)+"\"}");
+         return;
+      }
+      long nyTime = (long)HistoryDealGetInteger(outDeal, DEAL_TIME) - BROKER_TO_NY_SECONDS;
+      double closePrice = HistoryDealGetDouble(outDeal, DEAL_PRICE);
+      double profit = HistoryDealGetDouble(outDeal, DEAL_PROFIT) + HistoryDealGetDouble(outDeal, DEAL_SWAP) + HistoryDealGetDouble(outDeal, DEAL_COMMISSION);
+      string reasonStr = "manual";
+      long reason = HistoryDealGetInteger(outDeal, DEAL_REASON);
+      if(reason==DEAL_REASON_SL) reasonStr="sl";
+      else if(reason==DEAL_REASON_TP) reasonStr="tp";
+      WriteCommonFile(respFile, StringFormat(
+         "{\"ok\":true,\"close_price\":%.5f,\"close_time\":%I64d,\"profit\":%.2f,\"reason\":\"%s\"}",
+         closePrice, nyTime, profit, reasonStr));
+      return;
+   }
+
+   WriteCommonFile(respFile, "{\"error\":\"unknown action: "+action+"\"}");
+}
+
 void HandleRequest()
 {
    string raw;
@@ -105,6 +302,7 @@ void HandleRequest()
    int n = StringSplit(raw, '\n', lines);
 
    string id      = KeyValue(lines,n,"id");
+   string reqType = KeyValue(lines,n,"type");
    string symbol  = KeyValue(lines,n,"symbol");
    string interval= KeyValue(lines,n,"interval");
    string barsStr = KeyValue(lines,n,"bars");
@@ -117,6 +315,12 @@ void HandleRequest()
    if(id=="") return;
 
    string respFile = ZDIR+"resp_"+id+".txt";
+
+   if(reqType=="order")
+   {
+      HandleOrderRequest(lines, n, respFile);
+      return;
+   }
 
    if(symbol=="" || !SymbolSelect(symbol, true))
    {
