@@ -3354,7 +3354,7 @@ function setIndSettingsObject(name, obj){
 function getIndicatorStyle(name, def){ return Object.assign({ color: def.color, lineWidth: 1 }, STATE.indicatorStyles[name] || {}); }
 function savePresetsState(){ lsSet('td_presets', JSON.stringify(STATE.presets)); }
 
-let chart, candleSeries, volumeSeries, futureAxisSeries;
+let chart, candleSeries, volumeSeries, futureAxisSeries, futureAnchorSeries;
 const overlays = {};
 
 // ══════════════════════════════════════════════════════════
@@ -3781,7 +3781,17 @@ function onDtbExtend(dir) {
   captureUndoSnapshot();
   if (dir === 'left')  { d.extLeft  = !d.extLeft;  document.getElementById('dtb-ext-left').classList.toggle('active',  d.extLeft); }
   if (dir === 'right') { d.extRight = !d.extRight; document.getElementById('dtb-ext-right').classList.toggle('active', d.extRight); }
-  redrawDrawing(d);
+  // updateDrawingGeometry() primero (setData sobre las series YA existentes)
+  // en vez de redrawDrawing() siempre — sacar y volver a meter una serie
+  // cuyo punto extendido cae en el eje de tiempo compartido (aunque caiga
+  // justo en una vela whitespace real) termina corriendo el rango lógico
+  // visible un poco cada vez: imperceptible en un solo toggle, pero
+  // tocar Extender muchas veces seguidas (reportado por el usuario) lo
+  // acumulaba hasta notarse como un salto grande, e incluso llegó a
+  // disparar la carga de más historial (loadMoreHistory) de pura
+  // casualidad, por quedar el rango visible corrido por debajo del umbral.
+  // redrawDrawing() queda de respaldo solo si la forma del dibujo cambió.
+  if (!updateDrawingGeometry(d)) redrawDrawing(d);
   rememberToolStyle(d);
 }
 function onDtbLock() {
@@ -4706,6 +4716,26 @@ function initChart() {
   // aunque vivan en otra serie — ver updateFormingCandleLive más abajo.
   futureAxisSeries = chart.addLineSeries({
     visible:false, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false,
+  });
+
+  // Otra serie invisible, con un único punto fijo CON VALOR (no whitespace,
+  // a diferencia de futureAxisSeries) 15 velas a futuro — probado a mano:
+  // un punto con valor reserva el eje de tiempo compartido de verdad, uno
+  // de whitespace (como los de futureAxisSeries) no alcanza por sí solo.
+  // Sin esto, extender una línea/rect/fib hacia la derecha y después
+  // desextenderla (o borrar el dibujo) hacía que el eje perdiera esas
+  // columnas al toque — el rango visible quedaba recortado exactamente esa
+  // cantidad de velas, y como setVisibleRange()/setVisibleLogicalRange()
+  // no pueden pedir más de lo que el eje realmente tiene reservado, ni
+  // guardar/restaurar el rango de antes alcanzaba para deshacerlo. Repetir
+  // Extender varias veces seguidas (reportado por el usuario) iba restando
+  // de a 10 velas cada vez que se apagaba, acumulado — un chart que
+  // terminaba mostrando una ventana de tiempo bastante más vieja. Esta
+  // reserva, siempre presente, evita que el eje dependa de que algún
+  // dibujo puntual la sostenga.
+  futureAnchorSeries = chart.addLineSeries({
+    visible:false, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false,
+    autoscaleInfoProvider: () => null,
   });
 
   volumeSeries = chart.addHistogramSeries({
@@ -8651,6 +8681,10 @@ function renderSeries(timeframe){
   const last=candles[candles.length-1];
   candleSeries.setData(candles);
   futureAxisSeries.setData(futureWhitespace(last.time, timeframe, 15));
+  // Mismo horario que el último punto de futureWhitespace (15 velas a
+  // futuro) pero CON valor — ver el comentario junto a su creación.
+  const _barStep = candles.length>1 ? (candles[candles.length-1].time-candles[candles.length-2].time) : 3600;
+  futureAnchorSeries.setData([{ time: last.time + _barStep*15, value: last.close }]);
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
   renderWatchtower();
