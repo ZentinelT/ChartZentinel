@@ -3537,7 +3537,11 @@ const DEFAULT_FIB_LEVELS = [
 function cloneFibLevels() { return JSON.parse(JSON.stringify(DEFAULT_FIB_LEVELS)); }
 
 function lwStyle(s) {
-  return s == 0 ? 0 : s == 1 ? 1 : 2;
+  // lightweight-charts' LineStyle enum es Solid=0, Dotted=1, Dashed=2 — pero
+  // nuestro <select> (value 1="Dashed", value 2="Dotted") sigue el orden al
+  // revés, así que hay que invertir 1<->2 al traducir, si no quedaban
+  // cruzados (elegís "Dashed" y se dibuja punteado, y viceversa).
+  return s == 0 ? 0 : s == 1 ? 2 : s == 2 ? 1 : s;
 }
 
 function selectDrawing(id) {
