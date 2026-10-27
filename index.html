@@ -912,17 +912,19 @@
   /* ─── MODALS ──────────────────────────────────────────── */
   .modal-overlay {
     position: fixed; inset: 0;
-    /* Antes llevaba backdrop-filter:blur(4px) — un bug conocido de Chromium
-       hace que un elemento con backdrop-filter superpuesto a un <canvas>
-       (el del chart, acá atrás) fuerce al compositor a reconstruir esa capa
-       cuando el filtro aparece/desaparece, y el canvas se ve negro/vacío
-       por un frame: el "apagón"/parpadeo reportado al cerrar CUALQUIER
-       modal. Ya se probó animar el blur junto con la opacidad en vez de
-       togglearlo de un salto — no alcanzó, el bug es del compositor, no
-       del timing del CSS. Sacar el blur de raíz (fondo oscuro más opaco,
-       sin vidrio esmerilado) saca también la causa.
+    /* Sin fondo oscuro de por medio: el usuario quiere ver el chart nítido
+       detrás de CUALQUIER modal (antes solo el de Settings de un indicador
+       quedaba así, con una regla aparte — ver más abajo, ahora redundante).
+       Antes llevaba backdrop-filter:blur(4px) y después un fondo oscuro
+       sólido — un bug de Chromium hacía que cualquier capa semitransparente
+       encima del <canvas> del chart lo dejara en negro un frame al
+       abrir/cerrar el modal; el fix real fue aislar el chart en su propia
+       capa de composición (#chart-container, transform:translateZ(0)), así
+       que ya no hace falta un fondo oscuro para disimular ese parpadeo. El
+       overlay SIGUE capturando clicks igual que siempre (cierra al
+       clickear afuera) — no se toca pointer-events.
     */
-    background: rgba(0,0,0,.8);
+    background: transparent;
     z-index: 500;
     display: flex; align-items: center; justify-content: center;
     opacity: 0; pointer-events: none;
@@ -943,18 +945,16 @@
   .modal-overlay.open .modal { transform: translateY(0); }
 
   /* El panel de Settings de un indicador se usa para ajustar colores/valores
-     MIRANDO el efecto en el chart al toque — el fondo oscuro+blur genérico
-     de .modal-overlay lo tapaba casi entero. Acá se anula ESE fondo (queda
-     transparente, sin blur); el overlay SIGUE capturando clicks igual que
-     cualquier otro modal (cierra al clickear afuera, como siempre) — no se
-     toca pointer-events, a propósito: un intento anterior lo ponía en
-     'none' para además poder interactuar con el chart de atrás, pero eso
-     rompía el scroll con la rueda y los <select>/<input type=time> nativos
-     adentro del panel (hit-testing de controles de formulario nativos bajo
-     un ancestro pointer-events:none es poco confiable entre navegadores).
-     También se puede arrastrar desde el título (ver el bloque de drag más
-     abajo, junto al del draw-toolbar, mismo patrón: position:fixed + clamp). */
-  #modal-ind-settings.modal-overlay.open { background: transparent; backdrop-filter: none; }
+     MIRANDO el efecto en el chart al toque — por eso fue el primero en
+     quedar con fondo transparente (antes era el único; ahora .modal-overlay
+     ya es transparente de base para todos, ver arriba). pointer-events NO
+     se toca acá: un intento anterior lo ponía en 'none' para además poder
+     interactuar con el chart de atrás, pero eso rompía el scroll con la
+     rueda y los <select>/<input type=time> nativos adentro del panel
+     (hit-testing de controles de formulario nativos bajo un ancestro
+     pointer-events:none es poco confiable entre navegadores). También se
+     puede arrastrar desde el título (ver el bloque de drag más abajo,
+     junto al del draw-toolbar, mismo patrón: position:fixed + clamp). */
   #ind-settings-title { cursor: move; user-select: none; }
   #ind-settings-title.dragging { cursor: grabbing; }
 
