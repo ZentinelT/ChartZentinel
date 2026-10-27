@@ -924,6 +924,22 @@
   }
   .modal-overlay.open .modal { transform: translateY(0); }
 
+  /* El panel de Settings de un indicador se usa para ajustar colores/valores
+     MIRANDO el efecto en el chart al toque — el fondo oscuro+blur genérico
+     de .modal-overlay lo tapaba casi entero. Acá se anula ESE fondo (queda
+     transparente, sin blur); el overlay SIGUE capturando clicks igual que
+     cualquier otro modal (cierra al clickear afuera, como siempre) — no se
+     toca pointer-events, a propósito: un intento anterior lo ponía en
+     'none' para además poder interactuar con el chart de atrás, pero eso
+     rompía el scroll con la rueda y los <select>/<input type=time> nativos
+     adentro del panel (hit-testing de controles de formulario nativos bajo
+     un ancestro pointer-events:none es poco confiable entre navegadores).
+     También se puede arrastrar desde el título (ver el bloque de drag más
+     abajo, junto al del draw-toolbar, mismo patrón: position:fixed + clamp). */
+  #modal-ind-settings.modal-overlay.open { background: transparent; backdrop-filter: none; }
+  #ind-settings-title { cursor: move; user-select: none; }
+  #ind-settings-title.dragging { cursor: grabbing; }
+
   .modal h2 { font-family: var(--font-display); font-size: 11px; letter-spacing: 3px; color: var(--gold); margin-bottom: 16px; text-transform: uppercase; }
   .modal label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; letter-spacing: .5px; }
   .modal input[type=text], .modal input[type=password] {
@@ -1767,8 +1783,8 @@
 </div>
 
 <div class="modal-overlay" id="modal-ind-settings">
-  <div class="modal" style="max-height:85vh;overflow-y:auto;">
-    <h2 id="ind-settings-title">Settings</h2>
+  <div class="modal" id="ind-settings-panel" style="max-height:85vh;overflow-y:auto;">
+    <h2 id="ind-settings-title" title="Arrastrar para mover">Settings</h2>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;">Template</label>
       <select id="ind-settings-template-select" class="dtb-select" style="width:100%;margin-bottom:8px;"></select>
@@ -5883,6 +5899,7 @@ let _indSettingsTarget = null;
 
 function openIndicatorSettings(name) {
   _indSettingsTarget = name;
+  if (window._indSettingsResetPosition) window._indSettingsResetPosition();
   document.getElementById('ind-settings-title').textContent = name + ' — Settings';
   const body = document.getElementById('ind-settings-body');
   if (name === 'Watchtower') {
@@ -9615,6 +9632,59 @@ if (_dtbBar && _dtbHandle) {
     _dtbApplyPosition(c.left, c.top);
   });
 }
+
+// ─── Panel de Settings de un indicador: arrastrable (mismo patrón que el
+// draw-toolbar de arriba: position:fixed + left/top en px, clampeado al
+// viewport) — sin persistir posición entre aperturas a propósito (cada
+// openIndicatorSettings la resetea al centro, ver _indSettingsResetPosition
+// más arriba), porque acá se abre y cierra para indicadores distintos todo
+// el tiempo y no tiene el mismo sentido de "panel fijo" que el toolbar.
+(function initIndSettingsDrag(){
+  const panel = document.getElementById('ind-settings-panel');
+  const handle = document.getElementById('ind-settings-title');
+  if (!panel || !handle) return;
+  function clamp(left, top){
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxL = window.innerWidth - w - 4, maxT = window.innerHeight - h - 4;
+    return {
+      left: maxL >= 4 ? Math.min(Math.max(4, left), maxL) : 4,
+      top: maxT >= 4 ? Math.min(Math.max(4, top), maxT) : 4,
+    };
+  }
+  function applyPos(left, top){
+    panel.style.position = 'fixed';
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.margin = '0';
+  }
+  // Vuelve al centrado por flex de .modal-overlay (sacando el position:fixed
+  // de un arrastre anterior) — se llama al abrir el panel para un indicador.
+  window._indSettingsResetPosition = function(){
+    panel.style.position = '';
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.style.margin = '';
+  };
+  let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const r = panel.getBoundingClientRect();
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startLeft = r.left; startTop = r.top;
+    handle.classList.add('dragging');
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const c = clamp(startLeft + (e.clientX - startX), startTop + (e.clientY - startY));
+    applyPos(c.left, c.top);
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+  });
+})();
 
 // ══════════════════════════════════════════════════════════
 //  OPERACIONES (paper trading) — tomar/registrar trades simulados
