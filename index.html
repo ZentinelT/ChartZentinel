@@ -839,6 +839,27 @@
   .order-cancel-btn:hover { color: var(--red); }
   .order-edit-btn:hover { color: var(--gold); }
 
+  /* × para cerrar una operación abierta directo desde su línea de entrada
+     en el chart (ver renderOrderCloseButtons) — div real posicionado a
+     mano sobre el canvas del chart, mismo mecanismo que las etiquetas de
+     texto (ver label de 'text' en buildDrawingOnChart), reposicionado en
+     cada pan/zoom/resize vía syncOverlayPositions. */
+  .order-close-btn {
+    position: absolute;
+    width: 16px; height: 16px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; line-height: 1;
+    color: #fff;
+    background: rgba(10,10,14,.75);
+    border: 1px solid currentColor;
+    cursor: pointer;
+    z-index: 22;
+    user-select: none;
+  }
+  .order-close-btn:hover { background: var(--red); border-color: var(--red); }
+
   /* ─── CHART AREA ──────────────────────────────────────── */
   #chart-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
   /* transform:translateZ(0) fuerza su propia capa de composición GPU,
@@ -5120,6 +5141,7 @@ function initChart() {
         syncPositionTool(d);
       }
     });
+    positionOrderCloseButtons();
   }
   window._syncOverlayPositions = syncOverlayPositions;
   syncOverlayPositions();
@@ -10710,6 +10732,53 @@ function renderOrderPriceLines(){
     addLine(o.price, { color, lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: label }, { kind:'pending', id:o.id, field:'price', editable:true });
     if (o.sl != null) addLine(o.sl, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'pending', id:o.id, field:'sl', editable:true });
     if (o.tp != null) addLine(o.tp, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'pending', id:o.id, field:'tp', editable:true });
+  });
+  renderOrderCloseButtons();
+}
+
+// × sobre la línea de entrada de cada operación abierta (ver CSS
+// .order-close-btn) para cerrarla directo desde el chart, sin pasar por el
+// panel de Operar ni el modal de Trades — pedido explícito del usuario.
+// Reusa closeTradeById(), que ya sabe mandar el cierre real a MT5 cuando
+// corresponde (t.real) — a diferencia del arrastre de SL/TP (bloqueado para
+// reales a propósito), cerrar es una sola acción deliberada de un click,
+// mismo riesgo que el botón ✕ que ya existe en el modal de Trades.
+let _orderCloseButtons = [];
+function renderOrderCloseButtons(){
+  const container = document.getElementById('chart-container');
+  _orderCloseButtons.forEach(b => b.el.remove());
+  _orderCloseButtons = [];
+  if (!candleSeries || !chart || window._orderLineDragSession) return;
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
+    const btn = document.createElement('div');
+    btn.className = 'order-close-btn';
+    btn.textContent = '✕';
+    btn.title = 'Cerrar operación';
+    btn.style.color = t.side === 'long' ? '#26a69a' : '#ef5350';
+    btn.onclick = (e) => { e.stopPropagation(); closeTradeById(t.id); };
+    container.appendChild(btn);
+    _orderCloseButtons.push({ el: btn, tradeId: t.id });
+  });
+  positionOrderCloseButtons();
+}
+// Separado de renderOrderCloseButtons (que reconstruye todo) porque esto
+// se llama MUCHO más seguido — cada pan/zoom/resize, vía syncOverlayPositions
+// — y no hace falta destruir y crear los divs de nuevo, solo moverlos.
+function positionOrderCloseButtons(){
+  if (!candleSeries || !chart || !_orderCloseButtons.length) return;
+  const container = document.getElementById('chart-container');
+  const plotW = container.clientWidth - chart.priceScale('right').width();
+  const plotH = container.clientHeight - chart.timeScale().height();
+  const open = getOpenTrades();
+  _orderCloseButtons.forEach(b => {
+    const t = open.find(x => x.id === b.tradeId);
+    const y = t ? candleSeries.priceToCoordinate(t.entry_price) : null;
+    const hidden = !t || y === null || y < 0 || y > plotH;
+    b.el.style.display = hidden ? 'none' : 'flex';
+    if (hidden) return;
+    b.el.style.left = (plotW - 11) + 'px';
+    b.el.style.top = y + 'px';
   });
 }
 
