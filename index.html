@@ -1384,13 +1384,14 @@
   #draw-toolbar .dtb-color-wrap[style*="gap:10px"] { flex-direction: column; gap: 4px !important; padding: 2px 0; }
 
   .drawing-handle {
-    fill: var(--gold);
+    fill: var(--text-secondary);
+    fill-opacity: .85;
     stroke: var(--bg-panel);
-    stroke-width: 1.5;
+    stroke-width: 1;
     cursor: move;
     transition: r .1s;
   }
-  .drawing-handle:hover { r: 7; }
+  .drawing-handle:hover { r: 4.5; fill-opacity: 1; }
   [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
   .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
 
@@ -5208,7 +5209,7 @@ function highlightSelectedSvg(id) {
     function addHandle(x, y, dId, role) {
       if (x === null || y === null) return;
       const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-      c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 5);
+      c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 3.5);
       c.classList.add('drawing-handle');
       c.dataset.drawingId = dId;
       c.dataset.role = role;
