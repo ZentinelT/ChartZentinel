@@ -441,7 +441,9 @@
      igual que en TV — así que cada panel individual ya no muestra la suya. */
   html.embed-mode #toolbar,
   html.embed-mode #btn-sidebar-toggle,
-  html.embed-mode #sidebar { display: none !important; }
+  html.embed-mode #sidebar,
+  html.embed-mode #btn-orders-toggle,
+  html.embed-mode #orders-panel { display: none !important; }
   /* Mismo criterio para los TF, símbolo, Indicators, Replay, Undo/Redo,
      layout/tema/refresh/settings: un solo juego de controles arriba de
      toda la grilla (ver gbar en renderLayoutGrid), no uno repetido por
@@ -770,6 +772,79 @@
   .ind-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .ind-remove { background: none; border: none; color: transparent; cursor: pointer; font-size: 12px; line-height: 1; transition: color .15s; }
   .ind-item:hover .ind-remove { color: var(--red); }
+
+  /* ─── ORDERS PANEL (derecha) ──────────────────────────── */
+  /* Mismo mecanismo que #sidebar/.sidebar-inner (ver comentario arriba):
+     marco que recorta con ancho fijo adentro, para que el deslizar
+     abrir/cerrar no reacomode texto, solo "corra" el contenido. */
+  #orders-panel {
+    width: var(--orders-panel-w, 270px);
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: width .22s cubic-bezier(.4,0,.2,1);
+    will-change: width;
+  }
+  #orders-panel.collapsed { width: 0; border-left: none; }
+  .orders-panel-inner {
+    width: var(--orders-panel-w, 270px);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-light) transparent;
+  }
+  #btn-orders-toggle {
+    width: 13px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border: none;
+    border-left: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  #btn-orders-toggle:hover { color: var(--gold); }
+  #btn-orders-toggle svg { width: 10px; height: 10px; transition: transform .15s; }
+  #btn-orders-toggle.collapsed svg { transform: rotate(180deg); }
+
+  #orders-live-note.hidden, #orders-price-field.hidden { display: none; }
+  .orders-live-note { margin: 10px 12px 0; padding: 7px 9px; font-size: 10.5px; line-height: 1.4; color: var(--gold); background: var(--gold-glow); border: 1px solid var(--gold-dim); border-radius: 4px; }
+
+  .orders-form { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .orders-side-row { display: flex; gap: 6px; margin-bottom: 10px; }
+  .orders-side-btn {
+    flex: 1;
+    padding: 7px 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .orders-side-btn.buy.active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .orders-side-btn.sell.active { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .orders-field { margin-bottom: 10px; }
+  .orders-field:last-of-type { margin-bottom: 0; }
+
+  .orders-list { padding: 4px 0; max-height: 220px; overflow-y: auto; scrollbar-color: var(--border-light) transparent; }
+  .orders-empty { padding: 8px 12px; font-size: 11px; color: var(--text-dim); }
+  .order-row { display:flex; align-items:center; gap:6px; padding:5px 12px; border-bottom:1px solid var(--border); font-size:11px; font-family:var(--font-mono); }
+  .order-row:last-child { border-bottom:none; }
+  .order-row-meta { color:var(--text-dim); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .order-cancel-btn, .order-edit-btn { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:12px; line-height:1; padding:2px; flex-shrink:0; }
+  .order-cancel-btn:hover { color: var(--red); }
+  .order-edit-btn:hover { color: var(--gold); }
 
   /* ─── CHART AREA ──────────────────────────────────────── */
   #chart-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -1498,6 +1573,54 @@
         <div class="loader-msg" id="loader-msg">Initializing…</div>
       </div>
       <div id="crosshair-info"></div>
+    </div>
+  </div>
+
+  <!-- ── ORDERS PANEL TOGGLE ───────────────────────────── -->
+  <button id="btn-orders-toggle" title="Mostrar/ocultar panel de operar" onclick="toggleOrdersPanel()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+
+  <!-- ── ORDERS PANEL ──────────────────────────────────── -->
+  <div id="orders-panel">
+    <div class="orders-panel-inner">
+      <div class="sidebar-header">Operar</div>
+      <div id="orders-live-note" class="orders-live-note hidden">Trading real (MT5) activo: este panel solo arma órdenes en papel. Para abrir/cerrar en tu cuenta real usá el toggle y los botones del modal de Trades.</div>
+      <div class="orders-form">
+        <div class="orders-side-row">
+          <button id="orders-side-buy" class="orders-side-btn buy active" onclick="setOrdersSide('long')">Buy</button>
+          <button id="orders-side-sell" class="orders-side-btn sell" onclick="setOrdersSide('short')">Sell</button>
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Tipo de orden</label>
+          <select id="orders-type" class="dtb-select" style="width:100%;" onchange="onOrdersTypeChange()">
+            <option value="market">Market</option>
+            <option value="limit">Limit</option>
+            <option value="stop">Stop</option>
+          </select>
+        </div>
+        <div class="orders-field hidden" id="orders-price-field">
+          <label class="cs-field-label">Precio de la orden</label>
+          <input id="orders-price" type="text" class="topbar-input" style="width:100%;" placeholder="Precio" autocomplete="off">
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Tamaño (lotes)</label>
+          <input id="orders-volume" type="number" step="0.01" min="0" class="topbar-input" style="width:100%;" value="1">
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Stop loss</label>
+          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = sin SL" autocomplete="off">
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Take profit</label>
+          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = sin TP" autocomplete="off">
+        </div>
+        <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Colocar orden</button>
+      </div>
+      <div class="sidebar-header">Pendientes (<span id="orders-pending-count">0</span>)</div>
+      <div id="orders-pending-list" class="orders-list"></div>
+      <div class="sidebar-header">Abiertas (<span id="orders-open-count">0</span>)</div>
+      <div id="orders-open-list" class="orders-list"></div>
     </div>
   </div>
 </div>
@@ -5886,6 +6009,26 @@ if (_sidebarCollapsedSaved === '1' || (_sidebarCollapsedSaved === null && EMBED_
 }
 
 // ══════════════════════════════════════════════════════════
+//  ORDERS PANEL (operar: market/limit/stop + SL/TP/tamaño) toggle
+//  Mismo mecanismo de abrir/cerrar que el watchlist (toggleSidebar) pero
+//  SIN cerrarse solo al clickear el chart — a diferencia del watchlist,
+//  este panel se usa mientras se interactúa con el chart (dibujando,
+//  mirando precios), así que cerrarlo en cada click sería molesto.
+//  Arranca siempre colapsado (no hay caso de uso donde deba abrirse solo).
+// ══════════════════════════════════════════════════════════
+function toggleOrdersPanel() {
+  const collapsed = document.getElementById('orders-panel').classList.toggle('collapsed');
+  document.getElementById('btn-orders-toggle').classList.toggle('collapsed', collapsed);
+  lsSet(lsKey('td_orders_collapsed'), collapsed ? '1' : '0');
+  if (!collapsed) renderOrdersPanel();
+}
+const _ordersCollapsedSaved = lsGet(lsKey('td_orders_collapsed'));
+if (_ordersCollapsedSaved !== '0') {
+  document.getElementById('orders-panel').classList.add('collapsed');
+  document.getElementById('btn-orders-toggle').classList.add('collapsed');
+}
+
+// ══════════════════════════════════════════════════════════
 //  LAYOUT PICKER (1 / 2 / 4 gráficos)
 // ══════════════════════════════════════════════════════════
 // El modo de 1 solo gráfico guarda su estado sin sufijo de pane (td_symbol,
@@ -7898,6 +8041,7 @@ function _applyReplayFrame(){
   updateTopbarPrice(last, prev);
   updateTopbarOHLCV(last);
   checkOpenTradesAgainstBar(last);
+  checkPendingOrdersAgainstBar(last);
   document.getElementById('replay-label').textContent =
     `${fmtReplayTime(last.time)}  ·  ${r.idx+1}/${r.full.length}`;
   if (r.idx >= r.full.length - 1) replayPause();
@@ -9186,6 +9330,7 @@ async function appendNewBar(symbol, timeframe){
       // acercado desde entonces. Bug reportado 2026-10-22.
       const isStillForming = i === json.bars.length - 1;
       checkOpenTradesAgainstBar(bar, isStillForming);
+      checkPendingOrdersAgainstBar(bar, isStillForming);
     });
     renderSeries(timeframe);
     if (window._syncOverlayPositions) window._syncOverlayPositions(); // ver refreshFormingCandle — mismo motivo
@@ -9339,6 +9484,15 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     if (getOpenTrades().some(t => t.symbol === normalizeSymbolForJournal(symbol))) {
       candles.forEach((bar, i) => checkOpenTradesAgainstBar(bar, i === candles.length - 1));
     }
+    if (getPendingOrders().some(o => o.symbol === normalizeSymbolForJournal(symbol))) {
+      candles.forEach((bar, i) => checkPendingOrdersAgainstBar(bar, i === candles.length - 1));
+    }
+    // Cambiar de símbolo no necesariamente toca ningún trade/orden (los
+    // checks de arriba solo guardan y refrescan si algo se disparó) — pero
+    // el panel de operar filtra por STATE.symbol, así que igual hay que
+    // refrescarlo para que no quede mostrando las pendientes/abiertas del
+    // símbolo anterior.
+    renderOrdersPanelIfOpen();
     // Números enteros en el eje de precio (sin decimales) para símbolos
     // tipo índice (NAS100, US30, US500...) donde el centavo no aporta nada
     // y solo ensucia la lectura — pero sin forzarlo en pares con precio
@@ -9561,6 +9715,7 @@ async function refreshFormingCandle(symbol, timeframe){
 
     window._lastCandles[window._lastCandles.length-1]=bar;
     checkOpenTradesAgainstBar(bar, true);
+    checkPendingOrdersAgainstBar(bar, true);
     updateFormingCandleLive(bar);
     // Si esta vela en formación hizo un máximo/mínimo nuevo, el autoescalado
     // de precio se mueve — las velas y las LÍNEAS del dibujo (series reales
@@ -9972,6 +10127,14 @@ function saveClosedTrades(list){ lsSet('td_closed_trades', JSON.stringify(list))
 function getTradesPointValue(){ const v = parseFloat(lsGet('td_point_value')); return (isFinite(v) && v > 0) ? v : 1; }
 function setTradesPointValue(v){ const n = parseFloat(v); lsSet('td_point_value', String((isFinite(n) && n > 0) ? n : 1)); }
 
+// Órdenes pendientes (Limit/Stop) en papel — mismo storage GLOBAL sin
+// sufijo de pane que td_open_trades, por el mismo motivo (un trade/orden
+// abierta en un panel tiene que verse igual desde cualquier otro panel
+// con el mismo símbolo). Nunca tocan MT5: ver pregunta al usuario — las
+// Limit/Stop quedaron explícitamente solo del lado simulado.
+function getPendingOrders(){ try { return JSON.parse(lsGet('td_pending_orders') || '[]'); } catch(e){ return []; } }
+function savePendingOrders(list){ lsSet('td_pending_orders', JSON.stringify(list)); }
+
 // ══════════════════════════════════════════════════════════
 //  TRADING REAL (vía ZentinelBridge.mq5 → MT5) — a propósito separado
 //  del papel-trading de arriba: LIVE_TRADING es una variable suelta, NO
@@ -10001,6 +10164,8 @@ function toggleLiveTrading(on){
   if (statusEl) { statusEl.textContent = LIVE_TRADING ? 'ON' : 'OFF'; statusEl.classList.toggle('on', LIVE_TRADING); }
   const toggleEl = document.getElementById('live-trading-toggle');
   if (toggleEl) toggleEl.checked = LIVE_TRADING;
+  const noteEl = document.getElementById('orders-live-note');
+  if (noteEl) noteEl.classList.toggle('hidden', !LIVE_TRADING);
   _syncLivePollTimer();
 }
 
@@ -10201,6 +10366,11 @@ function renderTradesCountBadge(){
   const info = getTradesBadgeInfo();
   const el = document.getElementById('btn-trades-count');
   if (el) { el.textContent = info.label; el.style.color = info.color; }
+  // Se llama desde TODOS los puntos donde un trade cambia (abrir, cerrar,
+  // tick de precio) — mismo criterio que ya usa esta función para el P/L
+  // del badge de arriba: lugar más barato para refrescar también el panel
+  // de operar nuevo, sin agregar un gancho aparte en cada uno de esos sitios.
+  renderOrdersPanelIfOpen();
 }
 
 function confirmTrade(){
@@ -10614,6 +10784,7 @@ function editTradeById(id){
           markDrawingsDirty();
         }
         renderTradesModalIfOpen();
+        renderOrdersPanelIfOpen();
       }).catch((e) => alert('No se pudo modificar la operación real: ' + e.message));
       return;
     }
@@ -10630,7 +10801,239 @@ function editTradeById(id){
       markDrawingsDirty();
     }
     renderTradesModalIfOpen();
+    renderOrdersPanelIfOpen();
   });
+}
+
+// ══════════════════════════════════════════════════════════
+//  PANEL DE OPERAR (lateral derecho) — market/limit/stop + tamaño/SL/TP,
+//  independiente de la herramienta de dibujo Long/Short: no hace falta
+//  dibujar nada en el chart, se completan los campos y se manda. SIEMPRE
+//  en papel (ver getPendingOrders arriba) — aunque esté prendido el
+//  trading real, este panel no lo toca, a propósito (así el tamaño que
+//  se pruebe acá nunca termina mandándose a MT5).
+// ══════════════════════════════════════════════════════════
+let _ordersSide = 'long';
+function setOrdersSide(side){
+  _ordersSide = side;
+  const buyBtn = document.getElementById('orders-side-buy');
+  const sellBtn = document.getElementById('orders-side-sell');
+  if (buyBtn) buyBtn.classList.toggle('active', side === 'long');
+  if (sellBtn) sellBtn.classList.toggle('active', side === 'short');
+}
+function onOrdersTypeChange(){
+  const type = document.getElementById('orders-type').value;
+  document.getElementById('orders-price-field').classList.toggle('hidden', type === 'market');
+}
+function _ordersParsePrice(s){
+  // Mismo problema que editTradeById: fmt() devuelve con coma de miles
+  // (convención en-US de esta app), Number() no la entiende sola.
+  const t = String(s || '').trim();
+  if (t === '') return null;
+  const n = Number(t.replace(/,/g, ''));
+  return isFinite(n) ? n : NaN;
+}
+function placeOrderFromPanel(){
+  const type = document.getElementById('orders-type').value;
+  const volume = parseFloat(document.getElementById('orders-volume').value);
+  if (!volume || volume <= 0) { alert('Tamaño de posición inválido.'); return; }
+  const sl = _ordersParsePrice(document.getElementById('orders-sl').value);
+  const tp = _ordersParsePrice(document.getElementById('orders-tp').value);
+  if (Number.isNaN(sl) || Number.isNaN(tp)) { alert('Precio de SL/TP inválido.'); return; }
+  const side = _ordersSide;
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+
+  if (type === 'market') {
+    if (!lastBar) { alert('Todavía no cargó el precio actual.'); return; }
+    const trade = {
+      id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      symbol: sym,
+      side, volume,
+      entry_price: lastBar.close,
+      stop_loss: sl,
+      take_profit: tp,
+      open_time: getSimNow(),
+      source: window._replay ? 'replay' : 'live',
+    };
+    const open = getOpenTrades();
+    open.push(trade);
+    saveOpenTrades(open);
+    renderTradesCountBadge();
+    renderTradesModalIfOpen();
+    renderTradeMarkers();
+    return;
+  }
+
+  const price = _ordersParsePrice(document.getElementById('orders-price').value);
+  if (!price) { alert('Ingresá un precio para la orden ' + (type === 'limit' ? 'Limit' : 'Stop') + '.'); return; }
+  // Mismo criterio que un bróker real: Limit entra a favor (más barato en
+  // compra, más caro en venta), Stop entra en ruptura (más caro en compra,
+  // más barato en venta). No bloquea si no se cumple — algunos quieren
+  // dejarla cargada antes de que el precio se acomode — pero avisa.
+  if (lastBar) {
+    const cur = lastBar.close;
+    const invalid =
+      (side === 'long'  && type === 'limit' && price >= cur) ||
+      (side === 'long'  && type === 'stop'  && price <= cur) ||
+      (side === 'short' && type === 'limit' && price <= cur) ||
+      (side === 'short' && type === 'stop'  && price >= cur);
+    if (invalid) {
+      const hint = side === 'long'
+        ? (type === 'limit' ? 'Buy Limit normalmente va por DEBAJO del precio actual.' : 'Buy Stop normalmente va por ARRIBA del precio actual.')
+        : (type === 'limit' ? 'Sell Limit normalmente va por ARRIBA del precio actual.' : 'Sell Stop normalmente va por DEBAJO del precio actual.');
+      if (!confirm(hint + ' Precio actual: ' + fmt(cur) + '. ¿Colocarla igual?')) return;
+    }
+  }
+  const order = {
+    id: 'ord_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    symbol: sym,
+    side, type, price, volume,
+    sl, tp,
+    created: getSimNow(),
+    source: window._replay ? 'replay' : 'live',
+  };
+  const pending = getPendingOrders();
+  pending.push(order);
+  savePendingOrders(pending);
+  renderOrdersPanelIfOpen();
+}
+function cancelPendingOrder(id){
+  const pending = getPendingOrders().filter(o => o.id !== id);
+  savePendingOrders(pending);
+  renderOrdersPanelIfOpen();
+}
+function editPendingOrder(id){
+  const pending = getPendingOrders();
+  const o = pending.find(x => x.id === id);
+  if (!o) return;
+  promptFields('Editar orden pendiente', [
+    { id:'price', label:'Precio', type:'text', value: fmt(o.price) },
+    { id:'volume', label:'Tamaño (lotes)', type:'number', value: o.volume },
+    { id:'sl', label:'Stop loss (vacío = sin SL)', type:'text', value: o.sl != null ? fmt(o.sl) : '' },
+    { id:'tp', label:'Take profit (vacío = sin TP)', type:'text', value: o.tp != null ? fmt(o.tp) : '' },
+  ], (vals) => {
+    const price = _ordersParsePrice(vals.price);
+    const volume = parseFloat(vals.volume);
+    const sl = _ordersParsePrice(vals.sl);
+    const tp = _ordersParsePrice(vals.tp);
+    if (!price || Number.isNaN(price) || !volume || volume <= 0 || Number.isNaN(sl) || Number.isNaN(tp)) {
+      alert('Datos inválidos.');
+      return;
+    }
+    o.price = price; o.volume = volume; o.sl = sl; o.tp = tp;
+    savePendingOrders(pending);
+    renderOrdersPanelIfOpen();
+  });
+}
+// Mismo mecanismo que checkOpenTradesAgainstBar (ver comentario ahí): corre
+// en cada tick/vela nueva/paso de replay, chequea si el high/low de la vela
+// ya tocó el precio de alguna pendiente de ESTE símbolo y, si la tocó, la
+// convierte en operación abierta (entry = precio de la orden, no el de
+// mercado — a diferencia de confirmTrade/placeOrderFromPanel en market).
+function checkPendingOrdersAgainstBar(bar, formingLive){
+  if (!bar) return;
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const pending = getPendingOrders();
+  const filledIds = [];
+  const newTrades = [];
+  for (let i = pending.length - 1; i >= 0; i--) {
+    const o = pending[i];
+    if (o.symbol !== sym) continue;
+    if (bar.time != null && o.created != null && bar.time < o.created) continue;
+    // Mismo resguardo que en checkOpenTradesAgainstBar: si la orden se
+    // armó DENTRO del mismo bucket que esta vela en formación, su rango ya
+    // traía mecha de antes de que la orden existiera — comparar solo
+    // contra el cierre actual, no contra todo el high/low acumulado.
+    const sameBucketAsCreated = formingLive && bar.time != null && o.created != null && o.created >= bar.time;
+    const hi = sameBucketAsCreated ? bar.close : bar.high;
+    const lo = sameBucketAsCreated ? bar.close : bar.low;
+    let hit = false;
+    if (o.side === 'long') {
+      if (o.type === 'limit' && lo <= o.price) hit = true;
+      else if (o.type === 'stop' && hi >= o.price) hit = true;
+    } else {
+      if (o.type === 'limit' && hi >= o.price) hit = true;
+      else if (o.type === 'stop' && lo <= o.price) hit = true;
+    }
+    if (hit) {
+      filledIds.push(o.id);
+      newTrades.push({
+        id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        symbol: o.symbol,
+        side: o.side,
+        volume: o.volume,
+        entry_price: o.price,
+        stop_loss: o.sl,
+        take_profit: o.tp,
+        open_time: formingLive ? getSimNow() : bar.time,
+        source: o.source || (window._replay ? 'replay' : 'live'),
+      });
+    }
+  }
+  if (!filledIds.length) return;
+  // Mismo patrón que checkOpenTradesAgainstBar: releer fresco antes de
+  // guardar, así un segundo panel con el mismo símbolo no pisa cambios
+  // que éste no vio.
+  const freshPending = getPendingOrders().filter(o => !filledIds.includes(o.id));
+  savePendingOrders(freshPending);
+  const open = getOpenTrades();
+  newTrades.forEach(t => open.push(t));
+  saveOpenTrades(open);
+  renderTradesCountBadge();
+  renderTradesModalIfOpen();
+  renderTradeMarkers();
+}
+function renderOrdersPanelIfOpen(){
+  const el = document.getElementById('orders-panel');
+  if (el && !el.classList.contains('collapsed')) renderOrdersPanel();
+}
+function renderOrdersPanel(){
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const pending = getPendingOrders().filter(o => o.symbol === sym);
+  const open = getOpenTrades().filter(t => t.symbol === sym);
+  const pendingCountEl = document.getElementById('orders-pending-count');
+  if (pendingCountEl) pendingCountEl.textContent = String(pending.length);
+  const openCountEl = document.getElementById('orders-open-count');
+  if (openCountEl) openCountEl.textContent = String(open.length);
+
+  const pendingList = document.getElementById('orders-pending-list');
+  if (pendingList) {
+    pendingList.innerHTML = !pending.length ? '<div class="orders-empty">Sin órdenes pendientes.</div>' : pending.map(o => {
+      const meta = `${o.type === 'limit' ? 'Limit' : 'Stop'} ${fmt(o.price)} · SL${o.sl != null ? fmt(o.sl) : '—'} TP${o.tp != null ? fmt(o.tp) : '—'} · ${o.volume}L`;
+      return `<div class="order-row">
+        <span class="trade-side ${o.side}">${o.side === 'long' ? 'B' : 'S'}</span>
+        <span class="order-row-meta">${meta}</span>
+        <button class="order-edit-btn" title="Editar orden" onclick="editPendingOrder('${o.id}')">✎</button>
+        <button class="order-cancel-btn" title="Cancelar orden" onclick="cancelPendingOrder('${o.id}')">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  const pointValue = getTradesPointValue();
+  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+  const openList = document.getElementById('orders-open-list');
+  if (openList) {
+    openList.innerHTML = !open.length ? '<div class="orders-empty">Sin operaciones abiertas.</div>' : open.map(t => {
+      let plHtml = '';
+      if (t.real && t._liveProfit != null) {
+        const pl = t._liveProfit;
+        plHtml = `<span class="trade-pl ${pl >= 0 ? 'pos' : 'neg'}">${pl >= 0 ? '+' : ''}${pl.toFixed(2)}</span>`;
+      } else if (lastBar) {
+        const sign = t.side === 'long' ? 1 : -1;
+        const pl = (lastBar.close - t.entry_price) * sign * t.volume * pointValue;
+        plHtml = `<span class="trade-pl ${pl >= 0 ? 'pos' : 'neg'}">${pl >= 0 ? '+' : ''}${pl.toFixed(2)}</span>`;
+      }
+      const meta = `${t.real ? '🔴 ' : ''}${fmt(t.entry_price)} SL${t.stop_loss != null ? fmt(t.stop_loss) : '—'} TP${t.take_profit != null ? fmt(t.take_profit) : '—'} · ${t.volume}L`;
+      return `<div class="order-row">
+        <span class="trade-side ${t.side}">${t.side === 'long' ? 'L' : 'S'}</span>
+        <span class="order-row-meta">${meta}</span>
+        ${plHtml}
+        <button class="order-edit-btn" title="Editar SL/TP" onclick="editTradeById('${t.id}')">✎</button>
+        <button class="order-cancel-btn" title="Cerrar operación" onclick="closeTradeById('${t.id}')">✕</button>
+      </div>`;
+    }).join('');
+  }
 }
 
 function fmtTradeTime(epochSeconds){ return fmtReplayTime(epochSeconds); }
