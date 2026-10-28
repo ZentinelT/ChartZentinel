@@ -226,6 +226,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        # Sin esto, una pestaña ya abierta (o un simple reload, no hard
+        # refresh) puede seguir sirviendo una versión vieja de index.html
+        # desde el caché del navegador después de editar el código — pasó
+        # más de una vez (reportado por el usuario). App local de un solo
+        # archivo, chica: no vale la pena el caching, mejor forzar siempre
+        # la versión real.
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
