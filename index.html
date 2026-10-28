@@ -1810,6 +1810,10 @@
     </svg>
     <span class="dtb-btn-text">Levels</span>
   </button>
+  <button class="dtb-btn" id="dtb-vp-settings" title="Volume Profile Settings" onclick="openVpSettingsModal()" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2.1M8 12.4v2.1M1.5 8h2.1M12.4 8h2.1M3.5 3.5l1.5 1.5M11 11l1.5 1.5M3.5 12.5l1.5-1.5M11 5l1.5-1.5"/></svg>
+    <span class="dtb-btn-text">Settings</span>
+  </button>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" id="dtb-ext-left" title="Extend Left" onclick="onDtbExtend('left')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -2035,6 +2039,55 @@
     <div class="modal-btns">
       <button class="btn-ghost" onclick="resetFibLevels()">Reset to default</button>
       <button class="btn-primary" onclick="closeModal('modal-fib-levels')">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-vp-settings">
+  <div class="modal">
+    <h2>Volume Profile</h2>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px;">
+      <label style="font-size:11px;color:var(--text-dim);display:block;">Rows
+        <input type="number" id="vp-set-rows" min="2" max="150" step="1" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('rows', Math.max(2,Math.min(150,parseInt(this.value)||24)))">
+      </label>
+      <label style="font-size:11px;color:var(--text-dim);display:block;">Value Area Volume (%)
+        <input type="number" id="vp-set-va" min="1" max="99" step="1" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('vaPct', Math.max(1,Math.min(99,parseInt(this.value)||70)))">
+      </label>
+      <label style="font-size:11px;color:var(--text-dim);display:block;">Volume
+        <select id="vp-set-voltype" class="dtb-select" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('volumeType', this.value)">
+          <option value="updown">Up/Down</option>
+          <option value="total">Total</option>
+        </select>
+      </label>
+      <label style="font-size:11px;color:var(--text-dim);display:block;">Placement
+        <select id="vp-set-placement" class="dtb-select" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('placement', this.value)">
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="dtb-color-swatch" id="vp-set-up-swatch">
+            <input type="color" id="vp-set-up" oninput="document.getElementById('vp-set-up-swatch').style.background=this.value; onVpSettingChange('upColor', this.value)">
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);">Up volume</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="dtb-color-swatch" id="vp-set-down-swatch">
+            <input type="color" id="vp-set-down" oninput="document.getElementById('vp-set-down-swatch').style.background=this.value; onVpSettingChange('downColor', this.value)">
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);">Down volume</span>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
+        <input type="checkbox" id="vp-set-poc" onchange="onVpSettingChange('showPoc', this.checked)"> Show POC line
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
+        <input type="checkbox" id="vp-set-va-toggle" onchange="onVpSettingChange('showValueArea', this.checked)"> Show Value Area (VAH/VAL)
+      </label>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-primary" onclick="closeModal('modal-vp-settings')">Done</button>
     </div>
   </div>
 </div>
@@ -3798,7 +3851,11 @@ function refreshToolDefaultsFor(type){
   // d.levels guardado para 'fib' podía quedar pegado en toolDefaults al
   // pasar por otro tipo que no lo pisa (rect, trendline...) y éste nunca
   // lo limpia.
-  Object.assign(toolDefaults, { color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined }, TOOL_STYLE_STORE[type] || {});
+  Object.assign(toolDefaults, {
+    color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined,
+    rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
+    upColor:undefined, downColor:undefined, showPoc:undefined, showValueArea:undefined,
+  }, TOOL_STYLE_STORE[type] || {});
 }
 // Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
 // existente — guarda ese mismo estilo como el default de su TIPO, para que
@@ -3838,6 +3895,12 @@ function captureDrawingStyle(d){
     // entraban en el template.
     return Object.assign(base, { color: d.color, showBorder: d.showBorder !== false, showFill: d.showFill !== false });
   }
+  if (d.type === 'vp') {
+    return Object.assign(base, {
+      color: d.color, rows: d.rows, vaPct: d.vaPct, placement: d.placement, volumeType: d.volumeType,
+      upColor: d.upColor, downColor: d.downColor, showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false,
+    });
+  }
   if (d.type === 'hline' || d.type === 'trendline') {
     // showPriceLabel: si la línea muestra su precio como etiqueta en el eje
     // derecho (lastValueVisible) — antes no existía como campo, siempre
@@ -3868,7 +3931,7 @@ function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringi
 // restyleDrawingAppearance() no sabe aplicar porque no toca visibilidad/
 // opciones por fuera de color-ancho-estilo, solo repinta las series que YA
 // existen. Para estos hace falta reconstruir entero.
-const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'rect', 'long', 'short', 'hline', 'trendline']);
+const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'rect', 'vp', 'long', 'short', 'hline', 'trendline']);
 function applyStyleObjectToDrawing(d, style){
   captureUndoSnapshot();
   Object.assign(d, style);
@@ -4067,11 +4130,12 @@ function selectDrawing(id) {
   document.getElementById('dtb-width').value = d.width;
   document.getElementById('dtb-style').value = d.style;
   document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
+  document.getElementById('dtb-vp-settings').style.display = d.type==='vp' ? '' : 'none';
   const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'fib');
   document.getElementById('dtb-price-label').style.display = hasPriceLabel ? '' : 'none';
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
-  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect');
-  document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect') ? '' : 'none';
+  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp');
+  document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect' && d.type!=='vp') ? '' : 'none';
   document.getElementById('dtb-ext-right').style.display = extendApplies ? '' : 'none';
   document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
   document.getElementById('dtb-ext-right').classList.toggle('active', !!d.extRight);
@@ -4153,8 +4217,10 @@ function restyleDrawingAppearance(d) {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
   } else if (d.type === 'vp') {
-    d.series.forEach(s => { try { s.applyOptions({ color: C+'88', lineWidth: lw, lineStyle: ls }); } catch(e){} });
-    (d.vpBarEls||[]).forEach(el => el.setAttribute('fill', C));
+    // [0-3] borde, [4] POC (color fijo, no sigue a d.color), [5]/[6] VAH/VAL.
+    [0,1,2,3].forEach(i => { const s=d.series[i]; if (s) try { s.applyOptions({ color: C+'88', lineWidth: lw, lineStyle: ls }); } catch(e){} });
+    [5,6].forEach(i => { const s=d.series[i]; if (s) try { s.applyOptions({ color: C+'99' }); } catch(e){} });
+    syncVolumeProfileBars(d); // recolorea el segmento "total" (usa d.color); up/down tienen su propio color aparte
   } else if (d.type === 'fib') {
     const levels = (d.levels||[]).filter(lv => lv.on);
     d.series.forEach((s,i) => {
@@ -4303,6 +4369,42 @@ function openFibLevelsModal() {
   renderFibLevelsRows();
   openModal('modal-fib-levels');
 }
+// ══════════════════════════════════════════════════════════
+//  AJUSTES DEL PERFIL DE VOLUMEN (rows/value area/placement/colores) —
+//  mismos parámetros reales que trae la herramienta de TradingView (ver
+//  computeVolumeProfileBins para el detalle de cada uno).
+// ══════════════════════════════════════════════════════════
+function openVpSettingsModal() {
+  const d = getSelected(); if (!d || d.type!=='vp') return;
+  document.getElementById('vp-set-rows').value = d.rows || 24;
+  document.getElementById('vp-set-va').value = d.vaPct != null ? d.vaPct : 70;
+  document.getElementById('vp-set-voltype').value = d.volumeType || 'updown';
+  document.getElementById('vp-set-placement').value = d.placement || 'left';
+  document.getElementById('vp-set-up').value = d.upColor || '#26a69a';
+  document.getElementById('vp-set-up-swatch').style.background = d.upColor || '#26a69a';
+  document.getElementById('vp-set-down').value = d.downColor || '#ef5350';
+  document.getElementById('vp-set-down-swatch').style.background = d.downColor || '#ef5350';
+  document.getElementById('vp-set-poc').checked = d.showPoc !== false;
+  document.getElementById('vp-set-va-toggle').checked = d.showValueArea !== false;
+  openModal('modal-vp-settings');
+}
+// "rows" cambia cuántos rects de barra hacen falta — necesita reconstruir
+// el dibujo entero (ver el chequeo d.vpBarEls.length !== d.rows en
+// buildDrawingOnChart). El resto de los ajustes no cambian la CANTIDAD de
+// series/elementos, así que les alcanza con recalcular los bins y
+// reposicionar — mismo camino liviano que un arrastre (updateDrawingGeometry).
+function onVpSettingChange(field, val) {
+  const d = getSelected(); if (!d || d.type!=='vp') return;
+  captureUndoSnapshot();
+  d[field] = val;
+  if (field === 'rows') {
+    redrawDrawing(d);
+  } else if (!updateDrawingGeometry(d)) {
+    redrawDrawing(d);
+  }
+  markDrawingsDirty();
+  rememberToolStyle(d);
+}
 function updateFibLevel(i, field, val) {
   const d = getSelected(); if (!d || !d.levels[i]) return;
   captureUndoSnapshot();
@@ -4430,16 +4532,18 @@ function updateDrawingGeometry(d) {
     syncRectFill(d);
     ok = true;
 
-  } else if (d.type === 'vp' && d.series.length === 4) {
+  } else if (d.type === 'vp' && d.series.length === 7) {
     const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
     const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-    let t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
-    if (t2 === t1) t2 = t1 + barInterval;
+    let t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t2raw === t1) t2raw = t1 + barInterval;
+    const t2 = d.extRight ? tFuture : t2raw;
     d.series[0].setData([{time:t1,value:hi},{time:t2,value:hi}]);
     d.series[1].setData([{time:t1,value:lo},{time:t2,value:lo}]);
     d.series[2].setData([{time:t1,value:lo},{time:t1,value:hi}]);
     d.series[3].setData([{time:t2,value:lo},{time:t2,value:hi}]);
     computeVolumeProfileBins(d);
+    applyVpLevelLines(d, t1, t2);
     syncVolumeProfileBars(d);
     ok = true;
 
@@ -4490,7 +4594,7 @@ function removeDrawingById(id) {
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
-  if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(el => el.remove());
+  if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (d.profitFillEl instanceof Element) d.profitFillEl.remove();
   if (d.lossFillEl instanceof Element) d.lossFillEl.remove();
   if (d.entryTextEl instanceof Element) d.entryTextEl.remove();
@@ -4534,67 +4638,144 @@ function syncRectFill(d) {
 
 // Calcula el histograma de volumen por franja de precio de un 'vp' — se
 // llama solo cuando la GEOMETRÍA cambia (al crearlo, al arrastrar una
-// manija o el cuerpo entero), nunca en el loop de pan/zoom (syncOverlayPositions),
-// que solo reposiciona en pantalla los bins ya calculados (ver
+// manija o el cuerpo entero, o al tocar un ajuste del panel de
+// configuración), nunca en el loop de pan/zoom (syncOverlayPositions), que
+// solo reposiciona en pantalla los bins ya calculados (ver
 // syncVolumeProfileBars). Reparte el volumen de cada vela entre las
 // franjas que su rango high-low pisa, proporcional al solape — es una
 // aproximación razonable sin tener datos de tick a tick (mismo criterio
-// que usan los plugins de volume profile de lightweight-charts).
-const VP_BUCKETS = 24;
+// que usan los plugins de volume profile de lightweight-charts). El
+// volumen de cada vela se clasifica ENTERO como alcista o bajista según
+// close vs open (close<=open cuenta como bajista) — mismo criterio
+// documentado por TradingView para su Fixed Range Volume Profile, no un
+// reparto a mitad de vela. También arma el Value Area (POC + franjas
+// vecinas hasta juntar d.vaPct% del volumen total, expandiendo siempre
+// hacia el lado con más volumen — mismo algoritmo que TV).
 function computeVolumeProfileBins(d) {
   const candles = window._lastCandles || [];
   const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
-  const t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
-  const step = (hi - lo) / VP_BUCKETS || 1;
+  const t1 = Math.min(d.p1.time, d.p2.time);
+  const t2raw = Math.max(d.p1.time, d.p2.time);
+  // Extender a la derecha (ver mkR/d.extRight en buildDrawingOnChart): el
+  // perfil sigue sumando velas nuevas a medida que llegan, no se queda
+  // congelado en el t2 original del arrastre.
+  const t2 = d.extRight && candles.length ? Math.max(t2raw, candles[candles.length-1].time) : t2raw;
+  const N = Math.max(1, d.rows || 24);
+  const step = (hi - lo) / N || 1;
   const bins = [];
-  for (let i = 0; i < VP_BUCKETS; i++) bins.push({ top: hi - i*step, bottom: hi - (i+1)*step, vol: 0 });
+  for (let i = 0; i < N; i++) bins.push({ top: hi - i*step, bottom: hi - (i+1)*step, up: 0, down: 0 });
   candles.forEach(c => {
     if (c.time < t1 || c.time > t2) return;
     const vol = c.volume || 0;
     if (vol <= 0) return;
+    const isUp = c.close > c.open;
+    const add = (idx, v) => { if (isUp) bins[idx].up += v; else bins[idx].down += v; };
     const cHi = Math.min(c.high, hi), cLo = Math.max(c.low, lo);
     const range = c.high - c.low;
     if (range <= 0 || cHi <= cLo) {
       const closeClamped = Math.min(Math.max(c.close, lo), hi);
-      const idx = Math.min(VP_BUCKETS-1, Math.max(0, Math.floor((hi - closeClamped) / step)));
-      bins[idx].vol += vol;
+      const idx = Math.min(N-1, Math.max(0, Math.floor((hi - closeClamped) / step)));
+      add(idx, vol);
       return;
     }
-    bins.forEach(b => {
+    bins.forEach((b, i) => {
       const ovTop = Math.min(b.top, cHi), ovBot = Math.max(b.bottom, cLo);
       const overlap = ovTop - ovBot;
-      if (overlap > 0) b.vol += vol * (overlap / range);
+      if (overlap > 0) add(i, vol * (overlap / range));
     });
   });
-  let maxVol = 0, pocIdx = 0;
-  bins.forEach((b,i) => { if (b.vol > maxVol) { maxVol = b.vol; pocIdx = i; } });
+  bins.forEach(b => { b.total = b.up + b.down; });
+  let pocIdx = 0, maxVol = 0;
+  bins.forEach((b,i) => { if (b.total > maxVol) { maxVol = b.total; pocIdx = i; } });
+
+  // Value Area: arranca en el POC y suma la franja vecina (arriba o abajo,
+  // la que tenga más volumen) hasta llegar al % pedido del volumen total.
+  const totalVol = bins.reduce((s,b)=>s+b.total, 0);
+  const target = totalVol * ((d.vaPct != null ? d.vaPct : 70) / 100);
+  let topIdx = pocIdx, botIdx = pocIdx, acc = bins[pocIdx] ? bins[pocIdx].total : 0;
+  while (acc < target && (topIdx > 0 || botIdx < N-1)) {
+    const upNext = topIdx > 0 ? bins[topIdx-1].total : -1;
+    const downNext = botIdx < N-1 ? bins[botIdx+1].total : -1;
+    if (downNext >= upNext) { botIdx++; acc += bins[botIdx].total; }
+    else { topIdx--; acc += bins[topIdx].total; }
+  }
+  bins.forEach((b,i) => { b.inVA = i >= topIdx && i <= botIdx; });
+
   d.vpBins = bins; d.vpMaxVol = maxVol; d.vpPocIdx = pocIdx;
+  d.vpPocPrice = bins[pocIdx] ? (bins[pocIdx].top + bins[pocIdx].bottom)/2 : hi;
+  d.vpVahPrice = bins[topIdx] ? bins[topIdx].top : hi;
+  d.vpValPrice = bins[botIdx] ? bins[botIdx].bottom : lo;
+  d.vpT1 = t1; d.vpT2 = t2;
+}
+
+// Reposiciona las 3 líneas de nivel (POC/VAH/VAL, series[4]/[5]/[6]) con
+// los precios recién calculados por computeVolumeProfileBins — aparte de
+// syncVolumeProfileBars porque ESTAS sí son series reales del chart
+// (setData, no atributos SVG).
+function applyVpLevelLines(d, t1, t2) {
+  if (d.series.length < 7) return;
+  d.series[4].setData([{time:t1,value:d.vpPocPrice},{time:t2,value:d.vpPocPrice}]);
+  d.series[4].applyOptions({ visible: d.showPoc !== false });
+  d.series[5].setData([{time:t1,value:d.vpVahPrice},{time:t2,value:d.vpVahPrice}]);
+  d.series[5].applyOptions({ visible: d.showValueArea !== false });
+  d.series[6].setData([{time:t1,value:d.vpValPrice},{time:t2,value:d.vpValPrice}]);
+  d.series[6].applyOptions({ visible: d.showValueArea !== false });
 }
 
 // Reubica en pantalla las barras ya calculadas de un 'vp' (se llama cada
-// frame, igual que syncRectFill) — crecen desde el borde izquierdo de la
-// caja hacia la derecha, ancho proporcional al volumen de cada franja
-// contra el máximo (el "POC" queda resaltado con más opacidad).
+// frame, igual que syncRectFill) — 2 rects por franja (alcista/bajista "en
+// secuencia", pegados uno al otro, como en TV), creciendo desde el borde
+// de la caja que marque d.placement. La franja POC queda con más opacidad,
+// y las franjas fuera del Value Area quedan más apagadas que las de adentro
+// — mismo convenio visual que cualquier perfil de volumen.
 function syncVolumeProfileBars(d) {
   if (!Array.isArray(d.vpBarEls) || !d.vpBarEls.length) return;
   const bins = d.vpBins || [];
-  const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-  const t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+  const t1 = safeLineTime(d.vpT1 != null ? d.vpT1 : Math.min(d.p1.time, d.p2.time));
+  const t2 = safeLineTime(d.vpT2 != null ? d.vpT2 : Math.max(d.p1.time, d.p2.time));
   const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
-  if (x1===null || x2===null) { d.vpBarEls.forEach(el => el.style.display='none'); return; }
-  const boxLeft = Math.min(x1,x2), maxBarW = Math.abs(x2-x1) * 0.85;
+  if (x1===null || x2===null) { d.vpBarEls.forEach(p => { p.upEl.style.display='none'; p.downEl.style.display='none'; }); return; }
+  const left = d.placement !== 'right';
+  const boxLeft = Math.min(x1,x2), boxRight = Math.max(x1,x2);
+  const maxBarW = (boxRight - boxLeft) * 0.9;
+  const anchorX = left ? boxLeft : boxRight;
   const maxVol = d.vpMaxVol || 0;
-  d.vpBarEls.forEach((el, i) => {
+  d.vpBarEls.forEach((p, i) => {
     const b = bins[i];
     const yTop = b ? candleSeries.priceToCoordinate(b.top) : null;
     const yBot = b ? candleSeries.priceToCoordinate(b.bottom) : null;
-    if (!b || yTop===null || yBot===null) { el.style.display='none'; return; }
-    el.style.display='';
-    el.setAttribute('x', boxLeft);
-    el.setAttribute('y', Math.min(yTop,yBot));
-    el.setAttribute('width', maxVol>0 ? (b.vol/maxVol)*maxBarW : 0);
-    el.setAttribute('height', Math.max(1, Math.abs(yBot-yTop)-1));
-    el.setAttribute('fill-opacity', i===d.vpPocIdx ? '0.85' : '0.42');
+    if (!b || yTop===null || yBot===null) { p.upEl.style.display='none'; p.downEl.style.display='none'; return; }
+    const y = Math.min(yTop,yBot), h = Math.max(1, Math.abs(yBot-yTop)-1);
+    const total = b.up + b.down;
+    const totalW = maxVol>0 ? (total/maxVol)*maxBarW : 0;
+    const opacity = i===d.vpPocIdx ? 0.95 : (b.inVA ? 0.7 : 0.3);
+    p.upEl.setAttribute('y', y); p.downEl.setAttribute('y', y);
+    p.upEl.setAttribute('height', h); p.downEl.setAttribute('height', h);
+    p.upEl.setAttribute('fill-opacity', opacity); p.downEl.setAttribute('fill-opacity', opacity);
+
+    if (d.volumeType === 'total') {
+      // Un solo segmento (sin separar alcista/bajista), en el color
+      // genérico del dibujo (d.color) en vez de los dos de up/down.
+      p.upEl.style.display=''; p.downEl.style.display='none';
+      p.upEl.setAttribute('fill', d.color);
+      p.upEl.setAttribute('x', left ? anchorX : anchorX - totalW);
+      p.upEl.setAttribute('width', totalW);
+      return;
+    }
+
+    const upW = total>0 ? totalW * (b.up/total) : 0;
+    const downW = totalW - upW;
+    p.upEl.style.display = upW>0 ? '' : 'none';
+    p.downEl.style.display = downW>0 ? '' : 'none';
+    p.upEl.setAttribute('fill', d.upColor);
+    p.downEl.setAttribute('fill', d.downColor);
+    if (left) {
+      p.upEl.setAttribute('x', anchorX); p.upEl.setAttribute('width', upW);
+      p.downEl.setAttribute('x', anchorX + upW); p.downEl.setAttribute('width', downW);
+    } else {
+      p.downEl.setAttribute('x', anchorX - downW); p.downEl.setAttribute('width', downW);
+      p.upEl.setAttribute('x', anchorX - downW - upW); p.upEl.setAttribute('width', upW);
+    }
   });
 }
 
@@ -4770,38 +4951,62 @@ function buildDrawingOnChart(d) {
     syncRectFill(d);
 
   } else if (d.type === 'vp') {
+    // Defaults — por si este dibujo viene de localStorage/sync de ANTES de
+    // que estos campos existieran (versión vieja, solo tenía color/width/
+    // style). Mismos defaults que usa la creación nueva (ver tool==='vp').
+    if (d.rows == null) d.rows = 24;
+    if (d.vaPct == null) d.vaPct = 70;
+    if (!d.placement) d.placement = 'left';
+    if (!d.volumeType) d.volumeType = 'updown';
+    if (!d.upColor) d.upColor = '#26a69a';
+    if (!d.downColor) d.downColor = '#ef5350';
+    if (d.showPoc == null) d.showPoc = true;
+    if (d.showValueArea == null) d.showValueArea = true;
+
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
     const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-    let t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
-    if (t1 === t2) t2 = t1 + barInterval;
-    const mkR = (pts) => {
-      const s = chart.addLineSeries({ color: C+'88', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null });
+    let t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t1 === t2raw) t2raw = t1 + barInterval;
+    const t2 = d.extRight ? tFuture : t2raw;
+    const mkR = (pts, opts={}) => {
+      const s = chart.addLineSeries(Object.assign({ color: C+'88', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null }, opts));
       s.setData(pts); d.series.push(s); return s;
     };
+    // [0-3] las 4 líneas del borde (igual que 'rect'). [4] POC, [5]/[6]
+    // VAH/VAL — SIEMPRE se crean las 7 (aunque el toggle esté apagado, solo
+    // se ocultan con visible:false) para que d.series.length se mantenga
+    // constante: updateDrawingGeometry() necesita esa cuenta fija para
+    // tomar el camino liviano (setData) en vez de reconstruir todo en cada
+    // frame de un arrastre — mismo motivo ya documentado para el borde de
+    // 'rect' (ver showBorder arriba).
     mkR([{time:t1,value:hi},{time:t2,value:hi}]);
     mkR([{time:t1,value:lo},{time:t2,value:lo}]);
     mkR([{time:t1,value:lo},{time:t1,value:hi}]);
     mkR([{time:t2,value:lo},{time:t2,value:hi}]);
+    mkR([{time:t1,value:hi},{time:t2,value:hi}], { lineWidth:1, lineStyle:2, color:'#f0c060cc', visible: d.showPoc !== false });
+    mkR([{time:t1,value:hi},{time:t2,value:hi}], { lineWidth:1, lineStyle:1, color:C+'99', visible: d.showValueArea !== false });
+    mkR([{time:t1,value:lo},{time:t2,value:lo}], { lineWidth:1, lineStyle:1, color:C+'99', visible: d.showValueArea !== false });
 
-    // Las barras del histograma son rects de la capa SVG (no series del
-    // chart — lightweight-charts no puede dibujar una barra horizontal en
-    // un punto arbitrario de tiempo), igual que el relleno de 'rect' —
-    // reposicionadas cada frame por syncVolumeProfileBars. Se recrean solo
-    // si no existen todavía (redrawDrawing() las deja vivas, igual que
-    // fillEl en 'rect', así un cambio de color no las duplica).
-    if (!Array.isArray(d.vpBarEls) || !d.vpBarEls.length) {
+    // Barras del histograma: 2 rects por franja de precio (volumen alcista/
+    // bajista "en secuencia", como en TV — ver computeVolumeProfileBins) en
+    // la capa SVG, reposicionadas cada frame por syncVolumeProfileBars. Se
+    // recrean solo si cambió la cantidad de franjas (d.rows) — así cambiar
+    // color/estilo no las duplica (redrawDrawing() las deja vivas, igual
+    // que fillEl en 'rect').
+    if (!Array.isArray(d.vpBarEls) || d.vpBarEls.length !== d.rows) {
+      (d.vpBarEls||[]).forEach(p => { p.upEl.remove(); p.downEl.remove(); });
       d.vpBarEls = [];
-      for (let i = 0; i < 24; i++) {
-        const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
-        r.setAttribute('fill', C);
-        window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
-        d.vpBarEls.push(r);
+      for (let i = 0; i < d.rows; i++) {
+        const upEl = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        const downEl = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        window._drawingLayerSvg.insertBefore(downEl, window._drawingLayerSvg.firstChild);
+        window._drawingLayerSvg.insertBefore(upEl, window._drawingLayerSvg.firstChild);
+        d.vpBarEls.push({ upEl, downEl });
       }
-    } else {
-      d.vpBarEls.forEach(el => el.setAttribute('fill', C));
     }
     computeVolumeProfileBins(d);
+    applyVpLevelLines(d, t1, t2);
     syncVolumeProfileBars(d);
 
   } else if (d.type === 'fib') {
@@ -6119,7 +6324,18 @@ function initDrawingLayer() {
       const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
       const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
       if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
-      d = { id:genId(), type:'vp', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
+      d = {
+        id:genId(), type:'vp', series:[], svgEls:[], label:null, locked:false,
+        color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style,
+        extLeft:false, extRight:false, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2},
+        // Parámetros propios del perfil (ver computeVolumeProfileBins/openVpSettingsModal)
+        // — mismos nombres y defaults que usa TradingView en su herramienta real:
+        // 24 franjas, Value Area 70%, volumen separado en alcista/bajista.
+        rows: toolDefaults.rows || 24, vaPct: toolDefaults.vaPct != null ? toolDefaults.vaPct : 70,
+        placement: toolDefaults.placement || 'left', volumeType: toolDefaults.volumeType || 'updown',
+        upColor: toolDefaults.upColor || '#26a69a', downColor: toolDefaults.downColor || '#ef5350',
+        showPoc: toolDefaults.showPoc !== false, showValueArea: toolDefaults.showValueArea !== false,
+      };
     } else if (tool === 'fib') {
       if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
       // toolDefaults.levels: lo que haya quedado guardado como default de
