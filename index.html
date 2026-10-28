@@ -2201,15 +2201,19 @@ function renderLayoutGrid(n){
   const iframeEls = [];
   let activePane = 1;
 
-  // Color del anillo del panel activo, de los divisores entre paneles, Y del
-  // crosshair (las líneas que "encuadran" el precio/horario bajo el cursor)
-  // de cada panel — un solo toggle para las tres cosas (ver input
-  // #gc-accent-color más abajo, en el popup del layout-picker). Las dos
-  // primeras viven en este documento (CSS vars); el crosshair vive adentro
-  // de cada panel (su propio STATE.chartSettings.crosshairColor), así que
-  // hay que empujarlo con paneEval — no hay forma de pisarlo desde afuera
-  // con CSS. Se guarda sin sufijo de panel: una sola preferencia para toda
-  // la grilla, no por panel.
+  // Color del anillo del panel activo, de los divisores entre paneles, Y
+  // (si el usuario lo pide explícitamente, ver #gc-accent-color más abajo)
+  // del crosshair de cada panel. El anillo/divisores son CSS vars de ESTE
+  // documento, siempre al día. El crosshair vive adentro de cada panel (su
+  // propio STATE.chartSettings.crosshairColor) y SOLO se empuja con
+  // paneEval cuando el usuario cambia el color a mano acá — nunca solo, ni
+  // al cargar un panel ni al abrir la grilla (antes sí, y eso pisaba en
+  // cada carga el color que cada panel tuviera guardado — pedido explícito
+  // 2026-10-28: que cada panel se quede con el suyo a menos que el usuario
+  // elija lo contrario). Se guarda sin sufijo de panel: una sola
+  // preferencia para toda la grilla, no por panel — pero ahora es un
+  // PUNTO DE PARTIDA que el usuario aplica cuando quiere, no algo que se
+  // reimponga solo.
   function gridAccentRgba(hex, alpha){
     const h = hex.replace('#','');
     const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
@@ -3143,7 +3147,15 @@ function renderLayoutGrid(n){
         // puede no coincidir con el toggle central de Sync — alinearlo apenas
         // termina de cargar, no recién cuando alguien toque el toggle.
         paneEval(iframe, `STATE.chartSettings.syncCrosshair=${!!syncConfig.crosshair}; saveChartSettingsState();`);
-        pushAccentToPane(iframe); // mismo color de crosshair que el resto de la grilla desde el arranque
+        // SIN pushAccentToPane(iframe) acá a propósito — antes esto pisaba el
+        // color de crosshair/eje guardado de CADA panel con el compartido de
+        // la grilla en CADA carga (abrir la grilla, agregar un panel, F5...),
+        // así que lo que configurabas en modo 1 gráfico (o lo que ya tenía
+        // guardado un panel 2/3/4 de antes) se perdía solo. Pedido explícito
+        // 2026-10-28: que cada panel se quede con lo que tiene guardado. El
+        // color compartido de la grilla (ver pushAccentToPane/
+        // applyGridAccentColor) ahora solo se empuja cuando el usuario lo
+        // cambia A MANO desde "Panel border color" — nunca automático.
       });
       grid.appendChild(iframe);
       iframeEls.push(iframe);
