@@ -9526,10 +9526,11 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     }
     // Cambiar de símbolo no necesariamente toca ningún trade/orden (los
     // checks de arriba solo guardan y refrescan si algo se disparó) — pero
-    // el panel de operar filtra por STATE.symbol, así que igual hay que
-    // refrescarlo para que no quede mostrando las pendientes/abiertas del
-    // símbolo anterior.
+    // el panel de operar y las marcas/líneas del chart filtran por
+    // STATE.symbol, así que igual hay que refrescarlos para que no quede
+    // mostrando las pendientes/abiertas del símbolo anterior.
     renderOrdersPanelIfOpen();
+    renderTradeMarkers();
     // Números enteros en el eje de precio (sin decimales) para símbolos
     // tipo índice (NAS100, US30, US500...) donde el centavo no aporta nada
     // y solo ensucia la lectura — pero sin forzarlo en pares con precio
@@ -10607,6 +10608,42 @@ function renderTradeMarkers(){
 
   markers.sort((a, b) => a.time - b.time);
   candleSeries.setMarkers(markers);
+  // Líneas horizontales de precio (entry/SL/TP de lo abierto, precio de las
+  // pendientes) — se llama siempre desde acá para no tener que acordarse de
+  // agregarla en cada sitio nuevo que ya llama a renderTradeMarkers().
+  renderOrderPriceLines();
+}
+
+// Líneas horizontales estilo cualquier plataforma de trading (MT5, TV...):
+// una por cada operación abierta (entry + SL + TP) y una por cada orden
+// pendiente (Limit/Stop), con su precio en el eje. Sin modo incremental,
+// igual que setMarkers() arriba — se borran todas y se vuelven a crear cada
+// vez (createPriceLine/removePriceLine no tienen un "update por id").
+let _orderPriceLines = [];
+function renderOrderPriceLines(){
+  if (!candleSeries || !candleSeries.createPriceLine) return;
+  _orderPriceLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
+  _orderPriceLines = [];
+  if (STATE.chartSettings.tradeMarkersMode === 'off') return;
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const addLine = (opts) => _orderPriceLines.push(candleSeries.createPriceLine(opts));
+
+  getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
+    const color = t.side === 'long' ? '#26a69a' : '#ef5350';
+    addLine({ price: t.entry_price, color, lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: (t.side === 'long' ? 'Buy ' : 'Sell ') + t.volume + 'L' });
+    if (t.stop_loss != null) addLine({ price: t.stop_loss, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+    if (t.take_profit != null) addLine({ price: t.take_profit, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+  });
+
+  getPendingOrders().filter(o => o.symbol === sym).forEach(o => {
+    const color = o.side === 'long' ? '#26a69a' : '#ef5350';
+    const label = (o.side === 'long' ? 'Buy ' : 'Sell ') + (o.type === 'limit' ? 'Limit' : 'Stop') + ' ' + o.volume + 'L';
+    // LargeDashed (3) en vez de Dashed (2, que ya usan SL/TP de arriba) —
+    // para distinguir de un vistazo "todavía no entró" de "ya está abierta".
+    addLine({ price: o.price, color, lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: label });
+    if (o.sl != null) addLine({ price: o.sl, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+    if (o.tp != null) addLine({ price: o.tp, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+  });
 }
 
 // Se llama en cada tick de precio en vivo (refreshFormingCandle/appendNewBar)
@@ -10936,11 +10973,13 @@ function placeOrderFromPanel(){
   pending.push(order);
   savePendingOrders(pending);
   renderOrdersPanelIfOpen();
+  renderTradeMarkers();
 }
 function cancelPendingOrder(id){
   const pending = getPendingOrders().filter(o => o.id !== id);
   savePendingOrders(pending);
   renderOrdersPanelIfOpen();
+  renderTradeMarkers();
 }
 function editPendingOrder(id){
   const pending = getPendingOrders();
@@ -10963,6 +11002,7 @@ function editPendingOrder(id){
     o.price = price; o.volume = volume; o.sl = sl; o.tp = tp;
     savePendingOrders(pending);
     renderOrdersPanelIfOpen();
+    renderTradeMarkers();
   });
 }
 // Mismo mecanismo que checkOpenTradesAgainstBar (ver comentario ahí): corre
