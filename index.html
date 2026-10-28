@@ -2905,10 +2905,13 @@ function renderLayoutGrid(n){
     const btn = shellToolbar.querySelector(`[data-tool="${name}"]`);
     if (btn) btn.classList.add('active');
   };
-  // Clickear el chart de un panel con el watchlist compartido abierto lo
-  // cierra — igual que pasaba (por panel) antes de compartir uno solo acá.
+  // Clickear el chart de un panel con el watchlist (o el panel de Operar)
+  // compartido abierto los cierra — igual que pasaba (por panel) antes de
+  // compartir uno solo acá. closeOrdersPanel() ya es un no-op si estaba
+  // cerrado.
   window.zentinelChartClicked = function(){
     if (!shellSidebar.classList.contains('collapsed')) shellToggleSidebarPanel();
+    closeOrdersPanel();
   };
   // Al cambiar de panel activo, la barra de herramientas y el watchlist
   // tienen que reflejar lo que YA tenía ese panel (pudo haber quedado en
@@ -6333,9 +6336,15 @@ function toggleSidebar() {
 document.getElementById('chart-container').addEventListener('mousedown', () => {
   const sidebar = document.getElementById('sidebar');
   if (sidebar && !sidebar.classList.contains('collapsed')) toggleSidebar();
-  // En la grilla multi-chart el watchlist real que se ve ya no es ESTE
-  // (el de este panel está oculto) sino el compartido que vive en el shell
-  // de afuera — avisarle para que también se cierre con el mismo gesto.
+  // Mismo gesto que el watchlist — pedido explícito del usuario, 2026-10-28
+  // ("que se esconda igual que el watchlist, con un clic en el gráfico, y
+  // no solo con la x"). closeOrdersPanel() ya es un no-op si ya está
+  // cerrado, no hace falta chequear antes.
+  closeOrdersPanel();
+  // En la grilla multi-chart el watchlist/panel de Operar reales que se
+  // ven ya no son los DE ESTE panel (quedan ocultos) sino los compartidos
+  // que viven en el shell de afuera — avisarle para que también se cierren
+  // con el mismo gesto.
   if (EMBED_MODE && window.parent !== window && window.parent.zentinelChartClicked) {
     try { window.parent.zentinelChartClicked(); } catch(e){}
   }
