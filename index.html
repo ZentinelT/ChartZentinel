@@ -10561,9 +10561,16 @@ function finalizeTradeClose(t, closePrice, closeTime, reason, triggerBar){
 // la lista de trades nunca es tan grande como para que importe el costo.
 function renderTradeMarkers(){
   if (!candleSeries || !candleSeries.setMarkers) return;
-  if (STATE.chartSettings.tradeMarkersMode === 'off') { candleSeries.setMarkers([]); return; }
+  // Las líneas de SL/TP/pendientes (renderOrderPriceLines) son un feature
+  // aparte de las flechas de entrada/salida de abajo — si el usuario tenía
+  // "Trade markers" en 'off' de ANTES (apagó las flechas por gusto, mucho
+  // antes de que existiera el panel de Operar), cortar acá antes de llegar
+  // a esa llamada dejaba las líneas nuevas sin dibujarse NUNCA para esa
+  // persona, sin ningún aviso — reportado como "no veo nada"/"no dibuja
+  // las líneas" 2026-10-27. Siempre se llama, pase lo que pase con el modo.
+  if (STATE.chartSettings.tradeMarkersMode === 'off') { candleSeries.setMarkers([]); renderOrderPriceLines(); return; }
   const candles = window._lastCandles;
-  if (!candles || !candles.length) { candleSeries.setMarkers([]); return; }
+  if (!candles || !candles.length) { candleSeries.setMarkers([]); renderOrderPriceLines(); return; }
   const barStep = candles.length>1 ? (candles[1].time-candles[0].time) : 3600;
   const minT = candles[0].time, maxT = candles[candles.length - 1].time + barStep;
   // open_time/close_time ahora son un instante real preciso (ver
@@ -10659,7 +10666,6 @@ function renderOrderPriceLines(){
   if (window._orderLineDragSession) return;
   _orderPriceLines.forEach(e => { try { candleSeries.removePriceLine(e.line); } catch(err){} });
   _orderPriceLines = [];
-  if (STATE.chartSettings.tradeMarkersMode === 'off') return;
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const addLine = (price, opts, meta) => {
     const line = candleSeries.createPriceLine({ price, ...opts });
