@@ -186,6 +186,40 @@
   #price-countdown-badge.dn { background: var(--red); }
   #price-countdown-badge.soon { background: var(--gold-bright); }
 
+  /* ─── BUY/SELL rápidos (ver quickMarketOrder) ────────────────── */
+  /* Centro-arriba del chart, pedido explícito 2026-10-28 (antes vivían en
+     la barra de herramientas — el usuario los quiere acá, sobre el chart
+     mismo). .qt-pane-hidden: en la grilla, solo el panel 1 los muestra
+     (ver boot más abajo) — el resto de los paneles no los dibuja. */
+  #quick-trade-overlay {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 18;
+  }
+  #quick-trade-overlay.qt-pane-hidden { display: none !important; }
+  .qt-chart-btn {
+    padding: 6px 18px;
+    border-radius: 4px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    color: #0a0a0e;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+    transition: filter .12s, opacity .12s;
+  }
+  .qt-chart-btn:hover { filter: brightness(1.12); }
+  .qt-chart-btn:active { filter: brightness(.92); }
+  .qt-chart-btn.qt-buy  { background: var(--green); }
+  .qt-chart-btn.qt-sell { background: var(--red); }
+
   /* ─── WATCHTOWER — daily bias table (vertical, como en TV) ──── */
   #watchtower-bias-badge {
     position: absolute;
@@ -657,13 +691,6 @@
   .tool-btn svg { width: 15px; height: 15px; }
   .tool-sep { width: 20px; height: 1px; background: var(--border); margin: 4px 0; }
 
-  /* Buy/Sell rápidos (ver quickMarketOrder) — coloreados siempre, a
-     diferencia del resto de la barra (gris, se tiñe dorado solo si está
-     activo/seleccionado): acá el color ES la seña de qué hace cada botón. */
-  .qt-buy  { color: var(--green); }
-  .qt-buy:hover  { background: var(--green-dim); color: var(--green); }
-  .qt-sell { color: var(--red); }
-  .qt-sell:hover { background: var(--red-dim); color: var(--red); }
   .qt-hidden { display: none !important; }
 
   .tool-btn::after {
@@ -1581,12 +1608,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn qt-buy" id="btn-quick-buy" data-tip="Buy (market)" onclick="quickMarketOrder('long')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M12 5l-6 6M12 5l6 6"/></svg>
-    </button>
-    <button class="tool-btn qt-sell" id="btn-quick-sell" data-tip="Sell (market)" onclick="quickMarketOrder('short')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M12 19l-6-6M12 19l6-6"/></svg>
-    </button>
     <button class="tool-btn" id="btn-quick-trade-toggle" data-tip="Mostrar/ocultar Buy/Sell" onclick="toggleQuickTradeButtons()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>
@@ -1623,6 +1644,10 @@
   <!-- ── CHART ─────────────────────────────────────────── -->
   <div id="chart-wrap">
     <div id="chart-container">
+      <div id="quick-trade-overlay">
+        <button class="qt-chart-btn qt-buy" id="btn-quick-buy" onclick="quickMarketOrder('long')">Buy</button>
+        <button class="qt-chart-btn qt-sell" id="btn-quick-sell" onclick="quickMarketOrder('short')">Sell</button>
+      </div>
       <div id="price-countdown-badge">—</div>
       <div id="ohlcv-bar">
         <span id="pane-symbol-badge"></span>
@@ -2175,9 +2200,11 @@ function toggleIndicatorLegend(){
 }
 window.addEventListener('storage', e => { if (e.key === 'td_ind_legend') applyIndicatorLegendVisibility(); });
 
-// Buy/Sell rápidos de la barra de herramientas (ver quickMarketOrder más
-// abajo) — mismo mecanismo que la leyenda de indicadores de arriba: UNA
-// preferencia global de "se ven o no", no por panel.
+// Buy/Sell rápidos (ver quickMarketOrder más abajo, y #quick-trade-overlay
+// en el HTML — centro-arriba del chart) — el toggle que los oculta vive en
+// la barra de herramientas (junto a Volumen/Indicadores), mismo mecanismo
+// que la leyenda de indicadores de arriba: UNA preferencia global de "se
+// ven o no", no por panel.
 function getQuickTradeVisible(){
   const v = lsGet('td_quick_trade_visible');
   return v === null ? true : v === '1';
@@ -2194,6 +2221,15 @@ function toggleQuickTradeButtons(){
 }
 window.addEventListener('storage', e => { if (e.key === 'td_quick_trade_visible') applyQuickTradeVisibility(); });
 applyQuickTradeVisibility();
+// En la grilla (EMBED_MODE), el overlay de Buy/Sell SOLO se dibuja en el
+// panel 1 — pedido explícito del usuario, "si pongo más paneles que
+// queden en el 1". A diferencia del toggle de arriba (preferencia global,
+// aplica a TODOS los paneles que lo muestren), esto es puramente "en qué
+// panel existe" — se decide una sola vez acá, con el PANE_ID de esta
+// página, no es algo que cambie en caliente.
+if (EMBED_MODE && PANE_ID !== '1') {
+  document.getElementById('quick-trade-overlay')?.classList.add('qt-pane-hidden');
+}
 
 // Favoritos de TF: UNA sola lista para toda la app (no por panel/pestaña
 // — antes vivía adentro de STATE.chartSettings, que sí es por panel, y
@@ -2666,26 +2702,9 @@ function renderLayoutGrid(n){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn qt-buy" id="btn-quick-buy" data-tip="Buy panel 1 (market)" onclick="shellQuickMarketOrder('long')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M12 5l-6 6M12 5l6 6"/></svg>
-    </button>
-    <button class="tool-btn qt-sell" id="btn-quick-sell" data-tip="Sell panel 1 (market)" onclick="shellQuickMarketOrder('short')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M12 19l-6-6M12 19l6-6"/></svg>
-    </button>
     <button class="tool-btn" id="btn-quick-trade-toggle" data-tip="Mostrar/ocultar Buy/Sell" onclick="toggleQuickTradeButtons()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>`;
-  // Buy/Sell rápidos del shell SIEMPRE actúan sobre el PANEL 1 — a
-  // propósito, a diferencia del resto de esta barra (que sigue al panel
-  // ACTIVO, ver shellSetTool/shellToggleVolume arriba): pedido explícito
-  // del usuario, "si pongo más [paneles], que queden en el 1" — un botón
-  // de un solo click para comprar/vender tiene que apuntar siempre al
-  // mismo lugar, no mudarse solo según qué panel se haya clickeado último.
-  window.shellQuickMarketOrder = function(side){
-    const f = iframeEls[0];
-    if (!f || !f.contentWindow) return;
-    try { f.contentWindow.quickMarketOrder(side); } catch(e){}
-  };
 
   const shellSidebarToggle = document.createElement('button');
   shellSidebarToggle.id = 'btn-sidebar-toggle';
