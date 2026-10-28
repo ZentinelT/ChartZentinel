@@ -2044,7 +2044,7 @@
 </div>
 
 <div class="modal-overlay" id="modal-vp-settings">
-  <div class="modal">
+  <div class="modal" style="max-height:85vh;overflow-y:auto;">
     <h2>Volume Profile</h2>
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px;">
       <label style="font-size:11px;color:var(--text-dim);display:block;">Rows
@@ -2065,26 +2065,70 @@
           <option value="right">Right</option>
         </select>
       </label>
-      <div style="display:flex;align-items:center;gap:16px;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div class="dtb-color-swatch" id="vp-set-up-swatch">
-            <input type="color" id="vp-set-up" oninput="document.getElementById('vp-set-up-swatch').style.background=this.value; onVpSettingChange('upColor', this.value)">
+
+      <div style="border-top:1px solid var(--border);padding-top:10px;">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Value Area colors (rows inside)</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="dtb-color-swatch" id="vp-set-vaup-swatch">
+              <input type="color" id="vp-set-vaup" oninput="document.getElementById('vp-set-vaup-swatch').style.background=this.value; onVpSettingChange('vaUpColor', this.value)">
+            </div>
+            <span style="font-size:11px;color:var(--text-dim);">Up volume</span>
           </div>
-          <span style="font-size:11px;color:var(--text-dim);">Up volume</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div class="dtb-color-swatch" id="vp-set-down-swatch">
-            <input type="color" id="vp-set-down" oninput="document.getElementById('vp-set-down-swatch').style.background=this.value; onVpSettingChange('downColor', this.value)">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="dtb-color-swatch" id="vp-set-vadown-swatch">
+              <input type="color" id="vp-set-vadown" oninput="document.getElementById('vp-set-vadown-swatch').style.background=this.value; onVpSettingChange('vaDownColor', this.value)">
+            </div>
+            <span style="font-size:11px;color:var(--text-dim);">Down volume</span>
           </div>
-          <span style="font-size:11px;color:var(--text-dim);">Down volume</span>
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
-        <input type="checkbox" id="vp-set-poc" onchange="onVpSettingChange('showPoc', this.checked)"> Show POC line
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
-        <input type="checkbox" id="vp-set-va-toggle" onchange="onVpSettingChange('showValueArea', this.checked)"> Show Value Area (VAH/VAL)
-      </label>
+
+      <div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Outside Value Area colors</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="dtb-color-swatch" id="vp-set-up-swatch">
+              <input type="color" id="vp-set-up" oninput="document.getElementById('vp-set-up-swatch').style.background=this.value; onVpSettingChange('upColor', this.value)">
+            </div>
+            <span style="font-size:11px;color:var(--text-dim);">Up volume</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="dtb-color-swatch" id="vp-set-down-swatch">
+              <input type="color" id="vp-set-down" oninput="document.getElementById('vp-set-down-swatch').style.background=this.value; onVpSettingChange('downColor', this.value)">
+            </div>
+            <span style="font-size:11px;color:var(--text-dim);">Down volume</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:10px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px;">
+          <input type="checkbox" id="vp-set-poc" onchange="onVpSettingChange('showPoc', this.checked)"> Show POC line
+        </label>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="dtb-color-swatch" id="vp-set-poccolor-swatch">
+              <input type="color" id="vp-set-poccolor" oninput="document.getElementById('vp-set-poccolor-swatch').style.background=this.value; onVpSettingChange('pocColor', this.value)">
+            </div>
+            <span style="font-size:11px;color:var(--text-dim);">POC color</span>
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px;">
+          <input type="checkbox" id="vp-set-extendpoc" onchange="onVpSettingChange('extendPoc', this.checked)"> Extend POC right
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px;">
+          <input type="checkbox" id="vp-set-va-toggle" onchange="onVpSettingChange('showValueArea', this.checked)"> Show Value Area (VAH/VAL)
+        </label>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="dtb-color-swatch" id="vp-set-valinecolor-swatch">
+              <input type="color" id="vp-set-valinecolor" oninput="document.getElementById('vp-set-valinecolor-swatch').style.background=this.value; onVpSettingChange('vaLineColor', this.value)">
+            </div>
+            <span style="font-size:11px;color:var(--text-dim);">VAH/VAL color</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-btns">
       <button class="btn-primary" onclick="closeModal('modal-vp-settings')">Done</button>
@@ -3854,7 +3898,8 @@ function refreshToolDefaultsFor(type){
   Object.assign(toolDefaults, {
     color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined,
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
-    upColor:undefined, downColor:undefined, showPoc:undefined, showValueArea:undefined,
+    upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
+    pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined,
   }, TOOL_STYLE_STORE[type] || {});
 }
 // Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
@@ -3898,7 +3943,9 @@ function captureDrawingStyle(d){
   if (d.type === 'vp') {
     return Object.assign(base, {
       color: d.color, rows: d.rows, vaPct: d.vaPct, placement: d.placement, volumeType: d.volumeType,
-      upColor: d.upColor, downColor: d.downColor, showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false,
+      upColor: d.upColor, downColor: d.downColor, vaUpColor: d.vaUpColor, vaDownColor: d.vaDownColor,
+      pocColor: d.pocColor, vaLineColor: d.vaLineColor,
+      showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false, extendPoc: !!d.extendPoc,
     });
   }
   if (d.type === 'hline' || d.type === 'trendline') {
@@ -4217,10 +4264,12 @@ function restyleDrawingAppearance(d) {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
   } else if (d.type === 'vp') {
-    // [0-3] borde, [4] POC (color fijo, no sigue a d.color), [5]/[6] VAH/VAL.
+    // [0-3] borde (sigue a d.color/width/style, el selector genérico de la
+    // barra). POC/VAH/VAL y los 4 colores de las barras tienen sus propios
+    // controles en el panel "Settings" (ver openVpSettingsModal) — no
+    // siguen a este selector.
     [0,1,2,3].forEach(i => { const s=d.series[i]; if (s) try { s.applyOptions({ color: C+'88', lineWidth: lw, lineStyle: ls }); } catch(e){} });
-    [5,6].forEach(i => { const s=d.series[i]; if (s) try { s.applyOptions({ color: C+'99' }); } catch(e){} });
-    syncVolumeProfileBars(d); // recolorea el segmento "total" (usa d.color); up/down tienen su propio color aparte
+    syncVolumeProfileBars(d); // recolorea el segmento "total" (usa d.vaUpColor/upColor)
   } else if (d.type === 'fib') {
     const levels = (d.levels||[]).filter(lv => lv.on);
     d.series.forEach((s,i) => {
@@ -4376,15 +4425,19 @@ function openFibLevelsModal() {
 // ══════════════════════════════════════════════════════════
 function openVpSettingsModal() {
   const d = getSelected(); if (!d || d.type!=='vp') return;
+  const setColor = (id, val) => { document.getElementById(id).value = val; document.getElementById(id+'-swatch').style.background = val; };
   document.getElementById('vp-set-rows').value = d.rows || 24;
   document.getElementById('vp-set-va').value = d.vaPct != null ? d.vaPct : 70;
   document.getElementById('vp-set-voltype').value = d.volumeType || 'updown';
   document.getElementById('vp-set-placement').value = d.placement || 'left';
-  document.getElementById('vp-set-up').value = d.upColor || '#26a69a';
-  document.getElementById('vp-set-up-swatch').style.background = d.upColor || '#26a69a';
-  document.getElementById('vp-set-down').value = d.downColor || '#ef5350';
-  document.getElementById('vp-set-down-swatch').style.background = d.downColor || '#ef5350';
+  setColor('vp-set-vaup', d.vaUpColor || '#26a69a');
+  setColor('vp-set-vadown', d.vaDownColor || '#ef5350');
+  setColor('vp-set-up', d.upColor || '#1f5c55');
+  setColor('vp-set-down', d.downColor || '#7a3634');
+  setColor('vp-set-poccolor', d.pocColor || '#f0c060');
+  setColor('vp-set-valinecolor', d.vaLineColor || '#c9a84c');
   document.getElementById('vp-set-poc').checked = d.showPoc !== false;
+  document.getElementById('vp-set-extendpoc').checked = !!d.extendPoc;
   document.getElementById('vp-set-va-toggle').checked = d.showValueArea !== false;
   openModal('modal-vp-settings');
 }
@@ -4538,12 +4591,13 @@ function updateDrawingGeometry(d) {
     let t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
     if (t2raw === t1) t2raw = t1 + barInterval;
     const t2 = d.extRight ? tFuture : t2raw;
+    const tPoc = (d.extRight || d.extendPoc) ? tFuture : t2raw;
     d.series[0].setData([{time:t1,value:hi},{time:t2,value:hi}]);
     d.series[1].setData([{time:t1,value:lo},{time:t2,value:lo}]);
     d.series[2].setData([{time:t1,value:lo},{time:t1,value:hi}]);
     d.series[3].setData([{time:t2,value:lo},{time:t2,value:hi}]);
     computeVolumeProfileBins(d);
-    applyVpLevelLines(d, t1, t2);
+    applyVpLevelLines(d, t1, t2, tPoc);
     syncVolumeProfileBars(d);
     ok = true;
 
@@ -4712,22 +4766,24 @@ function computeVolumeProfileBins(d) {
 // los precios recién calculados por computeVolumeProfileBins — aparte de
 // syncVolumeProfileBars porque ESTAS sí son series reales del chart
 // (setData, no atributos SVG).
-function applyVpLevelLines(d, t1, t2) {
+function applyVpLevelLines(d, t1, t2, tPoc) {
   if (d.series.length < 7) return;
-  d.series[4].setData([{time:t1,value:d.vpPocPrice},{time:t2,value:d.vpPocPrice}]);
-  d.series[4].applyOptions({ visible: d.showPoc !== false });
+  d.series[4].setData([{time:t1,value:d.vpPocPrice},{time:tPoc != null ? tPoc : t2,value:d.vpPocPrice}]);
+  d.series[4].applyOptions({ visible: d.showPoc !== false, color: d.pocColor || '#f0c060' });
   d.series[5].setData([{time:t1,value:d.vpVahPrice},{time:t2,value:d.vpVahPrice}]);
-  d.series[5].applyOptions({ visible: d.showValueArea !== false });
+  d.series[5].applyOptions({ visible: d.showValueArea !== false, color: d.vaLineColor || '#c9a84c' });
   d.series[6].setData([{time:t1,value:d.vpValPrice},{time:t2,value:d.vpValPrice}]);
-  d.series[6].applyOptions({ visible: d.showValueArea !== false });
+  d.series[6].applyOptions({ visible: d.showValueArea !== false, color: d.vaLineColor || '#c9a84c' });
 }
 
 // Reubica en pantalla las barras ya calculadas de un 'vp' (se llama cada
 // frame, igual que syncRectFill) — 2 rects por franja (alcista/bajista "en
-// secuencia", pegados uno al otro, como en TV), creciendo desde el borde
-// de la caja que marque d.placement. La franja POC queda con más opacidad,
-// y las franjas fuera del Value Area quedan más apagadas que las de adentro
-// — mismo convenio visual que cualquier perfil de volumen.
+// secuencia", pegados uno al otro, como en TV), creciendo desde el borde de
+// la caja que marque d.placement. Las franjas ADENTRO del Value Area usan
+// vaUpColor/vaDownColor (vivos) y las de AFUERA usan upColor/downColor
+// (apagados) — 4 colores independientes, igual que el Style real de TV
+// ("Up Volume"/"Down Volume" vs "Value area Up Volume"/"Value area Down
+// Volume"), no una sola pareja de colores con opacidad variable.
 function syncVolumeProfileBars(d) {
   if (!Array.isArray(d.vpBarEls) || !d.vpBarEls.length) return;
   const bins = d.vpBins || [];
@@ -4748,16 +4804,17 @@ function syncVolumeProfileBars(d) {
     const y = Math.min(yTop,yBot), h = Math.max(1, Math.abs(yBot-yTop)-1);
     const total = b.up + b.down;
     const totalW = maxVol>0 ? (total/maxVol)*maxBarW : 0;
-    const opacity = i===d.vpPocIdx ? 0.95 : (b.inVA ? 0.7 : 0.3);
     p.upEl.setAttribute('y', y); p.downEl.setAttribute('y', y);
     p.upEl.setAttribute('height', h); p.downEl.setAttribute('height', h);
-    p.upEl.setAttribute('fill-opacity', opacity); p.downEl.setAttribute('fill-opacity', opacity);
+    p.upEl.setAttribute('fill-opacity', '1');
+    p.downEl.setAttribute('fill-opacity', '1');
 
     if (d.volumeType === 'total') {
-      // Un solo segmento (sin separar alcista/bajista), en el color
-      // genérico del dibujo (d.color) en vez de los dos de up/down.
+      // Un solo segmento (sin separar alcista/bajista): vaUpColor adentro
+      // del Value Area, upColor afuera — reusa los mismos 2 niveles de
+      // "vivo/apagado" que el modo Up/Down, nomás sin separar por vela.
       p.upEl.style.display=''; p.downEl.style.display='none';
-      p.upEl.setAttribute('fill', d.color);
+      p.upEl.setAttribute('fill', b.inVA ? d.vaUpColor : d.upColor);
       p.upEl.setAttribute('x', left ? anchorX : anchorX - totalW);
       p.upEl.setAttribute('width', totalW);
       return;
@@ -4767,8 +4824,8 @@ function syncVolumeProfileBars(d) {
     const downW = totalW - upW;
     p.upEl.style.display = upW>0 ? '' : 'none';
     p.downEl.style.display = downW>0 ? '' : 'none';
-    p.upEl.setAttribute('fill', d.upColor);
-    p.downEl.setAttribute('fill', d.downColor);
+    p.upEl.setAttribute('fill', b.inVA ? d.vaUpColor : d.upColor);
+    p.downEl.setAttribute('fill', b.inVA ? d.vaDownColor : d.downColor);
     if (left) {
       p.upEl.setAttribute('x', anchorX); p.upEl.setAttribute('width', upW);
       p.downEl.setAttribute('x', anchorX + upW); p.downEl.setAttribute('width', downW);
@@ -4958,10 +5015,17 @@ function buildDrawingOnChart(d) {
     if (d.vaPct == null) d.vaPct = 70;
     if (!d.placement) d.placement = 'left';
     if (!d.volumeType) d.volumeType = 'updown';
-    if (!d.upColor) d.upColor = '#26a69a';
-    if (!d.downColor) d.downColor = '#ef5350';
+    // 4 colores — igual que TV real: adentro del Value Area (vivos) y
+    // afuera (apagados), cada uno por separado para alcista/bajista.
+    if (!d.upColor) d.upColor = '#1f5c55';
+    if (!d.downColor) d.downColor = '#7a3634';
+    if (!d.vaUpColor) d.vaUpColor = '#26a69a';
+    if (!d.vaDownColor) d.vaDownColor = '#ef5350';
+    if (!d.pocColor) d.pocColor = '#f0c060';
+    if (!d.vaLineColor) d.vaLineColor = '#c9a84c';
     if (d.showPoc == null) d.showPoc = true;
     if (d.showValueArea == null) d.showValueArea = true;
+    if (d.extendPoc == null) d.extendPoc = false;
 
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
@@ -4969,6 +5033,7 @@ function buildDrawingOnChart(d) {
     let t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
     if (t1 === t2raw) t2raw = t1 + barInterval;
     const t2 = d.extRight ? tFuture : t2raw;
+    const tPoc = (d.extRight || d.extendPoc) ? tFuture : t2raw;
     const mkR = (pts, opts={}) => {
       const s = chart.addLineSeries(Object.assign({ color: C+'88', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null }, opts));
       s.setData(pts); d.series.push(s); return s;
@@ -4984,9 +5049,9 @@ function buildDrawingOnChart(d) {
     mkR([{time:t1,value:lo},{time:t2,value:lo}]);
     mkR([{time:t1,value:lo},{time:t1,value:hi}]);
     mkR([{time:t2,value:lo},{time:t2,value:hi}]);
-    mkR([{time:t1,value:hi},{time:t2,value:hi}], { lineWidth:1, lineStyle:2, color:'#f0c060cc', visible: d.showPoc !== false });
-    mkR([{time:t1,value:hi},{time:t2,value:hi}], { lineWidth:1, lineStyle:1, color:C+'99', visible: d.showValueArea !== false });
-    mkR([{time:t1,value:lo},{time:t2,value:lo}], { lineWidth:1, lineStyle:1, color:C+'99', visible: d.showValueArea !== false });
+    mkR([{time:t1,value:hi},{time:tPoc,value:hi}], { lineWidth:2, lineStyle:2, color:d.pocColor, visible: d.showPoc !== false });
+    mkR([{time:t1,value:hi},{time:t2,value:hi}], { lineWidth:1, lineStyle:1, color:d.vaLineColor, visible: d.showValueArea !== false });
+    mkR([{time:t1,value:lo},{time:t2,value:lo}], { lineWidth:1, lineStyle:1, color:d.vaLineColor, visible: d.showValueArea !== false });
 
     // Barras del histograma: 2 rects por franja de precio (volumen alcista/
     // bajista "en secuencia", como en TV — ver computeVolumeProfileBins) en
@@ -5006,7 +5071,7 @@ function buildDrawingOnChart(d) {
       }
     }
     computeVolumeProfileBins(d);
-    applyVpLevelLines(d, t1, t2);
+    applyVpLevelLines(d, t1, t2, tPoc);
     syncVolumeProfileBars(d);
 
   } else if (d.type === 'fib') {
@@ -6333,8 +6398,11 @@ function initDrawingLayer() {
         // 24 franjas, Value Area 70%, volumen separado en alcista/bajista.
         rows: toolDefaults.rows || 24, vaPct: toolDefaults.vaPct != null ? toolDefaults.vaPct : 70,
         placement: toolDefaults.placement || 'left', volumeType: toolDefaults.volumeType || 'updown',
-        upColor: toolDefaults.upColor || '#26a69a', downColor: toolDefaults.downColor || '#ef5350',
+        upColor: toolDefaults.upColor || '#1f5c55', downColor: toolDefaults.downColor || '#7a3634',
+        vaUpColor: toolDefaults.vaUpColor || '#26a69a', vaDownColor: toolDefaults.vaDownColor || '#ef5350',
+        pocColor: toolDefaults.pocColor || '#f0c060', vaLineColor: toolDefaults.vaLineColor || '#c9a84c',
         showPoc: toolDefaults.showPoc !== false, showValueArea: toolDefaults.showValueArea !== false,
+        extendPoc: !!toolDefaults.extendPoc,
       };
     } else if (tool === 'fib') {
       if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
