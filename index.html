@@ -441,15 +441,13 @@
      igual que en TV — así que cada panel individual ya no muestra la suya. */
   html.embed-mode #toolbar,
   html.embed-mode #btn-sidebar-toggle,
-  html.embed-mode #sidebar,
-  html.embed-mode #btn-orders-toggle { display: none !important; }
+  html.embed-mode #sidebar { display: none !important; }
   /* #orders-panel SÍ se deja visible en modo embed (a diferencia de arriba)
      — a propósito: es el único acceso al panel de Operar con más de un
      gráfico (ver gc-orders → postMessage zentinel:toggleOrders en
-     renderLayoutGrid), ya que la tira angosta del borde (#btn-orders-toggle,
-     sí oculta) no sirve ahí. Sigue arrancando colapsado igual (la clase
-     .collapsed no depende de embed-mode), así que no ocupa espacio hasta
-     que se abre a propósito desde ese botón. */
+     renderLayoutGrid). Flota (position:absolute, ver más abajo) y arranca
+     colapsado igual, así que no ocupa espacio hasta que se abre a propósito
+     desde ese botón. */
   /* Mismo criterio para los TF, símbolo, Indicators, Replay, Undo/Redo,
      layout/tema/refresh/settings: un solo juego de controles arriba de
      toda la grilla (ver gbar en renderLayoutGrid), no uno repetido por
@@ -621,7 +619,9 @@
   .tf-fav-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
   /* ─── MAIN AREA ───────────────────────────────────────── */
-  #main { display: flex; flex: 1; overflow: hidden; }
+  /* position:relative: ancla al panel de Operar (ver #orders-panel más
+     abajo, position:absolute) — sin esto se ancla al <body> entero. */
+  #main { display: flex; flex: 1; overflow: hidden; position: relative; }
 
   /* ─── TOOLBAR (left) ─────────────────────────────────── */
   #toolbar {
@@ -780,44 +780,31 @@
   .ind-item:hover .ind-remove { color: var(--red); }
 
   /* ─── ORDERS PANEL (derecha) ──────────────────────────── */
-  /* Mismo mecanismo que #sidebar/.sidebar-inner (ver comentario arriba):
-     marco que recorta con ancho fijo adentro, para que el deslizar
-     abrir/cerrar no reacomode texto, solo "corra" el contenido. */
+  /* FLOTA sobre el chart (position:absolute, ancla #main de arriba) en vez
+     de empujarle el ancho como el watchlist — a propósito: con la grilla
+     de 3/4 gráficos cada panel mide apenas ~260-300px, y un panel fijo de
+     270px que empuja el layout se comía CASI TODO el chart de ESE panel
+     (el usuario no veía nada ahí, aunque sí se dibujara bien en los otros
+     paneles con el mismo símbolo — reportado 2026-10-27). Flotando, abrir
+     el panel nunca reduce el área del chart, en ningún tamaño de pane.
+     min(270px,92%) para que tampoco se salga en un pane angosto. */
   #orders-panel {
-    width: var(--orders-panel-w, 270px);
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: min(270px, 92%);
     background: var(--bg-panel);
     border-left: 1px solid var(--border);
-    flex-shrink: 0;
-    overflow: hidden;
-    transition: width .22s cubic-bezier(.4,0,.2,1);
-    will-change: width;
-  }
-  #orders-panel.collapsed { width: 0; border-left: none; }
-  .orders-panel-inner {
-    width: var(--orders-panel-w, 270px);
-    height: 100%;
+    box-shadow: -6px 0 18px rgba(0,0,0,.35);
+    z-index: 25;
+    transform: translateX(0);
+    transition: transform .22s cubic-bezier(.4,0,.2,1);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--border-light) transparent;
   }
-  #btn-orders-toggle {
-    width: 13px;
-    flex-shrink: 0;
-    background: var(--bg-panel);
-    border: none;
-    border-left: 1px solid var(--border);
-    color: var(--text-dim);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-  }
-  #btn-orders-toggle:hover { color: var(--gold); }
-  #btn-orders-toggle svg { width: 10px; height: 10px; transition: transform .15s; }
-  #btn-orders-toggle.collapsed svg { transform: rotate(180deg); }
+  #orders-panel.collapsed { transform: translateX(100%); pointer-events: none; }
 
   #orders-live-note.hidden, #orders-price-field.hidden { display: none; }
   .orders-live-note { margin: 10px 12px 0; padding: 7px 9px; font-size: 10.5px; line-height: 1.4; color: var(--gold); background: var(--gold-glow); border: 1px solid var(--gold-dim); border-radius: 4px; }
@@ -1589,12 +1576,8 @@
     </div>
   </div>
 
-  <!-- ── ORDERS PANEL TOGGLE ───────────────────────────── -->
-  <button id="btn-orders-toggle" title="Mostrar/ocultar panel de operar" onclick="toggleOrdersPanel()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-  </button>
-
-  <!-- ── ORDERS PANEL ──────────────────────────────────── -->
+  <!-- ── ORDERS PANEL (flota sobre el chart; se abre/cierra con el botón
+       "Operar" de la topbar y la × de adentro — ver toggleOrdersPanel) ── -->
   <div id="orders-panel">
     <div class="orders-panel-inner">
       <div class="sidebar-header">Operar
@@ -6079,33 +6062,28 @@ if (_sidebarCollapsedSaved === '1' || (_sidebarCollapsedSaved === null && EMBED_
 
 // ══════════════════════════════════════════════════════════
 //  ORDERS PANEL (operar: market/limit/stop + SL/TP/tamaño) toggle
-//  Mismo mecanismo de abrir/cerrar que el watchlist (toggleSidebar) pero
-//  SIN cerrarse solo al clickear el chart — a diferencia del watchlist,
-//  este panel se usa mientras se interactúa con el chart (dibujando,
-//  mirando precios), así que cerrarlo en cada click sería molesto.
+//  Flota sobre el chart (ver CSS #orders-panel, position:absolute) — no
+//  empuja/achica el layout como el watchlist, así que no hace falta el
+//  gesto de "cerrarlo clickeando el chart" ni una tira-manija en el borde:
+//  se abre/cierra con el botón "Operar" de la topbar (toggle, ver también
+//  gc-orders en el shell de la grilla) y con la × de adentro del panel.
 //  Arranca siempre colapsado (no hay caso de uso donde deba abrirse solo).
 // ══════════════════════════════════════════════════════════
 function toggleOrdersPanel() {
   const collapsed = document.getElementById('orders-panel').classList.toggle('collapsed');
-  document.getElementById('btn-orders-toggle').classList.toggle('collapsed', collapsed);
   lsSet(lsKey('td_orders_collapsed'), collapsed ? '1' : '0');
   if (!collapsed) renderOrdersPanel();
 }
-// Botón × adentro del propio panel (ver header "Operar") — para cerrarlo
-// sin depender de la tira angosta del borde (#btn-orders-toggle), que en
-// modo grilla (embed) queda oculta a propósito. Funciona igual en modo
-// 1 gráfico.
+// Botón × adentro del propio panel (ver header "Operar").
 function closeOrdersPanel(){
   const panel = document.getElementById('orders-panel');
   if (!panel) return;
   panel.classList.add('collapsed');
-  document.getElementById('btn-orders-toggle')?.classList.add('collapsed');
   lsSet(lsKey('td_orders_collapsed'), '1');
 }
 const _ordersCollapsedSaved = lsGet(lsKey('td_orders_collapsed'));
 if (_ordersCollapsedSaved !== '0') {
   document.getElementById('orders-panel').classList.add('collapsed');
-  document.getElementById('btn-orders-toggle').classList.add('collapsed');
 }
 
 // ══════════════════════════════════════════════════════════
