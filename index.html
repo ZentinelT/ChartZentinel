@@ -9074,7 +9074,12 @@ function saveDtbTemplateAs(type){
     }
   });
   document.addEventListener('click', (e) => {
-    if (!document.getElementById('dtb-template-wrap').contains(e.target)) closeDtbTemplatePopup();
+    // El shell de la grilla (ver renderLayoutGrid) reconstruye su propio
+    // body sin este elemento — no tiene barra de dibujo propia, así que
+    // este popup no aplica ahí. Sin el chequeo, cualquier click en modo
+    // grilla tiraba un TypeError acá (reportado 2026-10-28).
+    const wrap = document.getElementById('dtb-template-wrap');
+    if (wrap && !wrap.contains(e.target)) closeDtbTemplatePopup();
   });
 })();
 
@@ -9318,7 +9323,15 @@ function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn){
   timeInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
   dateInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
   document.addEventListener('click', (e) => {
-    if (!document.getElementById(prefix+'goto-date-wrap').contains(e.target)) {
+    // initGoToDatePopup('') (el de 1 solo gráfico) se registra ANTES de
+    // que el shell de la grilla reemplace todo el body (ver
+    // renderLayoutGrid, corre en un setTimeout después) — para cuando esto
+    // se ejecuta ese wrap original ya no existe más ahí, aunque el
+    // listener (atado a document, no al wrap) sigue vivo. Sin el chequeo,
+    // cualquier click en modo grilla tiraba un TypeError acá (reportado
+    // 2026-10-28).
+    const wrap = document.getElementById(prefix+'goto-date-wrap');
+    if (wrap && !wrap.contains(e.target)) {
       popup.classList.remove('open');
       trigger.classList.remove('active');
     }
