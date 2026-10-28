@@ -4153,14 +4153,15 @@ function updateDrawingGeometry(d) {
   } else if (d.type === 'fib') {
     const levels = (d.levels || []).filter(lv => lv.on);
     if (d.series.length === levels.length) {
-      const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
       let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
       let rawT2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
       if (rawT2 === rawT1) rawT2 = rawT1 + barInterval;
       const t1 = d.extLeft  ? tPast   : rawT1;
       const t2 = d.extRight ? tFuture : rawT2;
+      // p1 = 0%, p2 = 100% — mismo criterio que buildDrawingOnChart, ver ahí.
       levels.forEach((lv,i) => {
-        d.series[i].setData([{time:t1,value:hi-(hi-lo)*lv.value},{time:t2,value:hi-(hi-lo)*lv.value}]);
+        const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
+        d.series[i].setData([{time:t1,value:val},{time:t2,value:val}]);
       });
       ok = true;
     }
@@ -4409,16 +4410,17 @@ function buildDrawingOnChart(d) {
     syncRectFill(d);
 
   } else if (d.type === 'fib') {
-    const hi = Math.max(d.p1.price, d.p2.price);
-    const lo = Math.min(d.p1.price, d.p2.price);
     if (!d.levels) d.levels = cloneFibLevels();
     let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
     let rawT2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
     if (rawT2 === rawT1) rawT2 = rawT1 + barInterval;
     const t1 = d.extLeft  ? tPast   : rawT1;
     const t2 = d.extRight ? tFuture : rawT2;
+    // p1 = ancla del 0% (el punto donde se SUELTA al dibujar — el extremo
+    // más reciente del movimiento), p2 = ancla del 100% (donde se empieza —
+    // el origen) — sin pisarlo con hi/lo como antes. Ver applyHandleDrag.
     d.levels.filter(lv => lv.on).forEach(lv => {
-      const val = hi - (hi - lo) * lv.value;
+      const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
       const s = mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: d.showPriceLabel !== false });
       // El título (el "61.8%" flotando al final de la línea) es aparte de
       // lastValueVisible (esa solo tapa el cartelito del eje) — mismo
@@ -4661,10 +4663,15 @@ function applyHandleDrag(d, role, price, time) {
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else { d.p2.price = price; d.p2.time = time; }
   } else if (d.type === 'fib') {
+    // Sin normalizar a hi/lo después (como hacía antes): p1 es el ancla del
+    // 0% y p2 la del 100%, cual sea que esté más arriba o más abajo — forzar
+    // "p1 siempre el más alto" perdía la dirección real del arrastre y
+    // dejaba el Fibo con los mismos niveles sin importar si se dibujó de un
+    // High a un Low o al revés (bug reportado 2026-10-28). Ver también la
+    // creación (tool==='fib') y el render (buildDrawingOnChart/
+    // updateDrawingGeometry), que ahora usan el mismo criterio.
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else { d.p2.price = price; d.p2.time = time; }
-    const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
-    d.p1.price = hi; d.p2.price = lo;
   } else if (d.type === 'rect') {
     let hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
     let t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
@@ -5261,8 +5268,12 @@ function initDrawingLayer() {
         distToSegment(x2,y1,x2,y2,mx,my)<THRESH
       );
       // fib: cualquiera de las líneas de nivel (las que están activas) cuenta como "cuerpo"
+      // — p1=0%/p2=100% (ver buildDrawingOnChart), NO hi/lo: con hi/lo acá
+      // el área clickeable no coincidía con donde las líneas se ven de
+      // verdad apenas el Fibo se dibujó de un High a un Low (en vez de al
+      // revés), que es justo el caso que antes quedaba igual sin que debiera.
       return (d.levels||cloneFibLevels()).filter(lv=>lv.on).some(lv=>{
-        const y = priceToY(hi-(hi-lo)*lv.value);
+        const y = priceToY(d.p1.price + (d.p2.price - d.p1.price) * lv.value);
         return y!==null && Math.abs(my-y)<THRESH && mx>=Math.min(x1,x2)-2 && mx<=Math.max(x1,x2)+2;
       });
     }
@@ -5647,11 +5658,15 @@ function initDrawingLayer() {
       rect.setAttribute('fill', tool==='long' ? 'rgba(38,166,154,0.08)' : tool==='short' ? 'rgba(239,83,80,0.08)' : 'rgba(201,168,76,0.06)');
       svg.appendChild(rect); previewEl = rect;
     } else if (tool === 'fib') {
-      const ry=Math.min(drawStart.y,y2), rh=Math.abs(y2-drawStart.y);
+      // ly acá tiene que coincidir con el mismo criterio que la creación
+      // real (ver tool==='fib' en mouseup, p1=0% en el punto de suelta/y2):
+      // lvl 0 en y2 (donde está el mouse ahora), lvl 1 en drawStart.y —
+      // si no, la vista previa mientras se arrastra no coincidía con lo
+      // que terminaba quedando dibujado.
       const group = document.createElementNS('http://www.w3.org/2000/svg','g');
       const fibColors=['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0'];
       [0,0.236,0.382,0.5,0.618,0.786,1].forEach((lvl,i) => {
-        const ly = ry + rh * lvl;
+        const ly = y2 + (drawStart.y - y2) * lvl;
         const line = document.createElementNS('http://www.w3.org/2000/svg','line');
         line.setAttribute('x1',0); line.setAttribute('y1',ly); line.setAttribute('x2',container.clientWidth); line.setAttribute('y2',ly);
         line.setAttribute('stroke',fibColors[i]+'bb'); line.setAttribute('stroke-width','1'); line.setAttribute('stroke-dasharray','3,3');
@@ -5699,13 +5714,21 @@ function initDrawingLayer() {
       if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
       d = { id:genId(), type:'rect', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
     } else if (tool === 'fib') {
-      const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
-      if (Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
+      if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
       // toolDefaults.levels: lo que haya quedado guardado como default de
       // Fib (último usado, o un template aplicado sin nada seleccionado —
       // ver refreshToolDefaultsFor/applyDtbTemplate) — si no hay nada
       // guardado todavía, cae en los niveles de fábrica de siempre.
-      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels: toolDefaults.levels ? JSON.parse(JSON.stringify(toolDefaults.levels)) : cloneFibLevels(), p1:{price:hi,time:drawStart.time}, p2:{price:lo,time:time2} };
+      // p1 = ancla del 0% = el punto donde se SUELTA (price2/time2, el
+      // extremo más reciente del movimiento); p2 = ancla del 100% = el
+      // punto donde se EMPEZÓ a arrastrar (drawStart) — igual que
+      // TradingView/MT5. Antes esto se normalizaba siempre a hi/lo (p1 =
+      // el precio más alto, sin importar hacia dónde se arrastró), así que
+      // dibujar de un High a un Low daba EXACTAMENTE los mismos niveles que
+      // al revés — bug reportado 2026-10-28. Ver también applyHandleDrag,
+      // buildDrawingOnChart y updateDrawingGeometry, que ahora leen p1/p2
+      // directo con el mismo criterio.
+      d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels: toolDefaults.levels ? JSON.parse(JSON.stringify(toolDefaults.levels)) : cloneFibLevels(), p1:{price:price2,time:time2}, p2:{price:drawStart.price,time:drawStart.time} };
     } else if (tool === 'vline') {
       d = { id:genId(), type:'vline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:null,time:drawStart.time}, p2:{price:null,time:drawStart.time} };
     } else if (tool === 'long' || tool === 'short') {
