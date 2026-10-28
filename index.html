@@ -441,13 +441,16 @@
      igual que en TV — así que cada panel individual ya no muestra la suya. */
   html.embed-mode #toolbar,
   html.embed-mode #btn-sidebar-toggle,
-  html.embed-mode #sidebar { display: none !important; }
-  /* #orders-panel SÍ se deja visible en modo embed (a diferencia de arriba)
-     — a propósito: es el único acceso al panel de Operar con más de un
-     gráfico (ver gc-orders → postMessage zentinel:toggleOrders en
-     renderLayoutGrid). Flota (position:absolute, ver más abajo) y arranca
-     colapsado igual, así que no ocupa espacio hasta que se abre a propósito
-     desde ese botón. */
+  html.embed-mode #sidebar,
+  html.embed-mode #orders-panel { display: none !important; }
+  /* El panel de Operar de CADA pane se oculta en modo embed — a propósito,
+     a diferencia de como era antes: con position:fixed (ver más abajo) un
+     panel dentro de un pane angosto quedaría pegado al borde derecho de
+     ESE pane, no al de la pantalla entera. En la grilla, renderLayoutGrid
+     arma su PROPIO #orders-panel (mismos ids, reusa las mismas funciones
+     de este script sin duplicarlas) directo en el documento de afuera, que
+     sí ocupa toda la pantalla — así el panel siempre queda pegado al borde
+     derecho real, sin importar cuántos paneles haya ni cuál esté activo. */
   /* Mismo criterio para los TF, símbolo, Indicators, Replay, Undo/Redo,
      layout/tema/refresh/settings: un solo juego de controles arriba de
      toda la grilla (ver gbar en renderLayoutGrid), no uno repetido por
@@ -788,15 +791,28 @@
      paneles con el mismo símbolo — reportado 2026-10-27). Flotando, abrir
      el panel nunca reduce el área del chart, en ningún tamaño de pane.
      min(270px,92%) para que tampoco se salga en un pane angosto. */
+  /* position:fixed (no absolute) — ancla al VIEWPORT real, no a #main: así
+     en la grilla de 2/3/4 gráficos el panel que arma renderLayoutGrid (ver
+     ahí) queda pegado al borde derecho de la PANTALLA entera, sin importar
+     qué panel esté activo — antes, dentro de cada pane, quedaba pegado al
+     borde de ESE pane nomás. En modo 1 gráfico no cambia nada (el viewport
+     y #main miden lo mismo).
+     transform:translateX(100%) es el estado POR DEFECTO (sin clase .open)
+     a propósito — así arranca cerrado sin esperar a que el JS de abajo
+     corra y le agregue la clase: si el default fuera "abierto" (como
+     estaba antes, con .collapsed para cerrarlo), se veía un flash del
+     panel abierto en cada F5 antes de que el JS lo cerrara (reportado
+     2026-10-28, "se ve como si lo mostrara y luego se acomoda"). */
   #orders-panel {
-    position: absolute;
+    position: fixed;
     top: 0; right: 0; bottom: 0;
     width: min(270px, 92%);
     background: var(--bg-panel);
     border-left: 1px solid var(--border);
     box-shadow: -6px 0 18px rgba(0,0,0,.35);
     z-index: 25;
-    transform: translateX(0);
+    transform: translateX(100%);
+    pointer-events: none;
     transition: transform .22s cubic-bezier(.4,0,.2,1);
     display: flex;
     flex-direction: column;
@@ -804,7 +820,7 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border-light) transparent;
   }
-  #orders-panel.collapsed { transform: translateX(100%); pointer-events: none; }
+  #orders-panel.open { transform: translateX(0); pointer-events: auto; }
 
   #orders-live-note.hidden, #orders-price-field.hidden { display: none; }
   .orders-live-note { margin: 10px 12px 0; padding: 7px 9px; font-size: 10.5px; line-height: 1.4; color: var(--gold); background: var(--gold-glow); border: 1px solid var(--gold-dim); border-radius: 4px; }
@@ -3016,11 +3032,17 @@ function renderLayoutGrid(n){
   gbar.querySelector('#gc-trades').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openTrades' }, '*');
   });
-  // Panel de Operar: mismo patrón que Trades arriba — vive en el script de
-  // cada panel, acá solo se delega al panel ACTIVO para abrirlo.
-  gbar.querySelector('#gc-orders').addEventListener('click', ()=>{
-    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:toggleOrders' }, '*');
-  });
+  // Panel de Operar: a diferencia de Trades/Settings/Indicators arriba,
+  // NO se delega por postMessage al panel activo — este documento (el
+  // shell) tiene su PROPIA copia del panel (ver más abajo, "PANEL DE
+  // OPERAR DEL SHELL"), con position:fixed al viewport real, así queda
+  // pegado al borde derecho de la PANTALLA entera sin importar qué panel
+  // esté activo (pedido explícito, 2026-10-28 — antes, delegado a cada
+  // panel, quedaba pegado al borde de ESE panel nomás). toggleOrdersPanel()
+  // es la misma función de siempre (este script corre completo acá
+  // también, solo que sin chart propio) — opera sobre CUALQUIER
+  // #orders-panel que haya en el documento actual, y acá abajo se arma uno.
+  gbar.querySelector('#gc-orders').addEventListener('click', toggleOrdersPanel);
   // El journal es global pero el precio fresco solo lo tiene CADA panel
   // (su propio window._lastCandles) — el badge de P/L en vivo de la barra
   // del shell se arma leyendo getTradesBadgeInfo() del panel activo cada
@@ -3272,6 +3294,125 @@ function renderLayoutGrid(n){
   document.body.appendChild(shellStatusbar);
   initStatusbarClock();
   renderShellStatus();
+
+  // ─── PANEL DE OPERAR DEL SHELL ───────────────────────────────────
+  // Copia del #orders-panel + #modal-prompt-fields de la página de 1
+  // gráfico — MISMOS ids que ahí (reusa toggleOrdersPanel/closeOrdersPanel/
+  // placeOrderFromPanel/setOrdersSide/onOrdersTypeChange/renderOrdersPanel/
+  // cancelPendingOrder/editPendingOrder tal cual están definidas más abajo
+  // en este mismo script, sin tocarlas ni duplicar su lógica) pero armada
+  // ACÁ, en el documento del shell — que sí ocupa la pantalla entera, a
+  // diferencia de cada pane (iframe chico). Con position:fixed (ver CSS),
+  // esto la deja pegada al borde derecho REAL sin importar cuántos
+  // gráficos haya ni cuál esté activo.
+  const shellOrdersPanel = document.createElement('div');
+  shellOrdersPanel.id = 'orders-panel';
+  shellOrdersPanel.innerHTML = `
+    <div class="orders-panel-inner">
+      <div class="sidebar-header">Operar
+        <button class="sidebar-add-btn" onclick="closeOrdersPanel()" title="Cerrar panel">×</button>
+      </div>
+      <div id="orders-live-note" class="orders-live-note hidden">Trading real (MT5) activo: este panel solo arma órdenes en papel. Para abrir/cerrar en tu cuenta real usá el toggle y los botones del modal de Trades.</div>
+      <div class="orders-form">
+        <div class="orders-side-row">
+          <button id="orders-side-buy" class="orders-side-btn buy active" onclick="setOrdersSide('long')">Buy</button>
+          <button id="orders-side-sell" class="orders-side-btn sell" onclick="setOrdersSide('short')">Sell</button>
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Tipo de orden</label>
+          <select id="orders-type" class="dtb-select" style="width:100%;" onchange="onOrdersTypeChange()">
+            <option value="market">Market</option>
+            <option value="limit">Limit</option>
+            <option value="stop">Stop</option>
+          </select>
+        </div>
+        <div class="orders-field hidden" id="orders-price-field">
+          <label class="cs-field-label">Precio de la orden</label>
+          <input id="orders-price" type="text" class="topbar-input" style="width:100%;" placeholder="Precio" autocomplete="off">
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Tamaño (lotes)</label>
+          <input id="orders-volume" type="number" step="0.01" min="0" class="topbar-input" style="width:100%;" value="1">
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Stop loss</label>
+          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
+        </div>
+        <div class="orders-field">
+          <label class="cs-field-label">Take profit</label>
+          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
+        </div>
+        <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Colocar orden</button>
+      </div>
+      <div class="sidebar-header">Pendientes (<span id="orders-pending-count">0</span>)</div>
+      <div id="orders-pending-list" class="orders-list"></div>
+      <div class="sidebar-header">Abiertas (<span id="orders-open-count">0</span>)</div>
+      <div id="orders-open-list" class="orders-list"></div>
+    </div>
+  `;
+  document.body.appendChild(shellOrdersPanel);
+  if (lsGet(lsKey('td_orders_collapsed')) === '0') shellOrdersPanel.classList.add('open');
+
+  // editPendingOrder() usa promptFields(), que a su vez necesita este modal
+  // — también lo borró el body.innerHTML='' de arriba. Igual que el panel,
+  // misma copia con los mismos ids: openModal/closeModal/promptFields
+  // operan por id, sin saber ni importarles en qué documento están.
+  const shellPromptModal = document.createElement('div');
+  shellPromptModal.className = 'modal-overlay';
+  shellPromptModal.id = 'modal-prompt-fields';
+  shellPromptModal.style.zIndex = '600';
+  shellPromptModal.innerHTML = `
+    <div class="modal" style="max-width:360px;">
+      <h2 id="prompt-fields-title">—</h2>
+      <div id="prompt-fields-body"></div>
+      <div class="modal-btns">
+        <button class="btn-ghost" onclick="closeModal('modal-prompt-fields')">Cancel</button>
+        <button class="btn-primary" id="prompt-fields-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(shellPromptModal);
+  // El listener de "click afuera cierra" (ver más abajo, fuera de esta
+  // función) se registró una sola vez al cargar la página, antes de que
+  // existiera esta copia — hay que repetirlo acá a mano.
+  shellPromptModal.addEventListener('click', e => { if (e.target === shellPromptModal) closeModal(shellPromptModal.id); });
+
+  // placeOrderFromPanel()/renderOrdersPanel() necesitan STATE.symbol y
+  // window._lastCandles — este documento (el shell) nunca cargó un chart
+  // propio, así que no los tiene. Sincronizarlos desde el panel ACTIVO
+  // justo antes de usarlos (ver el hook en placeOrderFromPanel) es más
+  // simple que duplicar esa lógica acá.
+  window._shellSyncOrdersContext = function(){
+    const f = iframeEls[activePane-1];
+    if (!f || !f.contentWindow) return;
+    try {
+      window._lastCandles = f.contentWindow._lastCandles;
+      STATE.symbol = f.contentWindow.STATE.symbol;
+    } catch(e){}
+  };
+  // Después de colocar/cancelar/editar desde acá, el panel activo recién
+  // se entera solo en su próximo tick de precio (~1s) — esto lo empuja al
+  // toque para que las líneas en el chart no tarden en aparecer/moverse.
+  window._shellRefreshActivePane = function(){
+    const f = iframeEls[activePane-1];
+    if (!f || !f.contentWindow) return;
+    try { f.contentWindow.renderTradeMarkers(); } catch(e){}
+  };
+  // Mientras el panel queda abierto, el P/L en vivo de ABIERTAS y el
+  // símbolo que filtra la lista tienen que seguir al panel activo (si se
+  // cambia de panel, o pasa un tick de precio) — mismo ritmo que el
+  // polling de gc-trades-count de arriba.
+  let _shellOrdersPollTimer = null;
+  window._shellOnOrdersToggle = function(open){
+    clearInterval(_shellOrdersPollTimer);
+    _shellOrdersPollTimer = null;
+    if (!open) return;
+    window._shellSyncOrdersContext();
+    _shellOrdersPollTimer = setInterval(() => {
+      window._shellSyncOrdersContext();
+      renderOrdersPanelIfOpen();
+    }, 1000);
+  };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -6127,20 +6268,25 @@ if (_sidebarCollapsedSaved === '1' || (_sidebarCollapsedSaved === null && EMBED_
 //  Arranca siempre colapsado (no hay caso de uso donde deba abrirse solo).
 // ══════════════════════════════════════════════════════════
 function toggleOrdersPanel() {
-  const collapsed = document.getElementById('orders-panel').classList.toggle('collapsed');
-  lsSet(lsKey('td_orders_collapsed'), collapsed ? '1' : '0');
-  if (!collapsed) renderOrdersPanel();
+  const open = document.getElementById('orders-panel').classList.toggle('open');
+  lsSet(lsKey('td_orders_collapsed'), open ? '0' : '1');
+  if (open) renderOrdersPanel();
+  if (window._shellOnOrdersToggle) window._shellOnOrdersToggle(open);
 }
 // Botón × adentro del propio panel (ver header "Operar").
 function closeOrdersPanel(){
   const panel = document.getElementById('orders-panel');
   if (!panel) return;
-  panel.classList.add('collapsed');
+  panel.classList.remove('open');
   lsSet(lsKey('td_orders_collapsed'), '1');
+  if (window._shellOnOrdersToggle) window._shellOnOrdersToggle(false);
 }
+// Sin clase .open por default en el HTML (ver CSS #orders-panel): arranca
+// cerrado sin ayuda de JS, así que acá solo hace falta ABRIRLO si la
+// preferencia guardada dice que estaba abierto — nunca al revés.
 const _ordersCollapsedSaved = lsGet(lsKey('td_orders_collapsed'));
-if (_ordersCollapsedSaved !== '0') {
-  document.getElementById('orders-panel').classList.add('collapsed');
+if (_ordersCollapsedSaved === '0') {
+  document.getElementById('orders-panel').classList.add('open');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -11114,6 +11260,11 @@ function placeOrderFromPanel(){
   let tp = _ordersParsePrice(document.getElementById('orders-tp').value);
   if (Number.isNaN(sl) || Number.isNaN(tp)) { alert('Precio de SL/TP inválido.'); return; }
   const side = _ordersSide;
+  // Shell de la grilla (ver renderLayoutGrid): este mismo script corre
+  // ahí también, pero sin chart propio — STATE.symbol/window._lastCandles
+  // quedan vacíos/viejos a menos que se sincronicen con el panel activo
+  // justo antes de usarlos acá.
+  if (window._shellSyncOrdersContext) window._shellSyncOrdersContext();
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
 
@@ -11140,6 +11291,7 @@ function placeOrderFromPanel(){
     renderTradesCountBadge();
     renderTradesModalIfOpen();
     renderTradeMarkers();
+    if (window._shellRefreshActivePane) window._shellRefreshActivePane();
     return;
   }
 
@@ -11184,12 +11336,14 @@ function placeOrderFromPanel(){
   savePendingOrders(pending);
   renderOrdersPanelIfOpen();
   renderTradeMarkers();
+  if (window._shellRefreshActivePane) window._shellRefreshActivePane();
 }
 function cancelPendingOrder(id){
   const pending = getPendingOrders().filter(o => o.id !== id);
   savePendingOrders(pending);
   renderOrdersPanelIfOpen();
   renderTradeMarkers();
+  if (window._shellRefreshActivePane) window._shellRefreshActivePane();
 }
 function editPendingOrder(id){
   const pending = getPendingOrders();
@@ -11275,7 +11429,7 @@ function checkPendingOrdersAgainstBar(bar, formingLive){
 }
 function renderOrdersPanelIfOpen(){
   const el = document.getElementById('orders-panel');
-  if (el && !el.classList.contains('collapsed')) renderOrdersPanel();
+  if (el && el.classList.contains('open')) renderOrdersPanel();
 }
 function renderOrdersPanel(){
   const sym = normalizeSymbolForJournal(STATE.symbol);
