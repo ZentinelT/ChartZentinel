@@ -2056,6 +2056,9 @@
       <label style="font-size:11px;color:var(--text-dim);display:block;" title="Qué tan largas llegan las barras — como % del ancho de la caja. Bajalo si el rango abarca muchas velas (p.ej. 1 día en M5) y las barras quedan tapando todo.">Width (%)
         <input type="number" id="vp-set-width" min="5" max="100" step="5" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('widthPct', Math.max(5,Math.min(100,parseInt(this.value)||70)))">
       </label>
+      <label style="font-size:11px;color:var(--text-dim);display:block;" title="Transparencia de las filas de volumen (Value Area y afuera) — bajalo para ver las velas a través de las barras.">Opacity (%)
+        <input type="number" id="vp-set-opacity" min="5" max="100" step="5" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('barOpacity', Math.max(5,Math.min(100,parseInt(this.value)||70)))">
+      </label>
       <label style="font-size:11px;color:var(--text-dim);display:block;">Volume
         <select id="vp-set-voltype" class="dtb-select" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('volumeType', this.value)">
           <option value="updown">Up/Down</option>
@@ -3902,7 +3905,7 @@ function refreshToolDefaultsFor(type){
     color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined,
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
     upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
-    pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined,
+    pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined, barOpacity:undefined,
   }, TOOL_STYLE_STORE[type] || {});
 }
 // Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
@@ -3948,7 +3951,7 @@ function captureDrawingStyle(d){
       color: d.color, rows: d.rows, vaPct: d.vaPct, placement: d.placement, volumeType: d.volumeType,
       upColor: d.upColor, downColor: d.downColor, vaUpColor: d.vaUpColor, vaDownColor: d.vaDownColor,
       pocColor: d.pocColor, vaLineColor: d.vaLineColor,
-      showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false, extendPoc: !!d.extendPoc, widthPct: d.widthPct,
+      showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false, extendPoc: !!d.extendPoc, widthPct: d.widthPct, barOpacity: d.barOpacity,
     });
   }
   if (d.type === 'hline' || d.type === 'trendline') {
@@ -4432,6 +4435,7 @@ function openVpSettingsModal() {
   document.getElementById('vp-set-rows').value = d.rows || 24;
   document.getElementById('vp-set-va').value = d.vaPct != null ? d.vaPct : 70;
   document.getElementById('vp-set-width').value = d.widthPct != null ? d.widthPct : 70;
+  document.getElementById('vp-set-opacity').value = d.barOpacity != null ? d.barOpacity : 70;
   document.getElementById('vp-set-voltype').value = d.volumeType || 'updown';
   document.getElementById('vp-set-placement').value = d.placement || 'left';
   setColor('vp-set-vaup', d.vaUpColor || '#26a69a');
@@ -4808,10 +4812,11 @@ function syncVolumeProfileBars(d) {
     const y = Math.min(yTop,yBot), h = Math.max(1, Math.abs(yBot-yTop)-1);
     const total = b.up + b.down;
     const totalW = maxVol>0 ? (total/maxVol)*maxBarW : 0;
+    const opacity = (d.barOpacity != null ? d.barOpacity : 70) / 100;
     p.upEl.setAttribute('y', y); p.downEl.setAttribute('y', y);
     p.upEl.setAttribute('height', h); p.downEl.setAttribute('height', h);
-    p.upEl.setAttribute('fill-opacity', '1');
-    p.downEl.setAttribute('fill-opacity', '1');
+    p.upEl.setAttribute('fill-opacity', opacity);
+    p.downEl.setAttribute('fill-opacity', opacity);
 
     if (d.volumeType === 'total') {
       // Un solo segmento (sin separar alcista/bajista): vaUpColor adentro
@@ -5031,6 +5036,7 @@ function buildDrawingOnChart(d) {
     if (d.showValueArea == null) d.showValueArea = true;
     if (d.extendPoc == null) d.extendPoc = false;
     if (d.widthPct == null) d.widthPct = 70;
+    if (d.barOpacity == null) d.barOpacity = 70;
 
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
@@ -6408,6 +6414,7 @@ function initDrawingLayer() {
         pocColor: toolDefaults.pocColor || '#f0c060', vaLineColor: toolDefaults.vaLineColor || '#c9a84c',
         showPoc: toolDefaults.showPoc !== false, showValueArea: toolDefaults.showValueArea !== false,
         extendPoc: !!toolDefaults.extendPoc, widthPct: toolDefaults.widthPct != null ? toolDefaults.widthPct : 70,
+        barOpacity: toolDefaults.barOpacity != null ? toolDefaults.barOpacity : 70,
       };
     } else if (tool === 'fib') {
       if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
