@@ -657,6 +657,15 @@
   .tool-btn svg { width: 15px; height: 15px; }
   .tool-sep { width: 20px; height: 1px; background: var(--border); margin: 4px 0; }
 
+  /* Buy/Sell rápidos (ver quickMarketOrder) — coloreados siempre, a
+     diferencia del resto de la barra (gris, se tiñe dorado solo si está
+     activo/seleccionado): acá el color ES la seña de qué hace cada botón. */
+  .qt-buy  { color: var(--green); }
+  .qt-buy:hover  { background: var(--green-dim); color: var(--green); }
+  .qt-sell { color: var(--red); }
+  .qt-sell:hover { background: var(--red-dim); color: var(--red); }
+  .qt-hidden { display: none !important; }
+
   .tool-btn::after {
     content: attr(data-tip);
     position: absolute;
@@ -1571,6 +1580,16 @@
     <button class="tool-btn" id="btn-ind-legend" data-tip="Toggle Indicator Legend" onclick="toggleIndicatorLegend()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn qt-buy" id="btn-quick-buy" data-tip="Buy (market)" onclick="quickMarketOrder('long')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M12 5l-6 6M12 5l6 6"/></svg>
+    </button>
+    <button class="tool-btn qt-sell" id="btn-quick-sell" data-tip="Sell (market)" onclick="quickMarketOrder('short')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M12 19l-6-6M12 19l6-6"/></svg>
+    </button>
+    <button class="tool-btn" id="btn-quick-trade-toggle" data-tip="Mostrar/ocultar Buy/Sell" onclick="toggleQuickTradeButtons()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+    </button>
   </div>
 
   <!-- ── SIDEBAR TOGGLE ─────────────────────────────────── -->
@@ -2155,6 +2174,27 @@ function toggleIndicatorLegend(){
   applyIndicatorLegendVisibility();
 }
 window.addEventListener('storage', e => { if (e.key === 'td_ind_legend') applyIndicatorLegendVisibility(); });
+
+// Buy/Sell rápidos de la barra de herramientas (ver quickMarketOrder más
+// abajo) — mismo mecanismo que la leyenda de indicadores de arriba: UNA
+// preferencia global de "se ven o no", no por panel.
+function getQuickTradeVisible(){
+  const v = lsGet('td_quick_trade_visible');
+  return v === null ? true : v === '1';
+}
+function setQuickTradeVisible(visible){ lsSet('td_quick_trade_visible', visible ? '1' : '0'); }
+function applyQuickTradeVisibility(){
+  const visible = getQuickTradeVisible();
+  document.querySelectorAll('.qt-buy, .qt-sell').forEach(el => el.classList.toggle('qt-hidden', !visible));
+  document.getElementById('btn-quick-trade-toggle')?.classList.toggle('active', visible);
+}
+function toggleQuickTradeButtons(){
+  setQuickTradeVisible(!getQuickTradeVisible());
+  applyQuickTradeVisibility();
+}
+window.addEventListener('storage', e => { if (e.key === 'td_quick_trade_visible') applyQuickTradeVisibility(); });
+applyQuickTradeVisibility();
+
 // Favoritos de TF: UNA sola lista para toda la app (no por panel/pestaña
 // — antes vivía adentro de STATE.chartSettings, que sí es por panel, y
 // eso hacía que cada ventana de la grilla mostrara una barra de TF
@@ -2624,7 +2664,28 @@ function renderLayoutGrid(n){
     </button>
     <button class="tool-btn" id="btn-ind-legend" data-tip="Toggle Indicator Legend" onclick="shellToggleIndicatorLegend()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn qt-buy" id="btn-quick-buy" data-tip="Buy panel 1 (market)" onclick="shellQuickMarketOrder('long')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M12 5l-6 6M12 5l6 6"/></svg>
+    </button>
+    <button class="tool-btn qt-sell" id="btn-quick-sell" data-tip="Sell panel 1 (market)" onclick="shellQuickMarketOrder('short')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M12 19l-6-6M12 19l6-6"/></svg>
+    </button>
+    <button class="tool-btn" id="btn-quick-trade-toggle" data-tip="Mostrar/ocultar Buy/Sell" onclick="toggleQuickTradeButtons()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>`;
+  // Buy/Sell rápidos del shell SIEMPRE actúan sobre el PANEL 1 — a
+  // propósito, a diferencia del resto de esta barra (que sigue al panel
+  // ACTIVO, ver shellSetTool/shellToggleVolume arriba): pedido explícito
+  // del usuario, "si pongo más [paneles], que queden en el 1" — un botón
+  // de un solo click para comprar/vender tiene que apuntar siempre al
+  // mismo lugar, no mudarse solo según qué panel se haya clickeado último.
+  window.shellQuickMarketOrder = function(side){
+    const f = iframeEls[0];
+    if (!f || !f.contentWindow) return;
+    try { f.contentWindow.quickMarketOrder(side); } catch(e){}
+  };
 
   const shellSidebarToggle = document.createElement('button');
   shellSidebarToggle.id = 'btn-sidebar-toggle';
@@ -2727,7 +2788,7 @@ function renderLayoutGrid(n){
   // (no sobre "Activo/Todos" — un dibujo o una herramienta no tiene sentido
   // replicada en varios paneles a la vez, a diferencia del símbolo/TF).
   window.shellSetTool = function(btn, name){
-    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend') b.classList.remove('active'); });
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend'&&b.id!=='btn-quick-trade-toggle') b.classList.remove('active'); });
     btn.classList.add('active');
     const f = iframeEls[activePane-1];
     if (f) { try { f.contentWindow.setTool(null, name); } catch(e){} }
@@ -2821,7 +2882,7 @@ function renderLayoutGrid(n){
   // herramienta vieja marcada aunque el panel ya hubiese vuelto al cursor.
   window.zentinelToolSync = function(paneId, name){
     if (Number(paneId) !== activePane) return;
-    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend') b.classList.remove('active'); });
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend'&&b.id!=='btn-quick-trade-toggle') b.classList.remove('active'); });
     const btn = shellToolbar.querySelector(`[data-tool="${name}"]`);
     if (btn) btn.classList.add('active');
   };
@@ -2838,7 +2899,7 @@ function renderLayoutGrid(n){
     if (!f) return;
     renderShellWatchlist();
     const tool = paneEval(f, 'STATE.activeTool');
-    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend') b.classList.remove('active'); });
+    shellToolbar.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend'&&b.id!=='btn-quick-trade-toggle') b.classList.remove('active'); });
     const btn = tool ? shellToolbar.querySelector(`[data-tool="${tool}"]`) : null;
     if (btn) btn.classList.add('active');
     syncMagnetBtn(f);
@@ -2854,6 +2915,7 @@ function renderLayoutGrid(n){
   row.appendChild(shellSidebar);
   document.body.appendChild(row);
   applyIndicatorLegendVisibility(); // repinta el botón recién creado con el estado global actual
+  applyQuickTradeVisibility(); // ídem, para los Buy/Sell recién creados
 
   // El cambio de tema desde ACÁ (la barra global) se veía en dos tiempos
   // si cada panel se enteraba solo por el 'storage' event (asíncrono,
@@ -6361,7 +6423,7 @@ function setTool(btn, name) {
   // desde la barra de herramientas compartida de afuera, no hay ningún
   // botón DE ESTE panel que marcar (está oculto) — solo hace falta que
   // STATE.activeTool cambie.
-  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend')b.classList.remove('active'); });
+  document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend'&&b.id!=='btn-quick-trade-toggle')b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   STATE.activeTool = name;
   refreshToolDefaultsFor(name);
@@ -11276,6 +11338,19 @@ function defaultOrderSlTp(price, side){
   return side === 'long'
     ? { sl: price - dist, tp: price + dist }
     : { sl: price + dist, tp: price - dist };
+}
+// Buy/Sell de un solo click en la barra de herramientas (ver .qt-buy/
+// .qt-sell) — arma una orden Market con el tamaño que haya cargado en el
+// panel de Operar (sus campos existen siempre, esté el panel abierto o
+// no) y SL/TP "pegados" (ver defaultOrderSlTp) ya que acá no hay inputs
+// para escribirlos. Simplemente ajusta lado+tipo y reusa
+// placeOrderFromPanel tal cual — cero lógica nueva.
+function quickMarketOrder(side){
+  setOrdersSide(side);
+  const typeSel = document.getElementById('orders-type');
+  if (typeSel) typeSel.value = 'market';
+  onOrdersTypeChange();
+  placeOrderFromPanel();
 }
 function placeOrderFromPanel(){
   const type = document.getElementById('orders-type').value;
