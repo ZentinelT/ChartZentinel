@@ -11283,6 +11283,43 @@ async function confirmLiveTrade(d){
   _syncLivePollTimer();
 }
 
+// Misma apertura real que confirmLiveTrade (arriba), pero sin un dibujo
+// Long/Short del que leer entry/SL/TP — la llama placeOrderFromPanel()
+// cuando la orden Market se arma desde el panel de Operar o los botones
+// Buy/Sell rápidos del chart, con el trading real prendido. El volumen
+// tampoco sale de acá (mismo motivo documentado en confirmLiveTrade): lo
+// decide DefaultVolume del lado del Service.
+async function placeLiveMarketOrder(side, sl, tp){
+  let result;
+  try {
+    result = await sendOrder({ action:'open', symbol: STATE.symbol, side: side==='long'?'buy':'sell', sl, tp });
+  } catch(e) {
+    alert('No se pudo abrir la operación real: ' + e.message);
+    return;
+  }
+  const p = result.position;
+  const trade = {
+    id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    symbol: normalizeSymbolForJournal(STATE.symbol),
+    side, volume: p.volume,
+    entry_price: p.price_open,
+    stop_loss: p.sl > 0 ? p.sl : null,
+    take_profit: p.tp > 0 ? p.tp : null,
+    open_time: p.time,
+    source: 'live',
+    real: true,
+    ticket: p.ticket,
+  };
+  const open = getOpenTrades();
+  open.push(trade);
+  saveOpenTrades(open);
+  renderTradesCountBadge();
+  renderTradesModalIfOpen();
+  renderTradeMarkers();
+  if (window._shellRefreshActivePane) window._shellRefreshActivePane();
+  _syncLivePollTimer();
+}
+
 function finalizeTradeClose(t, closePrice, closeTime, reason, triggerBar){
   const pointValue = getTradesPointValue();
   const sign = t.side === 'long' ? 1 : -1;
@@ -11616,30 +11653,20 @@ function checkOpenTradesAgainstBar(bar, formingLive){
   renderTradeMarkers();
 }
 
+// Antes duplicaba a mano el cierre simulado (finalizeTradeClose con el
+// precio actual del chart) SIN mirar t.real — para una operación real eso
+// la borraba del lado de la app mientras la posición seguía abierta de
+// verdad en MT5, sin aviso. closeTradeById() ya resuelve los dos casos
+// bien (real: le pide a MT5 que cierre y espera a pollLiveTrades para los
+// datos reales; papel: cierra local como antes) — delegarle acá evita
+// tener la misma lógica (y el mismo riesgo de desincronizarse) en dos
+// lugares. Bug reportado 2026-10-28 ("no pasó nada en MetaTrader").
 function manualCloseTrade(){
   const d = getSelected();
   if (!d || !d.tradeId) return;
   const open = getOpenTrades();
-  const idx = open.findIndex(t => t.id === d.tradeId);
-  if (idx < 0) { delete d.tradeId; selectDrawing(d.id); return; }
-  const t = open[idx];
-  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
-  const closePrice = lastBar ? lastBar.close : t.entry_price;
-  captureUndoSnapshot();
-  finalizeTradeClose(t, closePrice, getSimNow(), 'manual');
-  open.splice(idx, 1);
-  saveOpenTrades(open);
-  // drawings.forEach, no un delete suelto de `d`: por las dudas algún otro
-  // dibujo haya quedado apuntando al mismo tradeId (ver el fix de
-  // onDtbClone, que era justo esto) — soltarlos a TODOS, no solo al
-  // seleccionado.
-  const closedTid = d.tradeId;
-  drawings.forEach(x => { if (x.tradeId === closedTid) delete x.tradeId; });
-  selectDrawing(d.id);
-  markDrawingsDirty();
-  renderTradesCountBadge();
-  renderTradesModalIfOpen();
-  renderTradeMarkers();
+  if (!open.some(t => t.id === d.tradeId)) { delete d.tradeId; selectDrawing(d.id); return; }
+  closeTradeById(d.tradeId); // ya resuelve real vs papel y el undo-snapshot por su cuenta
 }
 
 // Cierra una operación abierta por id, SIN depender de que su dibujo
@@ -11680,14 +11707,13 @@ async function closeTradeById(id){
   finalizeTradeClose(t, closePrice, getSimNow(), 'manual');
   open.splice(idx, 1);
   saveOpenTrades(open);
-  // Si había un dibujo apuntando a esta operación (no se borró), soltarlo
-  // — mismo paso que hacía manualCloseTrade() desde el otro camino.
-  const d = drawings.find(x => x.tradeId === id);
-  if (d) {
-    delete d.tradeId;
-    markDrawingsDirty();
-    if (selectedDrawingId === d.id) selectDrawing(d.id);
-  }
+  // drawings.forEach, no un find+delete suelto: por las dudas algún otro
+  // dibujo haya quedado apuntando al mismo tradeId (clonar una herramienta
+  // de posición ya confirmada, ver el fix de onDtbClone) — soltarlos a
+  // TODOS, no solo al primero que aparezca.
+  drawings.forEach(x => { if (x.tradeId === id) delete x.tradeId; });
+  markDrawingsDirty();
+  if (selectedDrawingId) selectDrawing(selectedDrawingId);
   renderTradesCountBadge();
   renderTradesModalIfOpen();
   renderTradeMarkers();
@@ -11761,10 +11787,14 @@ function editTradeById(id){
 // ══════════════════════════════════════════════════════════
 //  PANEL DE OPERAR (lateral derecho) — market/limit/stop + tamaño/SL/TP,
 //  independiente de la herramienta de dibujo Long/Short: no hace falta
-//  dibujar nada en el chart, se completan los campos y se manda. SIEMPRE
-//  en papel (ver getPendingOrders arriba) — aunque esté prendido el
-//  trading real, este panel no lo toca, a propósito (así el tamaño que
-//  se pruebe acá nunca termina mandándose a MT5).
+//  dibujar nada en el chart, se completan los campos y se manda.
+//  Market SÍ manda una orden real a MT5 si el trading real está prendido
+//  (ver placeLiveMarketOrder) — mismo camino que "Confirm trade" con la
+//  herramienta Long/Short, pedido explícito 2026-10-28 ("conecta las
+//  market, lo demás no"). Limit/Stop se quedan SIEMPRE en papel, a
+//  propósito (ver getPendingOrders arriba) — el Service de MT5 todavía no
+//  sabe colocar/cancelar una orden pendiente real, y así el tamaño que se
+//  pruebe acá tampoco termina mandándose a MT5 por error.
 // ══════════════════════════════════════════════════════════
 let _ordersSide = 'long';
 function setOrdersSide(side){
@@ -11852,6 +11882,11 @@ function placeOrderFromPanel(){
       const def = defaultOrderSlTp(lastBar.close, side);
       if (sl == null) sl = def.sl;
       if (tp == null) tp = def.tp;
+    }
+    if (LIVE_TRADING) {
+      if (window._replay || window._replayFollow) { alert('No se puede mandar una orden real mientras estás en replay.'); return; }
+      placeLiveMarketOrder(side, sl, tp);
+      return;
     }
     const trade = {
       id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
