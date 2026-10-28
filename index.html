@@ -1550,6 +1550,11 @@
     <button class="tool-btn" data-tip="Rectangle" onclick="setTool(this,'rect')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg>
     </button>
+    <button class="tool-btn" data-tip="Volume Profile" onclick="setTool(this,'vp')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="11" height="3"/><rect x="3" y="9" width="17" height="3"/><rect x="3" y="14" width="7" height="3"/><rect x="3" y="19" width="14" height="3"/>
+      </svg>
+    </button>
     <button class="tool-btn" data-tip="Fibonacci" onclick="setTool(this,'fib')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
         <line x1="2" y1="3.5" x2="22" y2="3.5"/>
@@ -2665,6 +2670,7 @@ function renderLayoutGrid(n){
     { tool:'hline', tip:'Horizontal Line', icon:'<line x1="2" y1="12" x2="22" y2="12"/><circle cx="2" cy="12" r="2" fill="currentColor"/>' },
     { tool:'vline', tip:'Vertical Line', icon:'<line x1="12" y1="2" x2="12" y2="22"/><circle cx="12" cy="2" r="2" fill="currentColor"/>' },
     { tool:'rect', tip:'Rectangle', icon:'<rect x="3" y="6" width="18" height="12" rx="1"/>' },
+    { tool:'vp', tip:'Volume Profile', icon:'<rect x="3" y="4" width="11" height="3"/><rect x="3" y="9" width="17" height="3"/><rect x="3" y="14" width="7" height="3"/><rect x="3" y="19" width="14" height="3"/>' },
     { tool:'fib', tip:'Fibonacci', strokeWidth:'1.6', icon:'<line x1="2" y1="3.5" x2="22" y2="3.5"/><line x1="2" y1="8.3" x2="15" y2="8.3"/><line x1="2" y1="13" x2="20" y2="13"/><line x1="2" y1="17.7" x2="11" y2="17.7"/><line x1="2" y1="22.5" x2="22" y2="22.5"/>' },
     { tool:'long', tip:'Long Position', icon:'<rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="14" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="10.5" x2="22" y2="10.5"/><polyline points="9 16 12 19 15 16"/>' },
     { tool:'short', tip:'Short Position', icon:'<rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="3" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="13.5" x2="22" y2="13.5"/><polyline points="9 8 12 5 15 8"/>' },
@@ -3934,6 +3940,7 @@ function serializeDrawings(){
       ...d, series:undefined, svgEls:undefined, label:undefined, vLineEl:undefined,
       fillEl:undefined, profitFillEl:undefined, lossFillEl:undefined,
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
+      vpBarEls:undefined, vpBins:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -4145,6 +4152,9 @@ function restyleDrawingAppearance(d) {
   } else if (d.type === 'rect') {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
+  } else if (d.type === 'vp') {
+    d.series.forEach(s => { try { s.applyOptions({ color: C+'88', lineWidth: lw, lineStyle: ls }); } catch(e){} });
+    (d.vpBarEls||[]).forEach(el => el.setAttribute('fill', C));
   } else if (d.type === 'fib') {
     const levels = (d.levels||[]).filter(lv => lv.on);
     d.series.forEach((s,i) => {
@@ -4420,6 +4430,19 @@ function updateDrawingGeometry(d) {
     syncRectFill(d);
     ok = true;
 
+  } else if (d.type === 'vp' && d.series.length === 4) {
+    const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+    const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+    let t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t2 === t1) t2 = t1 + barInterval;
+    d.series[0].setData([{time:t1,value:hi},{time:t2,value:hi}]);
+    d.series[1].setData([{time:t1,value:lo},{time:t2,value:lo}]);
+    d.series[2].setData([{time:t1,value:lo},{time:t1,value:hi}]);
+    d.series[3].setData([{time:t2,value:lo},{time:t2,value:hi}]);
+    computeVolumeProfileBins(d);
+    syncVolumeProfileBars(d);
+    ok = true;
+
   } else if (d.type === 'fib') {
     const levels = (d.levels || []).filter(lv => lv.on);
     if (d.series.length === levels.length) {
@@ -4467,6 +4490,7 @@ function removeDrawingById(id) {
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
+  if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(el => el.remove());
   if (d.profitFillEl instanceof Element) d.profitFillEl.remove();
   if (d.lossFillEl instanceof Element) d.lossFillEl.remove();
   if (d.entryTextEl instanceof Element) d.entryTextEl.remove();
@@ -4506,6 +4530,72 @@ function syncRectFill(d) {
   d.fillEl.style.display='';
   d.fillEl.setAttribute('x', Math.min(x1,x2)); d.fillEl.setAttribute('y', y1);
   d.fillEl.setAttribute('width', Math.abs(x2-x1)); d.fillEl.setAttribute('height', Math.max(0,y2-y1));
+}
+
+// Calcula el histograma de volumen por franja de precio de un 'vp' — se
+// llama solo cuando la GEOMETRÍA cambia (al crearlo, al arrastrar una
+// manija o el cuerpo entero), nunca en el loop de pan/zoom (syncOverlayPositions),
+// que solo reposiciona en pantalla los bins ya calculados (ver
+// syncVolumeProfileBars). Reparte el volumen de cada vela entre las
+// franjas que su rango high-low pisa, proporcional al solape — es una
+// aproximación razonable sin tener datos de tick a tick (mismo criterio
+// que usan los plugins de volume profile de lightweight-charts).
+const VP_BUCKETS = 24;
+function computeVolumeProfileBins(d) {
+  const candles = window._lastCandles || [];
+  const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
+  const t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
+  const step = (hi - lo) / VP_BUCKETS || 1;
+  const bins = [];
+  for (let i = 0; i < VP_BUCKETS; i++) bins.push({ top: hi - i*step, bottom: hi - (i+1)*step, vol: 0 });
+  candles.forEach(c => {
+    if (c.time < t1 || c.time > t2) return;
+    const vol = c.volume || 0;
+    if (vol <= 0) return;
+    const cHi = Math.min(c.high, hi), cLo = Math.max(c.low, lo);
+    const range = c.high - c.low;
+    if (range <= 0 || cHi <= cLo) {
+      const closeClamped = Math.min(Math.max(c.close, lo), hi);
+      const idx = Math.min(VP_BUCKETS-1, Math.max(0, Math.floor((hi - closeClamped) / step)));
+      bins[idx].vol += vol;
+      return;
+    }
+    bins.forEach(b => {
+      const ovTop = Math.min(b.top, cHi), ovBot = Math.max(b.bottom, cLo);
+      const overlap = ovTop - ovBot;
+      if (overlap > 0) b.vol += vol * (overlap / range);
+    });
+  });
+  let maxVol = 0, pocIdx = 0;
+  bins.forEach((b,i) => { if (b.vol > maxVol) { maxVol = b.vol; pocIdx = i; } });
+  d.vpBins = bins; d.vpMaxVol = maxVol; d.vpPocIdx = pocIdx;
+}
+
+// Reubica en pantalla las barras ya calculadas de un 'vp' (se llama cada
+// frame, igual que syncRectFill) — crecen desde el borde izquierdo de la
+// caja hacia la derecha, ancho proporcional al volumen de cada franja
+// contra el máximo (el "POC" queda resaltado con más opacidad).
+function syncVolumeProfileBars(d) {
+  if (!Array.isArray(d.vpBarEls) || !d.vpBarEls.length) return;
+  const bins = d.vpBins || [];
+  const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+  const t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+  const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+  if (x1===null || x2===null) { d.vpBarEls.forEach(el => el.style.display='none'); return; }
+  const boxLeft = Math.min(x1,x2), maxBarW = Math.abs(x2-x1) * 0.85;
+  const maxVol = d.vpMaxVol || 0;
+  d.vpBarEls.forEach((el, i) => {
+    const b = bins[i];
+    const yTop = b ? candleSeries.priceToCoordinate(b.top) : null;
+    const yBot = b ? candleSeries.priceToCoordinate(b.bottom) : null;
+    if (!b || yTop===null || yBot===null) { el.style.display='none'; return; }
+    el.style.display='';
+    el.setAttribute('x', boxLeft);
+    el.setAttribute('y', Math.min(yTop,yBot));
+    el.setAttribute('width', maxVol>0 ? (b.vol/maxVol)*maxBarW : 0);
+    el.setAttribute('height', Math.max(1, Math.abs(yBot-yTop)-1));
+    el.setAttribute('fill-opacity', i===d.vpPocIdx ? '0.85' : '0.42');
+  });
 }
 
 // Recolorea una herramienta de posición ya construida sin tocar las series
@@ -4679,6 +4769,41 @@ function buildDrawingOnChart(d) {
     d.fillEl.setAttribute('fill-opacity', d.showFill === false ? '0' : '0.12');
     syncRectFill(d);
 
+  } else if (d.type === 'vp') {
+    const hi = Math.max(d.p1.price, d.p2.price);
+    const lo = Math.min(d.p1.price, d.p2.price);
+    const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+    let t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t1 === t2) t2 = t1 + barInterval;
+    const mkR = (pts) => {
+      const s = chart.addLineSeries({ color: C+'88', lineWidth:lw, lineStyle:ls, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider: () => null });
+      s.setData(pts); d.series.push(s); return s;
+    };
+    mkR([{time:t1,value:hi},{time:t2,value:hi}]);
+    mkR([{time:t1,value:lo},{time:t2,value:lo}]);
+    mkR([{time:t1,value:lo},{time:t1,value:hi}]);
+    mkR([{time:t2,value:lo},{time:t2,value:hi}]);
+
+    // Las barras del histograma son rects de la capa SVG (no series del
+    // chart — lightweight-charts no puede dibujar una barra horizontal en
+    // un punto arbitrario de tiempo), igual que el relleno de 'rect' —
+    // reposicionadas cada frame por syncVolumeProfileBars. Se recrean solo
+    // si no existen todavía (redrawDrawing() las deja vivas, igual que
+    // fillEl en 'rect', así un cambio de color no las duplica).
+    if (!Array.isArray(d.vpBarEls) || !d.vpBarEls.length) {
+      d.vpBarEls = [];
+      for (let i = 0; i < 24; i++) {
+        const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        r.setAttribute('fill', C);
+        window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
+        d.vpBarEls.push(r);
+      }
+    } else {
+      d.vpBarEls.forEach(el => el.setAttribute('fill', C));
+    }
+    computeVolumeProfileBins(d);
+    syncVolumeProfileBars(d);
+
   } else if (d.type === 'fib') {
     if (!d.levels) d.levels = cloneFibLevels();
     let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
@@ -4819,7 +4944,7 @@ function highlightSelectedSvg(id) {
     } else if (d.type === 'trendline' || d.type === 'fib') {
       addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
       addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
-    } else if (d.type === 'rect') {
+    } else if (d.type === 'rect' || d.type === 'vp') {
       const hi = Math.max(d.p1.price, d.p2.price);
       const lo = Math.min(d.p1.price, d.p2.price);
       const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
@@ -4942,7 +5067,7 @@ function applyHandleDrag(d, role, price, time) {
     // updateDrawingGeometry), que ahora usan el mismo criterio.
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else { d.p2.price = price; d.p2.time = time; }
-  } else if (d.type === 'rect') {
+  } else if (d.type === 'rect' || d.type === 'vp') {
     let hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
     let t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
     if (role === 't1hi') { t1 = time; hi = price; }
@@ -5386,6 +5511,8 @@ function initChart() {
         syncVLine(d);
       } else if (d.type==='rect') {
         syncRectFill(d);
+      } else if (d.type==='vp') {
+        syncVolumeProfileBars(d);
       } else if (d.type==='long' || d.type==='short') {
         syncPositionTool(d);
       }
@@ -5526,13 +5653,13 @@ function initDrawingLayer() {
       if (x1===null||x2===null||y1===null||y2===null) return false;
       return distToSegment(x1,y1,x2,y2,mx,my) < THRESH;
     }
-    if (d.type === 'rect' || d.type === 'fib') {
+    if (d.type === 'rect' || d.type === 'vp' || d.type === 'fib') {
       const hi=Math.max(d.p1.price,d.p2.price), lo=Math.min(d.p1.price,d.p2.price);
       const t1=safeLineTime(Math.min(d.p1.time,d.p2.time)), t2=safeLineTime(Math.max(d.p1.time,d.p2.time));
       const x1=timeToX(t1), x2=timeToX(t2);
       const y1=priceToY(hi), y2=priceToY(lo);
       if (x1===null||x2===null||y1===null||y2===null) return false;
-      if (d.type === 'rect') return (
+      if (d.type === 'rect' || d.type === 'vp') return (
         distToSegment(x1,y1,x2,y1,mx,my)<THRESH||
         distToSegment(x1,y2,x2,y2,mx,my)<THRESH||
         distToSegment(x1,y1,x1,y2,mx,my)<THRESH||
@@ -5918,7 +6045,7 @@ function initDrawingLayer() {
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
       svg.appendChild(line); previewEl = line;
-    } else if (tool === 'rect' || tool === 'long' || tool === 'short') {
+    } else if (tool === 'rect' || tool === 'vp' || tool === 'long' || tool === 'short') {
       const rx=Math.min(drawStart.x,x2), ry=Math.min(drawStart.y,y2);
       const rw=Math.abs(x2-drawStart.x), rh=Math.abs(y2-drawStart.y);
       const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -5984,6 +6111,15 @@ function initDrawingLayer() {
       const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
       if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
       d = { id:genId(), type:'rect', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
+    } else if (tool === 'vp') {
+      // Perfil de volumen de rango fijo: igual que 'rect' (una caja de
+      // precio/tiempo arrastrada a mano), pero en vez de un simple relleno
+      // se calcula un histograma de volumen por franja de precio usando
+      // las velas que caen dentro de ese rango — ver computeVolumeProfileBins.
+      const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
+      const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
+      if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
+      d = { id:genId(), type:'vp', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
     } else if (tool === 'fib') {
       if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
       // toolDefaults.levels: lo que haya quedado guardado como default de
