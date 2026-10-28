@@ -11358,13 +11358,30 @@ function defaultOrderSlTp(price, side){
     ? { sl: price - dist, tp: price + dist }
     : { sl: price + dist, tp: price - dist };
 }
-// Buy/Sell de un solo click en la barra de herramientas (ver .qt-buy/
-// .qt-sell) — arma una orden Market con el tamaño que haya cargado en el
-// panel de Operar (sus campos existen siempre, esté el panel abierto o
-// no) y SL/TP "pegados" (ver defaultOrderSlTp) ya que acá no hay inputs
-// para escribirlos. Simplemente ajusta lado+tipo y reusa
-// placeOrderFromPanel tal cual — cero lógica nueva.
+// Buy/Sell de un solo click sobre el chart (ver .qt-buy/.qt-sell) — arma
+// una orden Market con el tamaño que haya cargado en el panel de Operar
+// (sus campos existen siempre, esté el panel abierto o no) y SL/TP
+// "pegados" (ver defaultOrderSlTp) ya que acá no hay inputs para
+// escribirlos. Simplemente ajusta lado+tipo y reusa placeOrderFromPanel
+// tal cual — cero lógica nueva de verdad, salvo un detalle de la grilla.
 function quickMarketOrder(side){
+  // En la grilla (EMBED_MODE), el panel de Operar que el usuario ve y
+  // edita de verdad es el del SHELL (ver renderLayoutGrid) — vive en OTRO
+  // documento, así que cambiar el tamaño/SL/TP ahí NUNCA tocaba los
+  // campos propios de este panel (ocultos, nadie los edita a mano), y
+  // este botón terminaba usando el "1" de fábrica sin importar lo que se
+  // hubiera configurado — reportado 2026-10-28. Mismo origen (iframes de
+  // la propia grilla), así que se puede leer window.parent.document
+  // directo, sin postMessage.
+  if (EMBED_MODE && window.parent !== window) {
+    try {
+      ['orders-volume','orders-sl','orders-tp'].forEach(id => {
+        const shellEl = window.parent.document.getElementById(id);
+        const localEl = document.getElementById(id);
+        if (shellEl && localEl) localEl.value = shellEl.value;
+      });
+    } catch(e){}
+  }
   setOrdersSide(side);
   const typeSel = document.getElementById('orders-type');
   if (typeSel) typeSel.value = 'market';
