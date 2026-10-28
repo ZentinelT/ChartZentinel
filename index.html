@@ -445,7 +445,7 @@
   html.embed-mode #btn-orders-toggle { display: none !important; }
   /* #orders-panel SÍ se deja visible en modo embed (a diferencia de arriba)
      — a propósito: es el único acceso al panel de Operar con más de un
-     gráfico (ver gc-orders → postMessage zentinel:openOrders en
+     gráfico (ver gc-orders → postMessage zentinel:toggleOrders en
      renderLayoutGrid), ya que la tira angosta del borde (#btn-orders-toggle,
      sí oculta) no sirve ahí. Sigue arrancando colapsado igual (la clase
      .collapsed no depende de embed-mode), así que no ocupa espacio hasta
@@ -1433,7 +1433,7 @@
       <span class="tb-label" id="btn-trades-count"></span>
     </button>
 
-    <button class="topbar-btn" id="btn-orders-open" title="Operar (market/limit/stop)" onclick="openOrdersPanel()">
+    <button class="topbar-btn" id="btn-orders-open" title="Operar (market/limit/stop)" onclick="toggleOrdersPanel()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M7 3v14M7 3l-3.5 3.5M7 3l3.5 3.5"/>
         <path d="M17 21V7M17 21l-3.5-3.5M17 21l3.5-3.5"/>
@@ -3003,7 +3003,7 @@ function renderLayoutGrid(n){
   // Panel de Operar: mismo patrón que Trades arriba — vive en el script de
   // cada panel, acá solo se delega al panel ACTIVO para abrirlo.
   gbar.querySelector('#gc-orders').addEventListener('click', ()=>{
-    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openOrders' }, '*');
+    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:toggleOrders' }, '*');
   });
   // El journal es global pero el precio fresco solo lo tiene CADA panel
   // (su propio window._lastCandles) — el badge de P/L en vivo de la barra
@@ -6047,19 +6047,6 @@ function toggleOrdersPanel() {
   document.getElementById('btn-orders-toggle').classList.toggle('collapsed', collapsed);
   lsSet(lsKey('td_orders_collapsed'), collapsed ? '1' : '0');
   if (!collapsed) renderOrdersPanel();
-}
-// A diferencia de toggleOrdersPanel (la tira angosta al borde, que alterna
-// abierto/cerrado), esto SIEMPRE abre — lo usan el botón de la topbar y el
-// mensaje postMessage desde la barra del shell en modo grilla (2×/4⊞),
-// donde la tira del borde queda oculta (ver html.embed-mode más arriba) y
-// sin esto no había NINGUNA forma de llegar al panel con más de un gráfico.
-function openOrdersPanel(){
-  const panel = document.getElementById('orders-panel');
-  if (!panel) return;
-  panel.classList.remove('collapsed');
-  document.getElementById('btn-orders-toggle')?.classList.remove('collapsed');
-  lsSet(lsKey('td_orders_collapsed'), '0');
-  renderOrdersPanel();
 }
 // Botón × adentro del propio panel (ver header "Operar") — para cerrarlo
 // sin depender de la tira angosta del borde (#btn-orders-toggle), que en
@@ -9877,8 +9864,8 @@ window.addEventListener('message', (e) => {
     openIndicatorModal();
   } else if (msg.type === 'zentinel:openTrades') {
     openTradesModal();
-  } else if (msg.type === 'zentinel:openOrders') {
-    openOrdersPanel();
+  } else if (msg.type === 'zentinel:toggleOrders') {
+    toggleOrdersPanel();
   } else if (msg.type === 'zentinel:startReplayPick') {
     // El botón "Replay" de la grilla vive en el shell (acá adentro no se
     // ve: #topbar está oculto en modo embed) — esto es lo que hace que
