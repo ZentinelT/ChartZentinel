@@ -839,26 +839,38 @@
   .order-cancel-btn:hover { color: var(--red); }
   .order-edit-btn:hover { color: var(--gold); }
 
-  /* × para cerrar una operación abierta directo desde su línea de entrada
-     en el chart (ver renderOrderCloseButtons) — div real posicionado a
-     mano sobre el canvas del chart, mismo mecanismo que las etiquetas de
-     texto (ver label de 'text' en buildDrawingOnChart), reposicionado en
-     cada pan/zoom/resize vía syncOverlayPositions. */
-  .order-close-btn {
+  /* Etiqueta "Buy/Sell Nx L [×]" sobre la línea de entrada de cada operación
+     abierta (ver renderOrderPositionBadges) — div real posicionado A MANO
+     (mismo mecanismo que las etiquetas de texto, ver label de 'text' en
+     buildDrawingOnChart), reposicionado en cada pan/zoom/resize vía
+     syncOverlayPositions. A propósito NO es el title/axisLabel nativo de
+     createPriceLine (ver renderOrderPriceLines, entry queda con
+     title:'' / axisLabelVisible:false): ese cartel nativo vive en el eje
+     de precio junto con el de "precio actual" — cuando el precio en vivo
+     se acerca al de entrada, la librería los reacomoda para que no se
+     superpongan, y esa etiqueta terminaba corriéndose de lugar sola con
+     cada tick (reportado 2026-10-28: "la etiqueta no se debe mover con el
+     precio"). Esta, al posicionarla nosotros mismos siempre en
+     priceToCoordinate(entry_price) sin que nada más la toque, queda fija. */
+  .order-pos-badge {
     position: absolute;
-    width: 16px; height: 16px;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 700; line-height: 1;
-    color: #fff;
-    background: rgba(10,10,14,.75);
-    border: 1px solid currentColor;
+    transform: translate(0, -50%);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: #0a0a0e;
     cursor: pointer;
     z-index: 22;
+    white-space: nowrap;
     user-select: none;
   }
-  .order-close-btn:hover { background: var(--red); border-color: var(--red); }
+  .order-pos-badge .order-pos-badge-x { opacity: .7; }
+  .order-pos-badge:hover .order-pos-badge-x { opacity: 1; text-decoration: underline; }
 
   /* ─── CHART AREA ──────────────────────────────────────── */
   #chart-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -5141,7 +5153,7 @@ function initChart() {
         syncPositionTool(d);
       }
     });
-    positionOrderCloseButtons();
+    positionOrderPositionBadges();
   }
   window._syncOverlayPositions = syncOverlayPositions;
   syncOverlayPositions();
@@ -10719,7 +10731,11 @@ function renderOrderPriceLines(){
 
   getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
     const color = t.side === 'long' ? '#26a69a' : '#ef5350';
-    addLine(t.entry_price, { color, lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: (t.side === 'long' ? 'Buy ' : 'Sell ') + t.volume + 'L' }, { kind:'trade', id:t.id, field:'entry', editable:false });
+    // Sin title/axisLabel acá a propósito — ese cartel lo pone la badge
+    // propia (ver renderOrderPositionBadges), que no se mueve sola cuando
+    // el precio en vivo se acerca al de entrada (ver comentario en el CSS
+    // de .order-pos-badge).
+    addLine(t.entry_price, { color, lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '' }, { kind:'trade', id:t.id, field:'entry', editable:false });
     if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'trade', id:t.id, field:'sl', editable: !t.real });
     if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'trade', id:t.id, field:'tp', editable: !t.real });
   });
@@ -10733,51 +10749,55 @@ function renderOrderPriceLines(){
     if (o.sl != null) addLine(o.sl, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'pending', id:o.id, field:'sl', editable:true });
     if (o.tp != null) addLine(o.tp, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'pending', id:o.id, field:'tp', editable:true });
   });
-  renderOrderCloseButtons();
+  renderOrderPositionBadges();
 }
 
-// × sobre la línea de entrada de cada operación abierta (ver CSS
-// .order-close-btn) para cerrarla directo desde el chart, sin pasar por el
-// panel de Operar ni el modal de Trades — pedido explícito del usuario.
-// Reusa closeTradeById(), que ya sabe mandar el cierre real a MT5 cuando
-// corresponde (t.real) — a diferencia del arrastre de SL/TP (bloqueado para
-// reales a propósito), cerrar es una sola acción deliberada de un click,
-// mismo riesgo que el botón ✕ que ya existe en el modal de Trades.
-let _orderCloseButtons = [];
-function renderOrderCloseButtons(){
+// Badge "Buy/Sell Nx L ×" sobre la línea de entrada de cada operación
+// abierta — reemplaza el title/axisLabel nativo de esa línea (ver
+// renderOrderPriceLines) para que no se mueva sola, y de paso sirve para
+// cerrar la operación directo desde el chart con un click (pedido
+// explícito del usuario), sin pasar por el panel de Operar ni el modal de
+// Trades. Reusa closeTradeById(), que ya sabe mandar el cierre real a MT5
+// cuando corresponde (t.real) — a diferencia del arrastre de SL/TP
+// (bloqueado para reales a propósito), cerrar es una sola acción
+// deliberada de un click, mismo riesgo que el botón ✕ que ya existe en el
+// modal de Trades.
+let _orderPositionBadges = [];
+function renderOrderPositionBadges(){
   const container = document.getElementById('chart-container');
-  _orderCloseButtons.forEach(b => b.el.remove());
-  _orderCloseButtons = [];
+  _orderPositionBadges.forEach(b => b.el.remove());
+  _orderPositionBadges = [];
   if (!candleSeries || !chart || window._orderLineDragSession) return;
   const sym = normalizeSymbolForJournal(STATE.symbol);
   getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
-    const btn = document.createElement('div');
-    btn.className = 'order-close-btn';
-    btn.textContent = '✕';
-    btn.title = 'Cerrar operación';
-    btn.style.color = t.side === 'long' ? '#26a69a' : '#ef5350';
-    btn.onclick = (e) => { e.stopPropagation(); closeTradeById(t.id); };
-    container.appendChild(btn);
-    _orderCloseButtons.push({ el: btn, tradeId: t.id });
+    const el = document.createElement('div');
+    el.className = 'order-pos-badge';
+    el.style.background = t.side === 'long' ? '#26a69a' : '#ef5350';
+    el.title = 'Cerrar operación';
+    el.innerHTML = `<span>${t.side === 'long' ? 'Buy' : 'Sell'} ${t.volume}L</span><span class="order-pos-badge-x">✕</span>`;
+    el.onclick = (e) => { e.stopPropagation(); closeTradeById(t.id); };
+    container.appendChild(el);
+    _orderPositionBadges.push({ el, tradeId: t.id });
   });
-  positionOrderCloseButtons();
+  positionOrderPositionBadges();
 }
-// Separado de renderOrderCloseButtons (que reconstruye todo) porque esto
+// Separado de renderOrderPositionBadges (que reconstruye todo) porque esto
 // se llama MUCHO más seguido — cada pan/zoom/resize, vía syncOverlayPositions
 // — y no hace falta destruir y crear los divs de nuevo, solo moverlos.
-function positionOrderCloseButtons(){
-  if (!candleSeries || !chart || !_orderCloseButtons.length) return;
+function positionOrderPositionBadges(){
+  if (!candleSeries || !chart || !_orderPositionBadges.length) return;
   const container = document.getElementById('chart-container');
   const plotW = container.clientWidth - chart.priceScale('right').width();
   const plotH = container.clientHeight - chart.timeScale().height();
   const open = getOpenTrades();
-  _orderCloseButtons.forEach(b => {
+  _orderPositionBadges.forEach(b => {
     const t = open.find(x => x.id === b.tradeId);
     const y = t ? candleSeries.priceToCoordinate(t.entry_price) : null;
     const hidden = !t || y === null || y < 0 || y > plotH;
-    b.el.style.display = hidden ? 'none' : 'flex';
-    if (hidden) return;
-    b.el.style.left = (plotW - 11) + 'px';
+    if (hidden) { b.el.style.display = 'none'; return; }
+    b.el.style.display = 'flex';
+    b.el.style.right = (container.clientWidth - plotW + 6) + 'px';
+    b.el.style.left = 'auto';
     b.el.style.top = y + 'px';
   });
 }
