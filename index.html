@@ -5229,6 +5229,20 @@ function initDrawingLayer() {
 
   function priceToY(p) { return candleSeries.priceToCoordinate(p); }
   function timeToX(t)  { return chart.timeScale().timeToCoordinate(t); }
+
+  // Línea de SL/TP/precio pendiente (ver renderOrderPriceLines) bajo el
+  // mouse, si hay una arrastrable ahí — independiente de hitTestHandle/
+  // isClickOnDrawing de abajo (esas son para dibujos de drawings[], estas
+  // líneas son datos de trades/pendientes, no dibujos).
+  function hitTestOrderLine(mx, my) {
+    for (const entry of _orderPriceLines) {
+      if (!entry.editable) continue;
+      const y = priceToY(entry.price);
+      if (y !== null && Math.abs(my - y) < 6) return entry;
+    }
+    return null;
+  }
+
   function distToSegment(x1,y1,x2,y2,px,py) {
     const dx=x2-x1, dy=y2-y1;
     const len2 = dx*dx+dy*dy;
@@ -5314,6 +5328,7 @@ function initDrawingLayer() {
 
   // ── Selección + arrastre (mover cuerpo entero / estirar una punta) ──
   window._dragSession = null; // { kind:'handle'|'body', drawing, role, startPrice, startTime, origP1, origP2 }
+  window._orderLineDragSession = null; // { line, price, kind, id, field } — ver hitTestOrderLine/commitOrderLineDrag
 
   // capture:true + stopPropagation: si no, el canvas del chart (debajo de
   // esta capa) también recibe el mismo mousedown/mousemove y arranca su
@@ -5323,6 +5338,16 @@ function initDrawingLayer() {
     if (STATE.activeTool !== 'cursor') return;
     const rect = container.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    // SL/TP/precio pendiente ANTES que las manijas/dibujos propios: son
+    // líneas finas que cruzan todo el ancho, más fácil que terminen
+    // "ganándole" el click a un dibujo de fondo que al revés.
+    const lineHit = hitTestOrderLine(mx, my);
+    if (lineHit) {
+      e.preventDefault(); e.stopPropagation();
+      window._orderLineDragSession = lineHit;
+      return;
+    }
 
     const handleHit = hitTestHandle(mx, my);
     if (handleHit) {
@@ -5357,6 +5382,17 @@ function initDrawingLayer() {
   container.addEventListener('mousemove', e => {
     const rect = container.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (window._orderLineDragSession) {
+      e.preventDefault(); e.stopPropagation();
+      const price = candleSeries.coordinateToPrice(my);
+      if (price === null) return;
+      // Solo mueve la línea en pantalla (applyOptions, barato) — el precio
+      // real en storage recién se guarda al soltar, ver commitOrderLineDrag.
+      window._orderLineDragSession.price = price;
+      window._orderLineDragSession.line.applyOptions({ price });
+      return;
+    }
 
     if (window._dragSession) {
       e.preventDefault(); e.stopPropagation();
@@ -5422,6 +5458,7 @@ function initDrawingLayer() {
     // toda en este único handler para que no compita con otro listener
     // por el mismo style.cursor (eso era lo que causaba el titileo).
     if (STATE.activeTool === 'cursor') {
+      if (hitTestOrderLine(mx, my)) { container.style.cursor = 'ns-resize'; return; }
       if (hitTestHandle(mx, my)) { container.style.cursor = 'crosshair'; return; }
       const over = drawings.some(d => !d.locked && isClickOnDrawing(d, mx, my));
       if (over) { container.style.cursor = 'move'; return; }
@@ -5439,6 +5476,12 @@ function initDrawingLayer() {
   }
 
   window.addEventListener('mouseup', e => {
+    if (window._orderLineDragSession) {
+      e.preventDefault(); e.stopPropagation();
+      commitOrderLineDrag(window._orderLineDragSession);
+      window._orderLineDragSession = null;
+      return;
+    }
     if (window._dragSession) { e.preventDefault(); e.stopPropagation(); }
     if (window._dragSession && window._dragSession.kind === 'body' && window._dragSession.drawing.type === 'text') {
       const d = window._dragSession.drawing;
@@ -10619,20 +10662,37 @@ function renderTradeMarkers(){
 // pendiente (Limit/Stop), con su precio en el eje. Sin modo incremental,
 // igual que setMarkers() arriba — se borran todas y se vuelven a crear cada
 // vez (createPriceLine/removePriceLine no tienen un "update por id").
+//
+// Cada entrada guarda, además de la línea en sí, de qué trade/orden viene
+// (kind/id/field) y si se puede ARRASTRAR (editable) — eso lo lee
+// initOrderLineDrag() más abajo para dejar mover con el mouse el SL/TP de
+// una operación en papel o el precio/SL/TP de una pendiente, igual que en
+// MT5/TradingView. Las reales (t.real) quedan con editable:false a
+// propósito: ese SL/TP se cambia solo desde el botón ✎ (confirmación
+// explícita), no con un arrastre que se puede disparar sin querer.
 let _orderPriceLines = [];
 function renderOrderPriceLines(){
   if (!candleSeries || !candleSeries.createPriceLine) return;
-  _orderPriceLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
+  // Mientras se está arrastrando una de estas líneas, NO reconstruir —
+  // el tick de precio en vivo llama a esto cada ~1s vía renderTradeMarkers(),
+  // y reconstruir desde el storage (que todavía tiene el precio VIEJO,
+  // recién se guarda al soltar) pisaría el movimiento en curso y se vería
+  // la línea "saltar" de vuelta a su lugar a mitad del arrastre.
+  if (window._orderLineDragSession) return;
+  _orderPriceLines.forEach(e => { try { candleSeries.removePriceLine(e.line); } catch(err){} });
   _orderPriceLines = [];
   if (STATE.chartSettings.tradeMarkersMode === 'off') return;
   const sym = normalizeSymbolForJournal(STATE.symbol);
-  const addLine = (opts) => _orderPriceLines.push(candleSeries.createPriceLine(opts));
+  const addLine = (price, opts, meta) => {
+    const line = candleSeries.createPriceLine({ price, ...opts });
+    _orderPriceLines.push({ line, price, ...meta });
+  };
 
   getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
     const color = t.side === 'long' ? '#26a69a' : '#ef5350';
-    addLine({ price: t.entry_price, color, lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: (t.side === 'long' ? 'Buy ' : 'Sell ') + t.volume + 'L' });
-    if (t.stop_loss != null) addLine({ price: t.stop_loss, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
-    if (t.take_profit != null) addLine({ price: t.take_profit, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+    addLine(t.entry_price, { color, lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: (t.side === 'long' ? 'Buy ' : 'Sell ') + t.volume + 'L' }, { kind:'trade', id:t.id, field:'entry', editable:false });
+    if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'trade', id:t.id, field:'sl', editable: !t.real });
+    if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'trade', id:t.id, field:'tp', editable: !t.real });
   });
 
   getPendingOrders().filter(o => o.symbol === sym).forEach(o => {
@@ -10640,10 +10700,37 @@ function renderOrderPriceLines(){
     const label = (o.side === 'long' ? 'Buy ' : 'Sell ') + (o.type === 'limit' ? 'Limit' : 'Stop') + ' ' + o.volume + 'L';
     // LargeDashed (3) en vez de Dashed (2, que ya usan SL/TP de arriba) —
     // para distinguir de un vistazo "todavía no entró" de "ya está abierta".
-    addLine({ price: o.price, color, lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: label });
-    if (o.sl != null) addLine({ price: o.sl, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
-    if (o.tp != null) addLine({ price: o.tp, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' });
+    addLine(o.price, { color, lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: label }, { kind:'pending', id:o.id, field:'price', editable:true });
+    if (o.sl != null) addLine(o.sl, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'pending', id:o.id, field:'sl', editable:true });
+    if (o.tp != null) addLine(o.tp, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'pending', id:o.id, field:'tp', editable:true });
   });
+}
+
+// Aplica en storage lo que quedó arrastrado (ver initOrderLineDrag) — se
+// llama UNA vez al soltar el mouse, nunca durante el arrastre.
+function commitOrderLineDrag(sess){
+  if (sess.kind === 'trade') {
+    const open = getOpenTrades();
+    const t = open.find(x => x.id === sess.id);
+    if (t) {
+      if (sess.field === 'sl') t.stop_loss = sess.price;
+      else if (sess.field === 'tp') t.take_profit = sess.price;
+      saveOpenTrades(open);
+      renderTradesCountBadge(); // también refresca el panel de operar
+      renderTradesModalIfOpen();
+    }
+  } else if (sess.kind === 'pending') {
+    const pending = getPendingOrders();
+    const o = pending.find(x => x.id === sess.id);
+    if (o) {
+      if (sess.field === 'price') o.price = sess.price;
+      else if (sess.field === 'sl') o.sl = sess.price;
+      else if (sess.field === 'tp') o.tp = sess.price;
+      savePendingOrders(pending);
+      renderOrdersPanelIfOpen();
+    }
+  }
+  renderTradeMarkers();
 }
 
 // Se llama en cada tick de precio en vivo (refreshFormingCandle/appendNewBar)
