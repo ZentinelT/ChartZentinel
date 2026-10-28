@@ -2053,6 +2053,9 @@
       <label style="font-size:11px;color:var(--text-dim);display:block;">Value Area Volume (%)
         <input type="number" id="vp-set-va" min="1" max="99" step="1" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('vaPct', Math.max(1,Math.min(99,parseInt(this.value)||70)))">
       </label>
+      <label style="font-size:11px;color:var(--text-dim);display:block;" title="Qué tan largas llegan las barras — como % del ancho de la caja. Bajalo si el rango abarca muchas velas (p.ej. 1 día en M5) y las barras quedan tapando todo.">Width (%)
+        <input type="number" id="vp-set-width" min="5" max="100" step="5" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('widthPct', Math.max(5,Math.min(100,parseInt(this.value)||70)))">
+      </label>
       <label style="font-size:11px;color:var(--text-dim);display:block;">Volume
         <select id="vp-set-voltype" class="dtb-select" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('volumeType', this.value)">
           <option value="updown">Up/Down</option>
@@ -3899,7 +3902,7 @@ function refreshToolDefaultsFor(type){
     color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined,
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
     upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
-    pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined,
+    pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined,
   }, TOOL_STYLE_STORE[type] || {});
 }
 // Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
@@ -3945,7 +3948,7 @@ function captureDrawingStyle(d){
       color: d.color, rows: d.rows, vaPct: d.vaPct, placement: d.placement, volumeType: d.volumeType,
       upColor: d.upColor, downColor: d.downColor, vaUpColor: d.vaUpColor, vaDownColor: d.vaDownColor,
       pocColor: d.pocColor, vaLineColor: d.vaLineColor,
-      showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false, extendPoc: !!d.extendPoc,
+      showPoc: d.showPoc !== false, showValueArea: d.showValueArea !== false, extendPoc: !!d.extendPoc, widthPct: d.widthPct,
     });
   }
   if (d.type === 'hline' || d.type === 'trendline') {
@@ -4428,6 +4431,7 @@ function openVpSettingsModal() {
   const setColor = (id, val) => { document.getElementById(id).value = val; document.getElementById(id+'-swatch').style.background = val; };
   document.getElementById('vp-set-rows').value = d.rows || 24;
   document.getElementById('vp-set-va').value = d.vaPct != null ? d.vaPct : 70;
+  document.getElementById('vp-set-width').value = d.widthPct != null ? d.widthPct : 70;
   document.getElementById('vp-set-voltype').value = d.volumeType || 'updown';
   document.getElementById('vp-set-placement').value = d.placement || 'left';
   setColor('vp-set-vaup', d.vaUpColor || '#26a69a');
@@ -4793,7 +4797,7 @@ function syncVolumeProfileBars(d) {
   if (x1===null || x2===null) { d.vpBarEls.forEach(p => { p.upEl.style.display='none'; p.downEl.style.display='none'; }); return; }
   const left = d.placement !== 'right';
   const boxLeft = Math.min(x1,x2), boxRight = Math.max(x1,x2);
-  const maxBarW = (boxRight - boxLeft) * 0.9;
+  const maxBarW = (boxRight - boxLeft) * ((d.widthPct != null ? d.widthPct : 70) / 100);
   const anchorX = left ? boxLeft : boxRight;
   const maxVol = d.vpMaxVol || 0;
   d.vpBarEls.forEach((p, i) => {
@@ -5026,6 +5030,7 @@ function buildDrawingOnChart(d) {
     if (d.showPoc == null) d.showPoc = true;
     if (d.showValueArea == null) d.showValueArea = true;
     if (d.extendPoc == null) d.extendPoc = false;
+    if (d.widthPct == null) d.widthPct = 70;
 
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
@@ -6402,7 +6407,7 @@ function initDrawingLayer() {
         vaUpColor: toolDefaults.vaUpColor || '#26a69a', vaDownColor: toolDefaults.vaDownColor || '#ef5350',
         pocColor: toolDefaults.pocColor || '#f0c060', vaLineColor: toolDefaults.vaLineColor || '#c9a84c',
         showPoc: toolDefaults.showPoc !== false, showValueArea: toolDefaults.showValueArea !== false,
-        extendPoc: !!toolDefaults.extendPoc,
+        extendPoc: !!toolDefaults.extendPoc, widthPct: toolDefaults.widthPct != null ? toolDefaults.widthPct : 70,
       };
     } else if (tool === 'fib') {
       if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
