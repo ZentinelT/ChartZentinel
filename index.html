@@ -1628,11 +1628,11 @@
         </div>
         <div class="orders-field">
           <label class="cs-field-label">Stop loss</label>
-          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = sin SL" autocomplete="off">
+          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
         </div>
         <div class="orders-field">
           <label class="cs-field-label">Take profit</label>
-          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = sin TP" autocomplete="off">
+          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
         </div>
         <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Colocar orden</button>
       </div>
@@ -11072,12 +11072,26 @@ function _ordersParsePrice(s){
   const n = Number(t.replace(/,/g, ''));
   return isFinite(n) ? n : NaN;
 }
+// SL/TP "pegados" al precio de entrada/orden cuando el usuario los deja
+// vacíos al colocar — pedido explícito: así siempre queda algo para
+// agarrar y arrastrar a la línea de SL/TP (ver initOrderLineDrag) en vez
+// de no dibujar nada y obligar a escribir un precio a mano antes. 0.3%
+// del precio: ni tan pegado que las 3 líneas (entry/SL/TP) se amontonen
+// en la misma fila de píxeles a casi cualquier zoom, ni tan lejos que
+// parezca un nivel de riesgo real — es solo un punto de partida para
+// mover después.
+function defaultOrderSlTp(price, side){
+  const dist = Math.abs(price) * 0.003;
+  return side === 'long'
+    ? { sl: price - dist, tp: price + dist }
+    : { sl: price + dist, tp: price - dist };
+}
 function placeOrderFromPanel(){
   const type = document.getElementById('orders-type').value;
   const volume = parseFloat(document.getElementById('orders-volume').value);
   if (!volume || volume <= 0) { alert('Tamaño de posición inválido.'); return; }
-  const sl = _ordersParsePrice(document.getElementById('orders-sl').value);
-  const tp = _ordersParsePrice(document.getElementById('orders-tp').value);
+  let sl = _ordersParsePrice(document.getElementById('orders-sl').value);
+  let tp = _ordersParsePrice(document.getElementById('orders-tp').value);
   if (Number.isNaN(sl) || Number.isNaN(tp)) { alert('Precio de SL/TP inválido.'); return; }
   const side = _ordersSide;
   const sym = normalizeSymbolForJournal(STATE.symbol);
@@ -11085,6 +11099,11 @@ function placeOrderFromPanel(){
 
   if (type === 'market') {
     if (!lastBar) { alert('Todavía no cargó el precio actual.'); return; }
+    if (sl == null || tp == null) {
+      const def = defaultOrderSlTp(lastBar.close, side);
+      if (sl == null) sl = def.sl;
+      if (tp == null) tp = def.tp;
+    }
     const trade = {
       id: 'trd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       symbol: sym,
@@ -11123,6 +11142,14 @@ function placeOrderFromPanel(){
         : (type === 'limit' ? 'Sell Limit normalmente va por ARRIBA del precio actual.' : 'Sell Stop normalmente va por DEBAJO del precio actual.');
       if (!confirm(hint + ' Precio actual: ' + fmt(cur) + '. ¿Colocarla igual?')) return;
     }
+  }
+  if (sl == null || tp == null) {
+    // Acá "pegado" es al precio de la ORDEN (donde va a entrar si se
+    // dispara), no al precio de mercado actual — mismo defaultOrderSlTp
+    // de arriba.
+    const def = defaultOrderSlTp(price, side);
+    if (sl == null) sl = def.sl;
+    if (tp == null) tp = def.tp;
   }
   const order = {
     id: 'ord_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
