@@ -11913,8 +11913,8 @@ function renderOrderPriceLines(){
     // el precio en vivo se acerca al de entrada (ver comentario en el CSS
     // de .order-pos-badge).
     addLine(t.entry_price, { color, lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '' }, { kind:'trade', id:t.id, field:'entry', editable:false });
-    if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'trade', id:t.id, field:'sl', editable: !t.real });
-    if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'trade', id:t.id, field:'tp', editable: !t.real });
+    if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'trade', id:t.id, field:'sl', editable:true });
+    if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'trade', id:t.id, field:'tp', editable:true });
   });
 
   getPendingOrders().filter(o => o.symbol === sym).forEach(o => {
@@ -11935,10 +11935,9 @@ function renderOrderPriceLines(){
 // cerrar la operación directo desde el chart con un click (pedido
 // explícito del usuario), sin pasar por el panel de Operar ni el modal de
 // Trades. Reusa closeTradeById(), que ya sabe mandar el cierre real a MT5
-// cuando corresponde (t.real) — a diferencia del arrastre de SL/TP
-// (bloqueado para reales a propósito), cerrar es una sola acción
-// deliberada de un click, mismo riesgo que el botón ✕ que ya existe en el
-// modal de Trades.
+// cuando corresponde (t.real) — mismo criterio que arrastrar el SL/TP
+// (ver commitOrderLineDrag), ambas acciones deliberadas de un click/drag
+// explícito, mismo riesgo que los botones ya existentes del modal de Trades.
 let _orderPositionBadges = [];
 function renderOrderPositionBadges(){
   const container = document.getElementById('chart-container');
@@ -11981,17 +11980,45 @@ function positionOrderPositionBadges(){
 
 // Aplica en storage lo que quedó arrastrado (ver initOrderLineDrag) — se
 // llama UNA vez al soltar el mouse, nunca durante el arrastre.
-function commitOrderLineDrag(sess){
+async function commitOrderLineDrag(sess){
   if (sess.kind === 'trade') {
     const open = getOpenTrades();
     const t = open.find(x => x.id === sess.id);
-    if (t) {
-      if (sess.field === 'sl') t.stop_loss = sess.price;
-      else if (sess.field === 'tp') t.take_profit = sess.price;
-      saveOpenTrades(open);
-      renderTradesCountBadge(); // también refresca el panel de operar
+    if (!t) return;
+    if (t.real) {
+      // Mismo camino real que editTradeById/syncRealTradeFromDrawing: le
+      // pide a MT5 que modifique la posición de verdad y recién actualiza
+      // el registro local con lo que el bróker confirmó. Hay que mandar
+      // los DOS niveles (PositionModify no acepta "solo uno") — el que no
+      // se arrastró va con su valor actual sin tocar.
+      const sl = sess.field === 'sl' ? sess.price : t.stop_loss;
+      const tp = sess.field === 'tp' ? sess.price : t.take_profit;
+      try {
+        const result = await sendOrder({ action:'modify', ticket:t.ticket, sl, tp });
+        const p = result.position;
+        const fresh = getOpenTrades().find(x => x.id === sess.id);
+        if (fresh) {
+          fresh.stop_loss = p.sl > 0 ? p.sl : null; // 0 en MT5 = sin SL/TP fijado
+          fresh.take_profit = p.tp > 0 ? p.tp : null;
+          saveOpenTrades(getOpenTrades().map(x => x.id === fresh.id ? fresh : x));
+        }
+      } catch(e) {
+        alert('No se pudo modificar la operación real: ' + e.message);
+      }
+      // Vuelve a dibujar desde el storage pase lo que pase — si falló, esto
+      // es lo que hace que la línea "rebote" de vuelta a donde estaba de
+      // verdad en vez de quedarse mostrando el precio al que se arrastró.
+      renderOrderPriceLines();
+      renderTradesCountBadge();
       renderTradesModalIfOpen();
+      renderTradeMarkers();
+      return;
     }
+    if (sess.field === 'sl') t.stop_loss = sess.price;
+    else if (sess.field === 'tp') t.take_profit = sess.price;
+    saveOpenTrades(open);
+    renderTradesCountBadge(); // también refresca el panel de operar
+    renderTradesModalIfOpen();
   } else if (sess.kind === 'pending') {
     const pending = getPendingOrders();
     const o = pending.find(x => x.id === sess.id);
