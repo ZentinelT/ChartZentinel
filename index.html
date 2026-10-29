@@ -3773,6 +3773,25 @@ const SWEEPS_DEFAULTS = {
   duracionBarras:3,
   diasLimite:1, horasLimite:4,
 };
+// Puerto del NÚCLEO (velas HTF implícitas en el cálculo + modelo
+// C2→C3→C4 + CISD + Early CISD) del indicador Pine "FM°" v6 que pegó el
+// usuario 2026-10-29 — a pedido explícito, deja afuera liquidez BSL/SSL,
+// niveles PDH/PDL/opens, sesiones, proyecciones de desviación estándar,
+// tabla de info, el panel visual de velas HTF flotantes y los "protected
+// swings" (IC-CISD); eso queda para una etapa futura si se pide. Mismo
+// patrón que Sniper (ver snReplayCached/fmReplay más abajo): un replay
+// determinístico de todo el historial cargado, no una máquina de estados
+// `var` streaming bar a bar como el Pine original.
+const FRACTAL_MODEL_DEFAULTS = {
+  enabled:false,
+  biasFilter:'Neutral', // 'Neutral' | 'Bullish' | 'Bearish' — mismo input que el Pine
+  showHistory:2,         // cuántos setups pasados (por lado) se dejan dibujados
+  showSweep:true, sweepColor:'#9098b0', sweepWidth:1,
+  showEarlyCisd:true, earlyCisdBullColor:'#3d8bfd', earlyCisdBearColor:'#ef5350',
+  showCisd:true, cisdBullColor:'#3d8bfd', cisdBearColor:'#ef5350', cisdWidth:2,
+  showTSpot:true, tSpotBullColor:'rgba(165,214,167,0.18)', tSpotBearColor:'rgba(144,144,144,0.18)',
+  showLabels:true,
+};
 const STATE = {
   symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
@@ -3791,6 +3810,7 @@ const STATE = {
   }, _wtSaved, { kz: _wtKz }),
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
+  fractalModel: Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(lsGet(lsKey('td_fractal_model')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
   // Templates NOMBRADOS por indicador — {nombreIndicador: {nombreTemplate:
@@ -3815,8 +3835,10 @@ const STATE = {
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
+STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
+function saveFractalModelState(){ lsSet(lsKey('td_fractal_model'), JSON.stringify(STATE.fractalModel)); }
 function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
 function saveHiddenIndicatorsState(){ lsSet(lsKey('td_ind_hidden'), JSON.stringify(STATE.hiddenIndicators)); }
 function isIndicatorHidden(name){ return STATE.hiddenIndicators.includes(name); }
@@ -3828,6 +3850,7 @@ function toggleIndicatorVisibility(name){
   if (name === 'Watchtower') renderWatchtower();
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
+  else if (name === 'Fractal Model') renderFractalModel();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
 }
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
@@ -3843,6 +3866,7 @@ function getIndSettingsObject(name){
   if (name === 'Watchtower') return STATE.watchtower;
   if (name === 'Sniper') return STATE.sniper;
   if (name === 'Sweeps') return STATE.sweeps;
+  if (name === 'Fractal Model') return STATE.fractalModel;
   const def = INDICATOR_DEFS.find(d => d.name === name);
   return getIndicatorStyle(name, def || {});
 }
@@ -3857,6 +3881,9 @@ function setIndSettingsObject(name, obj){
   } else if (name === 'Sweeps') {
     STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, obj, { enabled: STATE.sweeps.enabled });
     saveSweepsState(); renderSweeps();
+  } else if (name === 'Fractal Model') {
+    STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, obj, { enabled: STATE.fractalModel.enabled });
+    saveFractalModelState(); renderFractalModel();
   } else {
     STATE.indicatorStyles[name] = obj;
     saveIndicatorStylesState();
@@ -5722,6 +5749,7 @@ function initChart() {
     renderWatchtower();
     renderSniper();
     renderSweeps();
+    renderFractalModel();
     syncOverlayPositions();
   }).observe(container);
 
@@ -5736,6 +5764,7 @@ function initChart() {
     renderWatchtower();
     renderSniper();
     renderSweeps();
+    renderFractalModel();
     syncOverlayPositions();
   });
 
@@ -5753,9 +5782,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -5771,6 +5800,7 @@ function initChart() {
   initWatchtowerLayer();
   initSniperLayer();
   initSweepsLayer();
+  initFractalModelLayer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
   // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
@@ -6959,6 +6989,7 @@ const INDICATOR_DEFS = [
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
+  { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -6984,6 +7015,7 @@ function applyIndicators() {
       if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
+      else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   });
@@ -7005,6 +7037,7 @@ function addIndicatorSeries(name) {
     if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
+    else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
     return;
   }
   if(overlays[name])return;
@@ -7230,6 +7263,65 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Hours</span>
         <input type="number" id="sw-horas" min="0" max="23" step="1" value="${sw.horasLimite}" style="width:56px">
       </div>`;
+  } else if (name === 'Fractal Model') {
+    const fm = STATE.fractalModel;
+    body.innerHTML = `
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bias</span>
+        <select id="fm-bias" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:4px 6px;">
+          <option value="Neutral" ${fm.biasFilter==='Neutral'?'selected':''}>Neutral</option>
+          <option value="Bullish" ${fm.biasFilter==='Bullish'?'selected':''}>Bullish only</option>
+          <option value="Bearish" ${fm.biasFilter==='Bearish'?'selected':''}>Bearish only</option>
+        </select>
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Setup history (per side)</span>
+        <input type="number" id="fm-history" min="1" max="20" step="1" value="${fm.showHistory}" style="width:56px">
+      </div>
+      <label class="wt-set-row"><span>Show labels (C2/C3/C4/XC2/XC4/CISD)</span><input type="checkbox" id="fm-show-labels" ${fm.showLabels?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Candle 1 Sweep</div>
+      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="fm-show-sweep" ${fm.showSweep?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="fm-sweep-color" value="${fm.sweepColor}">
+        <input type="number" id="fm-sweep-width" min="1" max="5" step="1" value="${fm.sweepWidth}" style="width:48px" title="Width">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Early CISD</div>
+      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="fm-show-early-cisd" ${fm.showEarlyCisd?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bullish color</span>
+        <input type="color" id="fm-early-cisd-bull-color" value="${fm.earlyCisdBullColor}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bearish color</span>
+        <input type="color" id="fm-early-cisd-bear-color" value="${fm.earlyCisdBearColor}">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">CISD</div>
+      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="fm-show-cisd" ${fm.showCisd?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bullish color</span>
+        <input type="color" id="fm-cisd-bull-color" value="${fm.cisdBullColor}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bearish color</span>
+        <input type="color" id="fm-cisd-bear-color" value="${fm.cisdBearColor}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Line width</span>
+        <input type="number" id="fm-cisd-width" min="1" max="5" step="1" value="${fm.cisdWidth}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">T-Spot (C3/C4)</div>
+      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="fm-show-tspot" ${fm.showTSpot?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bullish color</span>
+        <input type="color" id="fm-tspot-bull-color" value="${snParseRgba(fm.tSpotBullColor).hex}">
+        <input type="number" id="fm-tspot-bull-tr" min="0" max="100" step="1" value="${snParseRgba(fm.tSpotBullColor).transparency}" style="width:48px" title="Transparency %">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bearish color</span>
+        <input type="color" id="fm-tspot-bear-color" value="${snParseRgba(fm.tSpotBearColor).hex}">
+        <input type="number" id="fm-tspot-bear-tr" min="0" max="100" step="1" value="${snParseRgba(fm.tSpotBearColor).transparency}" style="width:48px" title="Transparency %">
+      </div>`;
   } else {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     const style = getIndicatorStyle(name, def);
@@ -7387,6 +7479,26 @@ function applyIndSettingsForm() {
     STATE.sweeps.horasLimite = Math.max(0, Math.min(23, Number(g('sw-horas').value)||0));
     saveSweepsState();
     renderSweeps();
+  } else if (_indSettingsTarget === 'Fractal Model') {
+    const g = id => document.getElementById(id);
+    STATE.fractalModel.biasFilter = g('fm-bias').value;
+    STATE.fractalModel.showHistory = Math.max(1, Math.min(20, Number(g('fm-history').value)||2));
+    STATE.fractalModel.showLabels = g('fm-show-labels').checked;
+    STATE.fractalModel.showSweep = g('fm-show-sweep').checked;
+    STATE.fractalModel.sweepColor = g('fm-sweep-color').value;
+    STATE.fractalModel.sweepWidth = Math.max(1, Math.min(5, Number(g('fm-sweep-width').value)||1));
+    STATE.fractalModel.showEarlyCisd = g('fm-show-early-cisd').checked;
+    STATE.fractalModel.earlyCisdBullColor = g('fm-early-cisd-bull-color').value;
+    STATE.fractalModel.earlyCisdBearColor = g('fm-early-cisd-bear-color').value;
+    STATE.fractalModel.showCisd = g('fm-show-cisd').checked;
+    STATE.fractalModel.cisdBullColor = g('fm-cisd-bull-color').value;
+    STATE.fractalModel.cisdBearColor = g('fm-cisd-bear-color').value;
+    STATE.fractalModel.cisdWidth = Math.max(1, Math.min(5, Number(g('fm-cisd-width').value)||2));
+    STATE.fractalModel.showTSpot = g('fm-show-tspot').checked;
+    STATE.fractalModel.tSpotBullColor = snRgba(g('fm-tspot-bull-color').value, Number(g('fm-tspot-bull-tr').value)||0);
+    STATE.fractalModel.tSpotBearColor = snRgba(g('fm-tspot-bear-color').value, Number(g('fm-tspot-bear-tr').value)||0);
+    saveFractalModelState();
+    renderFractalModel();
   } else {
     const colorEl=document.getElementById('ind-style-color');
     const widthEl=document.getElementById('ind-style-width');
@@ -7412,6 +7524,7 @@ function removeIndicator(name){
     if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
+    else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
@@ -8728,6 +8841,332 @@ function renderSweeps(){
 }
 
 // ══════════════════════════════════════════════════════════
+//  FRACTAL MODEL — puerto del núcleo del indicador Pine "FM°" v6 (ver
+//  FRACTAL_MODEL_DEFAULTS arriba para el alcance exacto). Reusa el mismo
+//  mapeo LTF->HTF que ya usa Sniper (SNIPER_HTF_MAP/snHtfBucketKey): en
+//  los TF sin HTF asociado el indicador simplemente no dibuja nada, igual
+//  que Sniper.
+// ══════════════════════════════════════════════════════════
+function initFractalModelLayer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:17;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._fractalModelSvg = svg;
+  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  new ResizeObserver(syncSize).observe(container);
+  syncSize();
+}
+
+// Agrupa las velas cargadas en períodos HTF igual que snBuildHtfRunning,
+// pero además rastrea el ÍNDICE de vela (no solo el precio) del high/low
+// corrido de CADA período — el Pine original necesita ese índice para
+// anclar la línea del "Candle 1 Sweep" (sweepFromBar) y el extremo del
+// C2 (extremeBar). prevPrev* (dos períodos HTF atrás) es el nivel que de
+// verdad se barrió — ver el comentario largo en fmReplay.
+function fmBuildHtfRunning(candles, cfg){
+  const n = candles.length;
+  const curHigh=new Array(n), curLow=new Array(n);
+  const prevHigh=new Array(n), prevLow=new Array(n), prevHighBar=new Array(n), prevLowBar=new Array(n);
+  const prevPrevHigh=new Array(n), prevPrevLow=new Array(n), prevPrevHighBar=new Array(n), prevPrevLowBar=new Array(n);
+  const newHtfBar=new Array(n);
+  let curH=null,curL=null,curHB=null,curLB=null,curKey=null;
+  let pH=null,pL=null,pHB=null,pLB=null;
+  let ppH=null,ppL=null,ppHB=null,ppLB=null;
+  for (let i=0;i<n;i++){
+    const c=candles[i];
+    const key=snHtfBucketKey(c.time, cfg);
+    if (curKey===null || key!==curKey){
+      newHtfBar[i]=true;
+      if (curKey!==null){ ppH=pH; ppL=pL; ppHB=pHB; ppLB=pLB; pH=curH; pL=curL; pHB=curHB; pLB=curLB; }
+      curH=c.high; curL=c.low; curHB=i; curLB=i; curKey=key;
+    } else {
+      newHtfBar[i]=false;
+      if (c.high>curH){ curH=c.high; curHB=i; }
+      if (c.low<curL){ curL=c.low; curLB=i; }
+    }
+    curHigh[i]=curH; curLow[i]=curL;
+    prevHigh[i]=pH; prevLow[i]=pL; prevHighBar[i]=pHB; prevLowBar[i]=pLB;
+    prevPrevHigh[i]=ppH; prevPrevLow[i]=ppL; prevPrevHighBar[i]=ppHB; prevPrevLowBar[i]=ppLB;
+  }
+  return {curHigh,curLow,prevHigh,prevLow,prevHighBar,prevLowBar,prevPrevHigh,prevPrevLow,prevPrevHighBar,prevPrevLowBar,newHtfBar};
+}
+
+function fmDir(c){ return c.close>c.open ? 1 : c.close<c.open ? -1 : 0; }
+
+// Puerto directo del bloque Pine "if low == l0 and low < l1 ... bullLevelFixed"
+// (y su espejo bajista): apenas el precio hace un nuevo mínimo del período
+// HTF en curso que además perfora el mínimo del período HTF anterior,
+// busca hacia atrás (hasta 10 velas) la última vela de color contrario a
+// esa racha — el open de esa vela es el nivel de CISD. l0/l1 son el low
+// corrido del período actual/anterior (fmBuildHtfRunning.curLow/prevLow).
+function fmScanBullLevel(candles, barI, l0, l1){
+  const cur = candles[barI];
+  if (!(cur.low === l0 && cur.low < l1)) return null;
+  const dir0 = fmDir(cur);
+  const prev1 = barI-1>=0 ? candles[barI-1] : null;
+  const dir1 = prev1 ? fmDir(prev1) : 0;
+  if (prev1 && dir0<=0 && dir1>=0 && !(dir0===0 && dir1===0)) return { level: cur.open, idx: barI };
+  for (let k=2; k<=10; k++){
+    if (barI-k<0) break;
+    if (candles[barI-k].low < cur.low) break;
+    const dirK = fmDir(candles[barI-k]), dirK1 = fmDir(candles[barI-(k-1)]);
+    if (dirK>=0 && dirK1<0){
+      let b=k-1, level=candles[barI-b].open, idx=barI-b;
+      for (let j=b; j>=0; j--){
+        const cj = candles[barI-j];
+        if (cj.open>level && fmDir(cj)<0){ level=cj.open; idx=barI-j; }
+      }
+      if (level<cur.open){ level = cur.close>cur.open ? cur.high : cur.open; idx=barI; }
+      return { level, idx };
+    }
+  }
+  return null;
+}
+function fmScanBearLevel(candles, barI, h0, h1){
+  const cur = candles[barI];
+  if (!(cur.high === h0 && cur.high > h1)) return null;
+  const dir0 = fmDir(cur);
+  const prev1 = barI-1>=0 ? candles[barI-1] : null;
+  const dir1 = prev1 ? fmDir(prev1) : 0;
+  if (prev1 && dir0>=0 && dir1<=0 && !(dir0===0 && dir1===0)) return { level: cur.open, idx: barI };
+  for (let k=2; k<=10; k++){
+    if (barI-k<0) break;
+    if (candles[barI-k].high > cur.high) break;
+    const dirK = fmDir(candles[barI-k]), dirK1 = fmDir(candles[barI-(k-1)]);
+    if (dirK<=0 && dirK1>0){
+      let b=k-1, level=candles[barI-b].open, idx=barI-b;
+      for (let j=b; j>=0; j--){
+        const cj = candles[barI-j];
+        if (cj.open<level && fmDir(cj)>0){ level=cj.open; idx=barI-j; }
+      }
+      if (level>cur.open){ level = cur.close<cur.open ? cur.low : cur.open; idx=barI; }
+      return { level, idx };
+    }
+  }
+  return null;
+}
+
+function fmNewSetup(isBull, extreme, extremeBar, sweepFromPrice, sweepFromBar, cisdLevel, cisdIdx, c2Bar){
+  return {
+    isBull, extreme, extremeBar, sweepFromPrice, sweepFromBar,
+    cisdLevel, cisdIdx, cisdConfirmed:false, cisdConfirmBar:null,
+    phase:1, dead:false, xc2:false, xc4:false, c4Invalid:false,
+    c3StartBar:c2Bar, c3Top:null, c3Bottom:null,
+    c4StartBar:null, c4Top:null, c4Bottom:null,
+    extendToBar:c2Bar, recorded:false,
+  };
+}
+
+// setup.phase===1 (C3) u (2) C4: la caja crece desde donde nació (bar
+// donde se armó esa fase) hasta extendToBar, con top/bottom fijos
+// (mid del período HTF que acaba de cerrar vs el open de la vela que
+// arranca la fase nueva) — mismo criterio que drawPhase() en el Pine.
+function fmBoxGeometry(candles, startBar, R){
+  const mid = (R.prevHigh[startBar]+R.prevLow[startBar])/2;
+  const o = candles[startBar].open;
+  return { top: Math.max(o, mid), bottom: Math.min(o, mid) };
+}
+
+function fmReplay(candles, cfg, p){
+  const n = candles.length;
+  if (n<3) return { setups:[], earlyCisdBull:[], earlyCisdBear:[] };
+  const R = fmBuildHtfRunning(candles, cfg);
+  const allowBuy = p.biasFilter !== 'Bearish';
+  const allowSell = p.biasFilter !== 'Bullish';
+
+  const c2BuyAt=new Array(n), c2SellAt=new Array(n);
+  for (let i=0;i<n;i++){
+    c2BuyAt[i]  = R.prevLow[i]!=null  && R.curLow[i]  < R.prevLow[i]  && candles[i].close > R.prevLow[i];
+    c2SellAt[i] = R.prevHigh[i]!=null && R.curHigh[i] > R.prevHigh[i] && candles[i].close < R.prevHigh[i];
+  }
+
+  let bullLevelFixed=null, bullIndexFixed=null, bullReclaimed=false;
+  let bearLevelFixed=null, bearIndexFixed=null, bearReclaimed=false;
+  let prevBullIdx=null, prevBearIdx=null;
+
+  const earlyCisdBull=[], earlyCisdBear=[]; // {level,startIdx,endIdx} — se van extendiendo/consumiendo
+  let buySetup=null, sellSetup=null;
+  const setups=[];
+  function finishSetup(s, endBar){ if (s && !s.recorded){ s.recorded=true; s.endBar=endBar; setups.push(s); } }
+
+  for (let i=0;i<n;i++){
+    const c = candles[i];
+
+    // ── 1) Disparo de C2 / avance de fase — usa el estado "[1]" (el que
+    //    quedó al CERRAR la vela anterior, todavía sin tocar en esta
+    //    iteración) — igual orden que el Pine, que lee bullLevelFixed[1]
+    //    recién después de haber actualizado la de HOY.
+    if (R.newHtfBar[i] && i>0){
+      if (allowBuy && c2BuyAt[i-1]){
+        if (bullReclaimed && earlyCisdBull.length) earlyCisdBull.pop();
+        finishSetup(buySetup, i-1);
+        buySetup = fmNewSetup(true, R.prevLow[i], R.prevLowBar[i], R.prevPrevLow[i], R.prevPrevLowBar[i], bullLevelFixed, bullIndexFixed, i, R);
+        if (bullReclaimed){ buySetup.cisdConfirmed=true; buySetup.cisdConfirmBar=i; }
+        const g = fmBoxGeometry(candles, i, R);
+        buySetup.c3Top=g.top; buySetup.c3Bottom=g.bottom;
+      } else if (buySetup && !buySetup.dead && buySetup.phase!==0){
+        if (buySetup.phase===1){
+          buySetup.phase=2; buySetup.c4StartBar=i;
+          buySetup.c3Extreme = R.prevLow[i];
+          const g = fmBoxGeometry(candles, i, R);
+          buySetup.c4Top=g.top; buySetup.c4Bottom=g.bottom;
+        } else if (buySetup.phase===2){
+          buySetup.phase=0;
+        }
+      }
+      if (allowSell && c2SellAt[i-1]){
+        if (bearReclaimed && earlyCisdBear.length) earlyCisdBear.pop();
+        finishSetup(sellSetup, i-1);
+        sellSetup = fmNewSetup(false, R.prevHigh[i], R.prevHighBar[i], R.prevPrevHigh[i], R.prevPrevHighBar[i], bearLevelFixed, bearIndexFixed, i, R);
+        if (bearReclaimed){ sellSetup.cisdConfirmed=true; sellSetup.cisdConfirmBar=i; }
+        const g = fmBoxGeometry(candles, i, R);
+        sellSetup.c3Top=g.top; sellSetup.c3Bottom=g.bottom;
+      } else if (sellSetup && !sellSetup.dead && sellSetup.phase!==0){
+        if (sellSetup.phase===1){
+          sellSetup.phase=2; sellSetup.c4StartBar=i;
+          sellSetup.c3Extreme = R.prevHigh[i];
+          const g = fmBoxGeometry(candles, i, R);
+          sellSetup.c4Top=g.top; sellSetup.c4Bottom=g.bottom;
+        } else if (sellSetup.phase===2){
+          sellSetup.phase=0;
+        }
+      }
+    }
+
+    // ── 2) Chequeos de todas las velas (breach de C2, invalidación de
+    //    C4, confirmación de CISD) sobre el setup activo de cada lado.
+    [buySetup, sellSetup].forEach(s => {
+      if (!s || s.dead || s.phase===0) return;
+      s.extendToBar = i;
+      const breach = s.isBull ? c.low < s.extreme : c.high > s.extreme;
+      if (breach){ s.xc2=true; s.dead=true; finishSetup(s, i); return; }
+      if (s.phase===2 && !s.c4Invalid && i>0){
+        const prevClose = candles[i-1].close;
+        const invalid = s.isBull ? prevClose < s.c4Bottom : prevClose > s.c4Top;
+        if (invalid) s.c4Invalid = true;
+      }
+      if (!s.cisdConfirmed && s.cisdLevel!=null){
+        const confirmed = s.isBull ? c.close > s.cisdLevel : c.close < s.cisdLevel;
+        if (confirmed){ s.cisdConfirmed=true; s.cisdConfirmBar=i; }
+      }
+    });
+
+    // ── 3) Nivel de CISD "candidato" (corre TODAS las velas, no solo en
+    //    el límite de período HTF) + Early CISD apenas el precio lo
+    //    reclama por su cuenta, antes de que el propio C2/HTF confirme.
+    const res = fmScanBullLevel(candles, i, R.curLow[i], R.prevLow[i]);
+    if (res){ bullLevelFixed=res.level; bullIndexFixed=res.idx; }
+    const newBullLevel = bullIndexFixed!=null && (prevBullIdx===null || bullIndexFixed!==prevBullIdx);
+    if (newBullLevel) bullReclaimed=false;
+    if (bullLevelFixed!=null && !bullReclaimed && c.close>bullLevelFixed){
+      bullReclaimed=true;
+      if (R.prevLow[i]!=null && R.curLow[i]<R.prevLow[i] && p.showEarlyCisd){
+        earlyCisdBull.push({ level:bullLevelFixed, startIdx:bullIndexFixed, endIdx:i });
+      }
+    }
+    prevBullIdx=bullIndexFixed;
+
+    const resB = fmScanBearLevel(candles, i, R.curHigh[i], R.prevHigh[i]);
+    if (resB){ bearLevelFixed=resB.level; bearIndexFixed=resB.idx; }
+    const newBearLevel = bearIndexFixed!=null && (prevBearIdx===null || bearIndexFixed!==prevBearIdx);
+    if (newBearLevel) bearReclaimed=false;
+    if (bearLevelFixed!=null && !bearReclaimed && c.close<bearLevelFixed){
+      bearReclaimed=true;
+      if (R.prevHigh[i]!=null && R.curHigh[i]>R.prevHigh[i] && p.showEarlyCisd){
+        earlyCisdBear.push({ level:bearLevelFixed, startIdx:bearIndexFixed, endIdx:i });
+      }
+    }
+    prevBearIdx=bearIndexFixed;
+
+    // Las líneas de Early CISD todavía vigentes (no consumidas) siguen
+    // "vivas" hasta la última vela donde su nivel sigue siendo el actual.
+    if (earlyCisdBull.length) earlyCisdBull[earlyCisdBull.length-1].endIdx = i;
+    if (earlyCisdBear.length) earlyCisdBear[earlyCisdBear.length-1].endIdx = i;
+  }
+
+  finishSetup(buySetup, n-1);
+  finishSetup(sellSetup, n-1);
+  return { setups, earlyCisdBull, earlyCisdBear };
+}
+
+let _fmReplayCache = null;
+function fmReplayCached(candles, cfg, p){
+  const key = candles.length + '|' + (candles.length?candles[0].time:0) + '|' + (candles.length?candles[candles.length-1].time:0)
+    + '|' + STATE.symbol + '|' + STATE.timeframe + '|' + p.biasFilter + '|' + p.showEarlyCisd;
+  if (_fmReplayCache && _fmReplayCache.key===key) return _fmReplayCache.result;
+  const result = fmReplay(candles, cfg, p);
+  _fmReplayCache = { key, result };
+  return result;
+}
+
+function renderFractalModel(){
+  if (!window._fractalModelSvg) return;
+  const svg = window._fractalModelSvg;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Fractal Model');
+  if (!STATE.fractalModel.enabled || isIndicatorHidden('Fractal Model')) return;
+  const candles = window._lastCandles||[];
+  if (candles.length<20) return;
+  const fm = STATE.fractalModel;
+  const cfg = SNIPER_HTF_MAP[STATE.timeframe];
+  if (!cfg) return; // mismo criterio que Sniper: sin HTF mapeado para este TF, no dibuja nada
+
+  const { setups, earlyCisdBull, earlyCisdBear } = fmReplayCached(candles, cfg, {
+    biasFilter: fm.biasFilter, showEarlyCisd: fm.showEarlyCisd,
+  });
+
+  if (fm.showEarlyCisd){
+    [{list:earlyCisdBull,color:fm.earlyCisdBullColor,txt:'+CISD'},{list:earlyCisdBear,color:fm.earlyCisdBearColor,txt:'-CISD'}].forEach(({list,color,txt})=>{
+      list.forEach(e => {
+        if (e.startIdx==null || e.startIdx>=candles.length || e.endIdx>=candles.length) return;
+        const t1 = candles[e.startIdx].time, t2 = candles[Math.min(e.endIdx+3, candles.length-1)].time;
+        wtLine(svg, t1, t2, e.level, color, 1, '4,3', 'Fractal Model');
+        if (fm.showLabels) wtLabel(svg, t2, e.level, txt, color, 'Fractal Model');
+      });
+    });
+  }
+
+  const bullSetups = setups.filter(s=>s.isBull).slice(-fm.showHistory);
+  const bearSetups = setups.filter(s=>!s.isBull).slice(-fm.showHistory);
+  // El setup todavía "vivo" al final del replay no pasa por finishSetup
+  // salvo en el cierre forzado de fmReplay — ya viene incluido en
+  // `setups` (ver finishSetup(buySetup/sellSetup, n-1) al final).
+
+  function drawSetup(s){
+    if (s.sweepFromBar!=null && s.sweepFromBar<candles.length && fm.showSweep){
+      const t1 = candles[s.sweepFromBar].time;
+      const t2 = candles[Math.min(s.extendToBar, candles.length-1)].time;
+      wtLine(svg, t1, t2, s.sweepFromPrice, fm.sweepColor, fm.sweepWidth, null, 'Fractal Model');
+    }
+    if (s.extremeBar!=null && s.extremeBar<candles.length && fm.showLabels){
+      wtLabel(svg, candles[s.extremeBar].time, s.extreme, s.xc2?'XC2':'C2', s.xc2?'#ef5350':(s.isBull?'#26a69a':'#ef5350'), 'Fractal Model');
+    }
+    const cisdColor = s.isBull ? fm.cisdBullColor : fm.cisdBearColor;
+    if (fm.showCisd && s.cisdConfirmed && s.cisdLevel!=null && s.cisdIdx!=null && s.cisdIdx<candles.length){
+      const t1 = candles[s.cisdIdx].time;
+      const endBar = Math.min((s.cisdConfirmBar!=null?s.cisdConfirmBar:s.extendToBar)+3, candles.length-1);
+      const t2 = candles[endBar].time;
+      wtLine(svg, t1, t2, s.cisdLevel, cisdColor, fm.cisdWidth, null, 'Fractal Model');
+      if (fm.showLabels) wtLabel(svg, t2, s.cisdLevel, 'CISD', cisdColor, 'Fractal Model');
+    }
+    if (fm.showTSpot && s.c3StartBar!=null && s.c3StartBar<candles.length){
+      const boxColor = s.isBull ? fm.tSpotBullColor : fm.tSpotBearColor;
+      const c3EndBar = Math.min(s.c4StartBar!=null ? s.c4StartBar : s.extendToBar, candles.length-1);
+      wtRect(svg, candles[s.c3StartBar].time, candles[c3EndBar].time, s.c3Top, s.c3Bottom, boxColor, 1, 'none', 'Fractal Model');
+      if (fm.showLabels) wtLabel(svg, candles[c3EndBar].time, s.isBull?s.c3Bottom:s.c3Top, 'C3', s.isBull?'#26a69a':'#ef5350', 'Fractal Model');
+      if (s.c4StartBar!=null && s.c4StartBar<candles.length){
+        const c4EndBar = Math.min(s.extendToBar, candles.length-1);
+        wtRect(svg, candles[s.c4StartBar].time, candles[c4EndBar].time, s.c4Top, s.c4Bottom, boxColor, 1, 'none', 'Fractal Model');
+        if (fm.showLabels) wtLabel(svg, candles[c4EndBar].time, s.c4Invalid?(s.isBull?s.c4Bottom:s.c4Top):(s.isBull?s.c4Bottom:s.c4Top), s.c4Invalid?'XC4':'C4', s.c4Invalid?'#ef5350':(s.isBull?'#26a69a':'#ef5350'), 'Fractal Model');
+      }
+    }
+  }
+  bullSetups.forEach(drawSetup);
+  bearSetups.forEach(drawSetup);
+}
+
+// ══════════════════════════════════════════════════════════
 //  REPLAY MODE
 //  window._replay = { full, idx, playing, timer, speedMs } cuando está
 //  activo, null si no. La idea central: window._lastCandles (la fuente
@@ -9285,6 +9724,7 @@ function captureCurrentDesign(){
     watchtower: STATE.watchtower,
     sniper: STATE.sniper,
     sweeps: STATE.sweeps,
+    fractalModel: STATE.fractalModel,
     // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
     // tal cual quedan en pantalla, con sus horarios/precios crudos — igual
     // que la sincronización entre paneles (ver zentinelDrawingsSync),
@@ -9338,10 +9778,12 @@ function applyPreset(name){
   STATE.watchtower = JSON.parse(JSON.stringify(p.watchtower || STATE.watchtower));
   STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(p.sniper || {})));
   STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(p.sweeps || {})));
+  STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(p.fractalModel || {})));
   STATE.indicators = [...(p.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
+  STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
 
   // Dibujos: solo si el preset los trae — uno guardado antes de esto no
   // tiene drawings, y aplicarlo no debería borrar los que el usuario ya
@@ -9372,6 +9814,7 @@ function applyPreset(name){
   renderWatchtower();
   renderSniper();
   renderSweeps();
+  renderFractalModel();
   fillChartSettingsForm(STATE.chartSettings);
 }
 
@@ -9668,6 +10111,7 @@ function renderSeries(timeframe){
   renderWatchtower();
   renderSniper();
   renderSweeps();
+  renderFractalModel();
   renderTradeMarkers();
 }
 
@@ -9689,6 +10133,7 @@ function updateFormingCandleLive(bar){
   renderWatchtower();
   renderSniper();
   renderSweeps();
+  renderFractalModel();
   renderTradeMarkers();
 }
 
@@ -10201,6 +10646,7 @@ function _resyncChartLayout(){
   renderWatchtower();
   renderSniper();
   renderSweeps();
+  renderFractalModel();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
