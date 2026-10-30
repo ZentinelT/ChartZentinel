@@ -2168,7 +2168,7 @@
       <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;">Template</label>
       <select id="ind-settings-template-select" class="dtb-select" style="width:100%;margin-bottom:8px;"></select>
       <div style="display:flex;gap:6px;">
-        <button class="btn-ghost" style="flex:1;" onclick="applySelectedIndTemplate()">Apply</button>
+        <button class="btn-ghost" style="flex:1;" onclick="applySelectedIndTemplate()" title="Aplica el template elegido arriba — para guardar los cambios del formulario de abajo, usá el botón Save al final del todo">Apply template</button>
         <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsIndTemplate()">Save as…</button>
         <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedIndTemplate()">Delete</button>
       </div>
@@ -3824,7 +3824,7 @@ const FRACTAL_MODEL_DEFAULTS = {
 const STAT_MAP_DEFAULTS = {
   enabled:false, behindCandles:false,
   // Sesión diaria
-  anchorHour:0, anchorMin:0, anchorStep:24, lookbackCount:1,
+  showDaily:true, anchorHour:0, anchorMin:0, anchorStep:24, lookbackCount:1,
   // Apertura semanal
   showWeekly:false, wAnchorMode:'open', wAnchorHour:0, wAnchorMin:0,
   wLineColor:'rgba(0,150,150,1)', wMidColor:'rgba(0,150,150,0.7)',
@@ -7557,6 +7557,7 @@ function openIndicatorSettings(name) {
     const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
     body.innerHTML = `
       <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">⏱ Sesión Diaria</div>
+      <label class="wt-set-row"><span>Mostrar niveles diarios</span><input type="checkbox" id="sm-show-daily" ${sm.showDaily!==false?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Apertura NY (hora:min)</span>
         <input type="number" id="sm-anchor-hour" min="0" max="23" step="1" value="${sm.anchorHour}" style="width:48px">
@@ -7832,6 +7833,7 @@ function applyIndSettingsForm() {
   } else if (_indSettingsTarget === 'Stat Map') {
     const g = id => document.getElementById(id);
     const sm = STATE.statMap;
+    sm.showDaily = g('sm-show-daily').checked;
     sm.anchorHour = Math.max(0, Math.min(23, Number(g('sm-anchor-hour').value)||0));
     sm.anchorMin  = Math.max(0, Math.min(59, Number(g('sm-anchor-min').value)||0));
     sm.anchorStep = Math.max(1, Math.min(24, Number(g('sm-anchor-step').value)||24));
@@ -9595,25 +9597,42 @@ function smMonthKey(t){
   return d.getUTCFullYear()*12 + d.getUTCMonth();
 }
 
-// Setups de la sesión diaria: ancla en el PRIMER candle de cada día
-// calendario NY cuya hora:min sea >= anchorHour:anchorMin — NO un match
-// exacto de horario. Bug encontrado al probar en H4: el bridge arma sus
-// velas de TF "sintéticos" (2H/3H/4H/6H/8H/12H/D) con un offset propio
-// (confirmado a mano: H4 solo tiene velas en NY 01/05/09/13/17/21, nunca
-// en 00:00 — ningún TF por encima de 1H tiene una vela exacta a
-// medianoche) — con el match exacto de antes, el anchor por defecto
-// (00:00) nunca disparaba en NINGÚN TF mayor a 1H, no solo en H4. "a
-// partir de" en vez de "exacto" resuelve esto para cualquier TF/horario:
-// agarra la PRIMERA vela del día que ya llegó (o pasó) la hora elegida,
-// sea cual sea el TF. Gateado una vez por día (pending), igual que
-// semanal/mensual más abajo — si no, CUALQUIER vela del día que siga
-// estando después del horario también dispararía.
+// Devuelve, para el candle c, si su hora:min NY cae DENTRO de un bar de
+// distancia del horario buscado (targetSec, en segundos desde las 00:00) —
+// ni un match exacto (se rompe en TF sintéticos sin vela justo ahí, ver
+// abajo) ni un simple ">=" (se rompe cuando el período/día empieza bastante
+// DESPUÉS del horario buscado — ej. la semana arranca domingo ~21:00 NY y
+// el horario personalizado es 13:00: 21:00 también es ">= 13:00", así que
+// sin esta tolerancia la primera vela del domingo "dispara" igual, un día
+// entero antes de lo que el usuario pidió. barIntervalSec acota la
+// tolerancia al ancho de UNA vela de este panel: alcanza para saltar el
+// offset propio de los TF sintéticos (ver el bug de H4 más abajo), pero no
+// para aceptar una vela que en realidad está horas después porque todavía
+// no llegó el horario pedido ese día).
+function smHourHit(c, targetSec, barIntervalSec){
+  const d = new Date(c.time*1000);
+  const sec = d.getUTCHours()*3600 + d.getUTCMinutes()*60;
+  const gap = sec - targetSec;
+  return gap >= 0 && gap < barIntervalSec;
+}
+
+// Setups de la sesión diaria: ancla en la PRIMERA vela de cada día
+// calendario NY que cae dentro de un bar de anchorHour:anchorMin (ver
+// smHourHit) — NO un match exacto. Bug encontrado al probar en H4: el
+// bridge arma sus velas de TF "sintéticos" (2H/3H/4H/6H/8H/12H/D) con un
+// offset propio (confirmado a mano: H4 solo tiene velas en NY 01/05/09/
+// 13/17/21, nunca en 00:00 — ningún TF por encima de 1H tiene una vela
+// exacta a medianoche) — con el match exacto de antes, el anchor por
+// defecto (00:00) nunca disparaba en NINGÚN TF mayor a 1H, no solo en H4.
+// Gateado una vez por día (pending), igual que semanal/mensual más abajo —
+// si no, CUALQUIER vela del día que siga estando después del horario
+// también dispararía.
 // "Rango anterior" = el día calendario NY completo inmediatamente previo
 // (mismo criterio que prevDayHigh/prevDayLow del Pine).
-function smBuildDailySetups(candles, anchorHour, anchorMin, lookback){
+function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval){
   const setups = [];
   let cur = null, prevCompleted = null, pending = false;
-  const targetMin = anchorHour*60 + anchorMin;
+  const targetSec = anchorHour*3600 + anchorMin*60;
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = smDayKey(c.time);
@@ -9625,12 +9644,9 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback){
       if (c.high>cur.high) cur.high=c.high;
       if (c.low<cur.low) cur.low=c.low;
     }
-    if (pending){
-      const d = new Date(c.time*1000);
-      if (d.getUTCHours()*60 + d.getUTCMinutes() >= targetMin){
-        pending = false;
-        if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
-      }
+    if (pending && smHourHit(c, targetSec, barInterval)){
+      pending = false;
+      if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
     }
   }
   while (setups.length>lookback) setups.shift();
@@ -9638,19 +9654,22 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback){
 }
 
 // Setups semanales/mensuales: anclan en el PRIMER candle del período (modo
-// 'open') o en el primer candle del período cuya hora:min NY ya llegó (o
-// pasó) anchorHour:anchorMin (modo 'custom', mismo criterio ">=" que el
-// diario de arriba — mismo bug de TF sintéticos sin vela exacta a esa hora,
-// ver el comentario grande ahí) — "pending" se resetea en cada período
-// nuevo, así que si ese horario no llega a aparecer antes de que termine
-// el período, ese período simplemente no genera setup (igual que el Pine,
-// sin el bug: acá "período nuevo" lo decide keyFn, robusto — wtWeekKey ya
-// probado para PWH/PWL de Watchtower, no un match de horario exacto como
-// tenía el Pine original para la semanal).
-function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin){
+// 'open') o en el primer candle del período que cae dentro de un bar de
+// anchorHour:anchorMin (modo 'custom', ver smHourHit — mismo motivo que el
+// diario de arriba, PERO acá importa todavía más: el período en sí puede
+// arrancar bien entrada la hora del día — la semana arranca domingo a la
+// noche NY — así que un simple ">=" contra el horario pedido disparaba de
+// una en la primera vela del período aunque el horario elegido todavía no
+// hubiese llegado) — "pending" se resetea en cada período nuevo, así que
+// si ese horario no llega a aparecer antes de que termine el período, ese
+// período simplemente no genera setup (igual que el Pine, sin el bug: acá
+// "período nuevo" lo decide keyFn, robusto — wtWeekKey ya probado para
+// PWH/PWL de Watchtower, no un match de horario exacto como tenía el Pine
+// original para la semanal).
+function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval){
   const setups = [];
   let cur = null, prevCompleted = null, pending = false;
-  const targetMin = anchorHour*60 + anchorMin;
+  const targetSec = anchorHour*3600 + anchorMin*60;
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = keyFn(c.time);
@@ -9664,8 +9683,7 @@ function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorM
       if (c.low<cur.low) cur.low=c.low;
     }
     if (pending){
-      const d = new Date(c.time*1000);
-      const hit = mode === 'open' ? isNewPeriod : (d.getUTCHours()*60 + d.getUTCMinutes() >= targetMin);
+      const hit = mode === 'open' ? isNewPeriod : smHourHit(c, targetSec, barInterval);
       if (hit){
         pending = false;
         if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
@@ -9739,16 +9757,18 @@ function renderStatMap(){
   const lastTime = candles[candles.length-1].time;
   const labelSide = sm.labelSide === 'left' ? 'left' : 'right';
 
-  const dailySetups = smBuildDailySetups(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount);
-  dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, {
-    lineColor: sm.lineColor, midColor: sm.midColor, lineWidth: sm.lineWidth, dash: smDash(sm.lineStyle),
-    zoneColor: sm.zoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
-    showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
-    labelColor: sm.labelColor, midLblColor: sm.midLblColor, labelPrefix: '',
-  }));
+  if (sm.showDaily !== false){
+    const dailySetups = smBuildDailySetups(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount, barInterval);
+    dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, {
+      lineColor: sm.lineColor, midColor: sm.midColor, lineWidth: sm.lineWidth, dash: smDash(sm.lineStyle),
+      zoneColor: sm.zoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
+      showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
+      labelColor: sm.labelColor, midLblColor: sm.midLblColor, labelPrefix: '',
+    }));
+  }
 
   if (sm.showWeekly){
-    const weeklySetups = smBuildPeriodSetups(candles, wtWeekKey, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin);
+    const weeklySetups = smBuildPeriodSetups(candles, wtWeekKey, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin, barInterval);
     // Infinity, NO 118*3600 (la aproximación "~5 días hábiles" del Pine
     // original) como techo: ese techo fijo es lo que generaba el hueco de
     // varios días reportado por el usuario — acá solo sirve de techo
@@ -9765,7 +9785,7 @@ function renderStatMap(){
   }
 
   if (sm.showMonthly){
-    const monthlySetups = smBuildPeriodSetups(candles, smMonthKey, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin);
+    const monthlySetups = smBuildPeriodSetups(candles, smMonthKey, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin, barInterval);
     // Ver el comentario igual arriba, semanal — mismo motivo exacto (acá
     // es el que el usuario reportó: "los niveles mensuales duran 21 días",
     // que era el techo fijo 483*3600 ("~21 días hábiles" del Pine
