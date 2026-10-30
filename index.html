@@ -9681,9 +9681,24 @@ function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorM
 // clampeado a "dónde estamos ahora" (LEVEL_EXTEND_BARS, mismo criterio que
 // cualquier otro nivel vigente de la app) en vez de saltar al largo
 // completo de una, que era el bug #2 del Pine original.
-function smDrawSetup(svg, setup, durationSec, lastTime, barInterval, opts){
+//
+// nextStart (el startTime del PRÓXIMO setup ya conocido, o null si este es
+// el más reciente) manda sobre durationSec cuando existe: el Pine original
+// congela cada nivel en una duración fija aproximada ("~21 días hábiles"
+// para el mensual, son 483h) y lo deja ahí quieto hasta que arranca el
+// siguiente — entre el final de esos ~21 días y el próximo mes real (~30
+// días) quedaba una ventana de varios días sin ningún nivel mensual
+// dibujado (reportado por el usuario: "los niveles mensuales duran 21
+// días"). Acá, para cualquier setup que YA tiene uno siguiente conocido
+// (todos menos el más reciente del lookback), el nivel se extiende hasta
+// ahí de verdad — sin hueco — en vez de cortar en una duración aproximada.
+// durationSec queda solo como techo para el setup MÁS RECIENTE (el que
+// todavía no tiene "próximo"): sigue creciendo en vivo (LEVEL_EXTEND_BARS)
+// hasta esa aproximación, que es lo mejor que se puede hacer sin saber
+// todavía cuándo va a arrancar el siguiente período real.
+function smDrawSetup(svg, setup, nextStart, durationSec, lastTime, barInterval, opts){
   const range = setup.high - setup.low;
-  const naturalEnd = setup.startTime + durationSec;
+  const naturalEnd = nextStart != null ? nextStart : setup.startTime + durationSec;
   const liveEnd = Math.min(naturalEnd, lastTime + LEVEL_EXTEND_BARS*barInterval);
   // naturalEnd (startTime + duración en segundos) casi nunca cae justo en
   // el horario de una vela/whitespace real de ESTE panel — probado a mano:
@@ -9725,7 +9740,7 @@ function renderStatMap(){
   const labelSide = sm.labelSide === 'left' ? 'left' : 'right';
 
   const dailySetups = smBuildDailySetups(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount);
-  dailySetups.forEach(s => smDrawSetup(svg, s, sm.anchorStep*3600, lastTime, barInterval, {
+  dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, {
     lineColor: sm.lineColor, midColor: sm.midColor, lineWidth: sm.lineWidth, dash: smDash(sm.lineStyle),
     zoneColor: sm.zoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
     showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
@@ -9734,7 +9749,14 @@ function renderStatMap(){
 
   if (sm.showWeekly){
     const weeklySetups = smBuildPeriodSetups(candles, wtWeekKey, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin);
-    weeklySetups.forEach(s => smDrawSetup(svg, s, 118*3600, lastTime, barInterval, {
+    // Infinity, NO 118*3600 (la aproximación "~5 días hábiles" del Pine
+    // original) como techo: ese techo fijo es lo que generaba el hueco de
+    // varios días reportado por el usuario — acá solo sirve de techo
+    // cuando YA hay un próximo setup real (nextStart, ver el comentario
+    // grande de smDrawSetup); el setup más reciente (sin próximo todavía)
+    // simplemente sigue creciendo en vivo hasta que lo reemplace el
+    // próximo lunes real, sin cortar antes por una duración aproximada.
+    weeklySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, {
       lineColor: sm.wLineColor, midColor: sm.wMidColor, lineWidth: sm.wLineWidth, dash: smDash(sm.wLineStyle),
       zoneColor: sm.wZoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
       showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
@@ -9744,7 +9766,11 @@ function renderStatMap(){
 
   if (sm.showMonthly){
     const monthlySetups = smBuildPeriodSetups(candles, smMonthKey, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin);
-    monthlySetups.forEach(s => smDrawSetup(svg, s, 483*3600, lastTime, barInterval, {
+    // Ver el comentario igual arriba, semanal — mismo motivo exacto (acá
+    // es el que el usuario reportó: "los niveles mensuales duran 21 días",
+    // que era el techo fijo 483*3600 ("~21 días hábiles" del Pine
+    // original) cortando antes de que arrancara el mes real siguiente.
+    monthlySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, {
       lineColor: sm.mLineColor, midColor: sm.mMidColor, lineWidth: sm.mLineWidth, dash: smDash(sm.mLineStyle),
       zoneColor: sm.mZoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
       showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
