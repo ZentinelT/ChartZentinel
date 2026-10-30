@@ -3800,6 +3800,7 @@ const FRACTAL_MODEL_DEFAULTS = {
   showCisd:true, cisdBullColor:'#3d8bfd', cisdBearColor:'#ef5350', cisdWidth:2,
   showTSpot:true, tSpotBullColor:'rgba(165,214,167,0.18)', tSpotBearColor:'rgba(144,144,144,0.18)',
   showLabels:true,
+  behindCandles:false,
 };
 const STATE = {
   symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
@@ -5593,6 +5594,7 @@ class ZentinelBehindDrawingsPrimitive {
             if (STATE.watchtower.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._watchtowerSvg);
             if (STATE.sniper.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._sniperSvg);
             if (STATE.sweeps.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._sweepsSvg);
+            if (STATE.fractalModel.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._fractalModelSvg);
           });
         },
       }),
@@ -7495,6 +7497,7 @@ function openIndicatorSettings(name) {
   } else if (name === 'Fractal Model') {
     const fm = STATE.fractalModel;
     body.innerHTML = `
+      <label class="wt-set-row"><span>Show behind candles</span><input type="checkbox" id="fm-behind-candles" ${fm.behindCandles?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Bias</span>
         <select id="fm-bias" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:4px 6px;">
@@ -7712,6 +7715,7 @@ function applyIndSettingsForm() {
     renderSweeps();
   } else if (_indSettingsTarget === 'Fractal Model') {
     const g = id => document.getElementById(id);
+    STATE.fractalModel.behindCandles = g('fm-behind-candles').checked;
     STATE.fractalModel.biasFilter = g('fm-bias').value;
     STATE.fractalModel.showHistory = Math.max(1, Math.min(20, Number(g('fm-history').value)||2));
     STATE.fractalModel.showLabels = g('fm-show-labels').checked;
@@ -9425,6 +9429,7 @@ function renderFractalModel(){
   }
   bullSetups.forEach(drawSetup);
   bearSetups.forEach(drawSetup);
+  if (fm.behindCandles) hideSvgShapesBehindCandles(svg);
 }
 
 // ══════════════════════════════════════════════════════════
