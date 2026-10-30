@@ -9152,11 +9152,16 @@ function fmReplay(candles, cfg, p){
     c2SellAt[i] = R.prevHigh[i]!=null && R.curHigh[i] > R.prevHigh[i] && candles[i].close < R.prevHigh[i];
   }
 
-  let bullLevelFixed=null, bullIndexFixed=null, bullReclaimed=false;
-  let bearLevelFixed=null, bearIndexFixed=null, bearReclaimed=false;
+  let bullLevelFixed=null, bullIndexFixed=null, bullReclaimed=false, bullReclaimBar=null;
+  let bearLevelFixed=null, bearIndexFixed=null, bearReclaimed=false, bearReclaimBar=null;
   let prevBullIdx=null, prevBearIdx=null;
 
-  const earlyCisdBull=[], earlyCisdBear=[]; // {level,startIdx,endIdx} — se van extendiendo/consumiendo
+  // {level,startIdx,endIdx} — endIdx queda FIJO en la vela donde se creó
+  // (bar_index en el Pine, ver drawEarlyCisd) y nunca se vuelve a tocar:
+  // el Pine dibuja la línea una sola vez con line.new(...,confirmBar+3,...)
+  // y jamás la extiende después (pruneEarlyCisd/consumeLastEarlyCisd solo
+  // la borran, no la alargan) — NO "se van extendiendo".
+  const earlyCisdBull=[], earlyCisdBear=[];
   let buySetup=null, sellSetup=null;
   const setups=[];
   function finishSetup(s, endBar){ if (s && !s.recorded){ s.recorded=true; s.endBar=endBar; setups.push(s); } }
@@ -9173,7 +9178,13 @@ function fmReplay(candles, cfg, p){
         if (bullReclaimed && earlyCisdBull.length) earlyCisdBull.pop();
         finishSetup(buySetup, i-1);
         buySetup = fmNewSetup(true, R.prevLow[i], R.prevLowBar[i], R.prevPrevLow[i], R.prevPrevLowBar[i], bullLevelFixed, bullIndexFixed, i, R);
-        if (bullReclaimed){ buySetup.cisdConfirmed=true; buySetup.cisdConfirmBar=i; }
+        // bullReclaimBar (la vela donde el precio cerró más allá del nivel),
+        // NO `i` (la vela de ESTE C2 nuevo, que suele ser bastante más
+        // tarde) — Pine: newSetup(..., cisdConfirmBar=bullReclaimBar[1],...)
+        // -> confirmCisd(s, cisdConfirmBar, false) -> line.new(..., cisdConfirmBar+3, ...).
+        // Usar `i` acá era lo que hacía que la línea de CISD saliera
+        // demasiado larga.
+        if (bullReclaimed){ buySetup.cisdConfirmed=true; buySetup.cisdConfirmBar=bullReclaimBar; }
         const g = fmBoxGeometry(candles, i, R);
         buySetup.c3Top=g.top; buySetup.c3Bottom=g.bottom;
       } else if (buySetup && !buySetup.dead && buySetup.phase!==0){
@@ -9190,7 +9201,8 @@ function fmReplay(candles, cfg, p){
         if (bearReclaimed && earlyCisdBear.length) earlyCisdBear.pop();
         finishSetup(sellSetup, i-1);
         sellSetup = fmNewSetup(false, R.prevHigh[i], R.prevHighBar[i], R.prevPrevHigh[i], R.prevPrevHighBar[i], bearLevelFixed, bearIndexFixed, i, R);
-        if (bearReclaimed){ sellSetup.cisdConfirmed=true; sellSetup.cisdConfirmBar=i; }
+        // Ver el comentario igual arriba, lado bullish.
+        if (bearReclaimed){ sellSetup.cisdConfirmed=true; sellSetup.cisdConfirmBar=bearReclaimBar; }
         const g = fmBoxGeometry(candles, i, R);
         sellSetup.c3Top=g.top; sellSetup.c3Bottom=g.bottom;
       } else if (sellSetup && !sellSetup.dead && sellSetup.phase!==0){
@@ -9229,9 +9241,10 @@ function fmReplay(candles, cfg, p){
     const res = fmScanBullLevel(candles, i, R.curLow[i], R.prevLow[i]);
     if (res){ bullLevelFixed=res.level; bullIndexFixed=res.idx; }
     const newBullLevel = bullIndexFixed!=null && (prevBullIdx===null || bullIndexFixed!==prevBullIdx);
-    if (newBullLevel) bullReclaimed=false;
+    if (newBullLevel) { bullReclaimed=false; bullReclaimBar=null; }
     if (bullLevelFixed!=null && !bullReclaimed && c.close>bullLevelFixed){
       bullReclaimed=true;
+      bullReclaimBar=i;
       if (R.prevLow[i]!=null && R.curLow[i]<R.prevLow[i] && p.showEarlyCisd){
         earlyCisdBull.push({ level:bullLevelFixed, startIdx:bullIndexFixed, endIdx:i });
       }
@@ -9241,19 +9254,15 @@ function fmReplay(candles, cfg, p){
     const resB = fmScanBearLevel(candles, i, R.curHigh[i], R.prevHigh[i]);
     if (resB){ bearLevelFixed=resB.level; bearIndexFixed=resB.idx; }
     const newBearLevel = bearIndexFixed!=null && (prevBearIdx===null || bearIndexFixed!==prevBearIdx);
-    if (newBearLevel) bearReclaimed=false;
+    if (newBearLevel) { bearReclaimed=false; bearReclaimBar=null; }
     if (bearLevelFixed!=null && !bearReclaimed && c.close<bearLevelFixed){
       bearReclaimed=true;
+      bearReclaimBar=i;
       if (R.prevHigh[i]!=null && R.curHigh[i]>R.prevHigh[i] && p.showEarlyCisd){
         earlyCisdBear.push({ level:bearLevelFixed, startIdx:bearIndexFixed, endIdx:i });
       }
     }
     prevBearIdx=bearIndexFixed;
-
-    // Las líneas de Early CISD todavía vigentes (no consumidas) siguen
-    // "vivas" hasta la última vela donde su nivel sigue siendo el actual.
-    if (earlyCisdBull.length) earlyCisdBull[earlyCisdBull.length-1].endIdx = i;
-    if (earlyCisdBear.length) earlyCisdBear[earlyCisdBear.length-1].endIdx = i;
   }
 
   finishSetup(buySetup, n-1);
@@ -9306,8 +9315,16 @@ function renderFractalModel(){
 
   function drawSetup(s){
     if (s.sweepFromBar!=null && s.sweepFromBar<candles.length && fm.showSweep){
+      // Pine: drawSweepLine(sweepFromBar, sweepFromPrice, bar_index) se
+      // llama UNA sola vez, al crear el setup (processC2 -> newSetup) — la
+      // línea queda fija ahí para siempre, nunca se extiende con el resto
+      // del setup (no hay line.set_x2 para c1SweepLines). s.c3StartBar es
+      // ESA misma vela (ver fmNewSetup: c3StartBar=c2Bar=bar_index de ese
+      // momento) — usar s.extendToBar en cambio (que sigue creciendo
+      // mientras el setup vive) era lo que hacía que esta línea quedara
+      // larga de más.
       const t1 = candles[s.sweepFromBar].time;
-      const t2 = candles[Math.min(s.extendToBar, candles.length-1)].time;
+      const t2 = candles[Math.min(s.c3StartBar, candles.length-1)].time;
       wtLine(svg, t1, t2, s.sweepFromPrice, fm.sweepColor, fm.sweepWidth, null, 'Fractal Model');
     }
     if (s.extremeBar!=null && s.extremeBar<candles.length && fm.showLabels){
