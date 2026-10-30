@@ -1856,6 +1856,13 @@
     </svg>
     <span class="dtb-btn-text">Lock</span>
   </button>
+  <button class="dtb-btn" id="dtb-send-back" title="Send behind candles / bring to front" onclick="onDtbSendToBack()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="2" width="8" height="8" rx="1"/>
+      <rect x="6" y="6" width="8" height="8" rx="1" fill="currentColor" fill-opacity="0.25"/>
+    </svg>
+    <span class="dtb-btn-text">Back</span>
+  </button>
   <div class="dtb-sep"></div>
   <div id="dtb-template-wrap" style="position:relative;">
     <button class="dtb-btn" id="dtb-template-trigger" title="Save/load a named style template for this tool">
@@ -4227,6 +4234,8 @@ function selectDrawing(id) {
   document.getElementById('dtb-pos-labels').style.display = isPosition ? '' : 'none';
   document.getElementById('dtb-pos-labels').classList.toggle('active', d.showLabels !== false);
   document.getElementById('dtb-lock').classList.toggle('active', !!d.locked);
+  document.getElementById('dtb-send-back').style.display = d.type === 'text' ? 'none' : '';
+  document.getElementById('dtb-send-back').classList.toggle('active', !!d.sendToBack);
   document.getElementById('dtb-confirm-trade').style.display = (isPosition && !d.tradeId) ? '' : 'none';
   document.getElementById('dtb-close-trade').style.display = (isPosition && d.tradeId) ? '' : 'none';
   showDrawToolbar();
@@ -4360,6 +4369,17 @@ function onDtbLock() {
   captureUndoSnapshot();
   d.locked = !d.locked;
   document.getElementById('dtb-lock').classList.toggle('active', d.locked);
+  markDrawingsDirty();
+}
+// Alterna si este dibujo se ve detrás de las velas (en vez de siempre
+// adelante, como era hasta ahora) — ver applyDrawingZOrder/
+// ZentinelBehindDrawingsPrimitive para el detalle de cómo se logra.
+function onDtbSendToBack() {
+  const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
+  d.sendToBack = !d.sendToBack;
+  document.getElementById('dtb-send-back').classList.toggle('active', !!d.sendToBack);
+  applyDrawingZOrder(d);
   markDrawingsDirty();
 }
 // La herramienta de posición no tiene un solo "color" como el resto de los
@@ -4671,7 +4691,7 @@ function updateDrawingGeometry(d) {
     ok = true;
   }
 
-  if (ok) highlightSelectedSvg(d.id);
+  if (ok) { applyDrawingZOrder(d); highlightSelectedSvg(d.id); }
   return ok;
 }
 
@@ -5208,6 +5228,7 @@ function buildDrawingOnChart(d) {
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
+  applyDrawingZOrder(d);
   markDrawingsDirty();
 }
 
@@ -5529,6 +5550,155 @@ function initWatchtowerLayer() {
   });
 })();
 
+// ══════════════════════════════════════════════════════════
+//  ENVIAR AL FONDO (dibujos detrás de las velas) — las líneas de un dibujo
+//  (hline/trendline/bordes de rect-vp/fib/niveles de long-short) son series
+//  REALES del chart (chart.addLineSeries), dibujadas en el mismo canvas que
+//  las velas — lightweight-charts no tiene forma de "reordenar" series ya
+//  creadas, así que no alcanza con un z-index CSS como con las capas SVG.
+//  La única forma soportada de dibujar algo realmente DETRÁS de las velas en
+//  esta versión de la librería es un "Series Primitive" (chart.attachPrimitive,
+//  v4.1+) con zOrder:'bottom' — acá se usa UNO solo, compartido por todos los
+//  dibujos, que simplemente relee los puntos/color/ancho/estilo que ya tiene
+//  cada serie (s.data()/s.options(), la misma fuente que usa la librería
+//  para dibujarla normal) y los traza a mano en el canvas cuando
+//  d.sendToBack está activo — en ese caso la serie real se pone
+//  visible:false (ver applyDrawingZOrder) para que la librería no la dibuje
+//  una segunda vez por encima.
+// ══════════════════════════════════════════════════════════
+class ZentinelBehindDrawingsPrimitive {
+  attached(param) { this._chart = param.chart; this._requestUpdate = param.requestUpdate; window._behindPrimitiveRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._behindPrimitiveRequestUpdate) delete window._behindPrimitiveRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'bottom',
+      renderer: () => ({
+        // draw() (aunque zOrder:'bottom') pinta en la capa de "primitives",
+        // que lightweight-charts compone ARRIBA del canvas de las series —
+        // probado a mano, con zOrder:'bottom' la línea seguía tapando las
+        // velas igual. drawBackground() es el único hook que pinta ANTES
+        // que el cuerpo de la serie (candleSeries) — ver el comentario de la
+        // clase. draw() queda vacío (la interfaz lo exige, no es opcional).
+        draw: () => {},
+        drawBackground: (target) => {
+          target.useMediaCoordinateSpace(({ context: ctx }) => {
+            (drawings || []).forEach(d => {
+              if (!d.sendToBack) return;
+              drawBehindDrawingSeries(ctx, d);
+              drawBehindDrawingSvgParts(ctx, d);
+            });
+          });
+        },
+      }),
+    }];
+  }
+}
+// lineStyle ya llega convertido al enum de la librería (ver lwStyle): 0
+// sólido, 1 punteado, 2 rayado, 3/4 variantes de rayado/punteado finito.
+function _behindDashPattern(lineStyle) {
+  if (lineStyle === 1) return [2,2];
+  if (lineStyle === 2) return [6,4];
+  if (lineStyle === 3) return [10,6];
+  if (lineStyle === 4) return [1,4];
+  return [];
+}
+function drawBehindDrawingSeries(ctx, d) {
+  (d.series || []).forEach((s, i) => {
+    if (!segmentIntendedVisible(d, i)) return;
+    let data, opts;
+    try { data = s.data(); opts = s.options(); } catch(e) { return; }
+    if (!data || data.length < 2) return;
+    const pts = data.map(p => ({ x: chart.timeScale().timeToCoordinate(p.time), y: s.priceToCoordinate(p.value) }))
+                    .filter(p => p.x !== null && p.y !== null);
+    if (pts.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = opts.color || d.color;
+    ctx.lineWidth = opts.lineWidth || d.width || 1;
+    ctx.setLineDash(_behindDashPattern(opts.lineStyle));
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let k=1;k<pts.length;k++) ctx.lineTo(pts[k].x, pts[k].y);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+// El relleno de rect/long-short, la línea vertical y las barras del perfil
+// de volumen NO son series del chart — viven como elementos SVG sueltos,
+// reposicionados cada frame por syncRectFill/syncVLine/syncVolumeProfileBars
+// (que les pisan x/y/width/height/fill/opacity ya calculados). Ponerlos en
+// una capa SVG aparte con z-index negativo no sirve: ese z-index los deja
+// detrás de TODO el <canvas> del chart, incluido su propio fondo opaco, así
+// que quedan invisibles del todo (probado a mano) — hace falta el mismo
+// truco que las líneas: no tocar su posición/cálculo (siguen viviendo y
+// actualizándose en el DOM normal, solo se ocultan con visibility:hidden,
+// ver applyDrawingZOrder) y redibujar un rect/línea equivalente leyendo esos
+// mismos atributos ya calculados, adentro de drawBackground().
+function drawBehindDrawingSvgParts(ctx, d) {
+  function fillRectEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    const w = parseFloat(el.getAttribute('width')), h = parseFloat(el.getAttribute('height'));
+    if (!(w > 0) || !(h > 0)) return;
+    ctx.save();
+    ctx.globalAlpha = parseFloat(el.getAttribute('fill-opacity') || '1');
+    ctx.fillStyle = el.getAttribute('fill') || '#000';
+    ctx.fillRect(parseFloat(el.getAttribute('x')), parseFloat(el.getAttribute('y')), w, h);
+    ctx.restore();
+  }
+  fillRectEl(d.fillEl);
+  fillRectEl(d.profitFillEl);
+  fillRectEl(d.lossFillEl);
+  if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { fillRectEl(p.downEl); fillRectEl(p.upEl); });
+  if (d.vLineEl instanceof Element && d.vLineEl.style.display !== 'none') {
+    ctx.save();
+    ctx.strokeStyle = d.vLineEl.getAttribute('stroke') || d.color;
+    ctx.lineWidth = parseFloat(d.vLineEl.getAttribute('stroke-width') || '1');
+    const dash = d.vLineEl.getAttribute('stroke-dasharray');
+    ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+    ctx.beginPath();
+    ctx.moveTo(parseFloat(d.vLineEl.getAttribute('x1')), parseFloat(d.vLineEl.getAttribute('y1')));
+    ctx.lineTo(parseFloat(d.vLineEl.getAttribute('x2')), parseFloat(d.vLineEl.getAttribute('y2')));
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+// Visibilidad "de fondo" de cada serie de un dibujo, SIN contar
+// d.sendToBack (esa parte la decide applyDrawingZOrder) — mismos flags que
+// ya usa buildDrawingOnChart/applyVpLevelLines para decidir qué serie
+// mostrar (borde de rect, POC/VA del perfil de volumen).
+function segmentIntendedVisible(d, i) {
+  if (d.type === 'rect') return d.showBorder !== false;
+  if (d.type === 'vp') {
+    if (i < 4) return true;       // [0-3] borde
+    if (i === 4) return d.showPoc !== false;        // [4] POC
+    return d.showValueArea !== false;                // [5]/[6] VAH/VAL
+  }
+  return true;
+}
+// Único punto de entrada para mandar un dibujo atrás/adelante — oculta (con
+// visibility:hidden, no display:none: eso lo siguen pisando las funciones
+// sync* normales, ver el comentario de drawBehindDrawingSvgParts) sus piezas
+// puramente SVG y sus series reales del chart (ambas las vuelve a dibujar el
+// primitive de arriba, leyendo esos mismos elementos/series). Las etiquetas
+// de texto y las manijas de selección NO se tocan — quedan siempre adelante,
+// para que el dibujo siga siendo legible/arrastrable aunque esté "atrás".
+function applyDrawingZOrder(d) {
+  const back = !!d.sendToBack;
+  [d.fillEl, d.vLineEl, d.profitFillEl, d.lossFillEl].forEach(el => {
+    if (el instanceof Element) el.style.visibility = back ? 'hidden' : '';
+  });
+  if (Array.isArray(d.vpBarEls)) {
+    d.vpBarEls.forEach(p => {
+      p.upEl.style.visibility = back ? 'hidden' : '';
+      p.downEl.style.visibility = back ? 'hidden' : '';
+    });
+  }
+  (d.series || []).forEach((s, i) => {
+    try { s.applyOptions({ visible: back ? false : segmentIntendedVisible(d, i) }); } catch(e){}
+  });
+  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
+}
+
 function initChart() {
   const container = document.getElementById('chart-container');
   chart = LightweightCharts.createChart(container, {
@@ -5546,6 +5716,7 @@ function initChart() {
   });
 
   candleSeries = chart.addCandlestickSeries({});
+  candleSeries.attachPrimitive(new ZentinelBehindDrawingsPrimitive());
   applyChartSettings();
 
   // Serie invisible, aparte de candleSeries: solo lleva los puntos fantasma
