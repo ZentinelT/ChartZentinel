@@ -3780,6 +3780,7 @@ const SWEEPS_DEFAULTS = {
   anchoLinea:1,
   duracionBarras:3,
   diasLimite:1, horasLimite:4,
+  behindCandles:false,
 };
 // Puerto del NÚCLEO (velas HTF implícitas en el cálculo + modelo
 // C2→C3→C4 + CISD + Early CISD) del indicador Pine "FM°" v6 que pegó el
@@ -5591,6 +5592,7 @@ class ZentinelBehindDrawingsPrimitive {
             });
             if (STATE.watchtower.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._watchtowerSvg);
             if (STATE.sniper.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._sniperSvg);
+            if (STATE.sweeps.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._sweepsSvg);
           });
         },
       }),
@@ -7462,6 +7464,7 @@ function openIndicatorSettings(name) {
   } else if (name === 'Sweeps') {
     const sw = STATE.sweeps;
     body.innerHTML = `
+      <label class="wt-set-row"><span>Show behind candles</span><input type="checkbox" id="sw-behind-candles" ${sw.behindCandles?'checked':''}></label>
       <label class="wt-set-row"><span>Bullish sweep (prior high swept &amp; rejected down)</span><input type="checkbox" id="sw-mostrar-alcista" ${sw.mostrarAlcista?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Color</span>
@@ -7696,6 +7699,7 @@ function applyIndSettingsForm() {
     renderSniper();
   } else if (_indSettingsTarget === 'Sweeps') {
     const g = id => document.getElementById(id);
+    STATE.sweeps.behindCandles = g('sw-behind-candles').checked;
     STATE.sweeps.mostrarAlcista = g('sw-mostrar-alcista').checked;
     STATE.sweeps.mostrarBajista = g('sw-mostrar-bajista').checked;
     STATE.sweeps.colorAlcista = g('sw-color-alcista').value;
@@ -9077,6 +9081,7 @@ function renderSweeps(){
       wtLine(svg, t1, t2, prev.low, sw.colorBajista, sw.anchoLinea, null, 'Sweeps');
     }
   }
+  if (sw.behindCandles) hideSvgShapesBehindCandles(svg);
 }
 
 // ══════════════════════════════════════════════════════════
