@@ -9616,6 +9616,22 @@ function smHourHit(c, targetSec, barIntervalSec){
   return gap >= 0 && gap < barIntervalSec;
 }
 
+// Vela real más cercana a targetTime en TODO el historial cargado (a
+// diferencia de smHourHit, que solo busca HACIA ADELANTE desde que
+// arranca el período) — hace falta para el horario personalizado >=18hs
+// de semanal/mensual, ver el comentario grande de smBuildPeriodSetups: el
+// horario buscado puede caer en el día calendario ANTERIOR a donde
+// arranca el período (keyFn), así que escanear solo adelante nunca lo iba
+// a encontrar.
+function smNearestCandle(candles, targetTime){
+  let best = candles[0], bestDiff = Math.abs(candles[0].time - targetTime);
+  for (const c of candles){
+    const diff = Math.abs(c.time - targetTime);
+    if (diff < bestDiff){ bestDiff = diff; best = c; }
+  }
+  return best;
+}
+
 // Setups de la sesión diaria: ancla en la PRIMERA vela de cada día
 // calendario NY que cae dentro de un bar de anchorHour:anchorMin (ver
 // smHourHit) — NO un match exacto. Bug encontrado al probar en H4: el
@@ -9666,6 +9682,19 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterva
 // "período nuevo" lo decide keyFn, robusto — wtWeekKey ya probado para
 // PWH/PWL de Watchtower, no un match de horario exacto como tenía el Pine
 // original para la semanal).
+//
+// Caso especial, horario personalizado >=18:00 (pedido por el usuario):
+// la vela real de "día 1" de un mes/semana NO es la de las 18hs de ESE
+// mismo día calendario — es la de las 18hs del día calendario ANTERIOR
+// (si el 1° del mes cae lunes, día 1 es domingo 18hs; si cae martes, es
+// lunes 18hs — mismo criterio que la vela diaria D1 de MT5, que ya usa
+// wtDayKey para PDH/PDL de Watchtower). Escanear hacia ADELANTE desde que
+// arranca el período (como hace smHourHit para el resto de los horarios)
+// nunca iba a encontrarla, porque queda ATRÁS, en el período anterior —
+// por eso "no lo tomaba". Acá en cambio, apenas se detecta el período
+// nuevo, se calcula ese horario exacto con wtDayKey y se busca la vela
+// real más cercana en TODO el historial cargado (smNearestCandle), sin
+// restricción de "hacia adelante".
 function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval){
   const setups = [];
   let cur = null, prevCompleted = null, pending = false;
@@ -9678,6 +9707,20 @@ function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorM
       if (cur) prevCompleted = cur;
       cur = { key:k, high:c.high, low:c.low };
       pending = true;
+      if (mode === 'custom' && anchorHour >= 18){
+        const target = wtDayKey(c.time) + (anchorHour-18)*3600 + anchorMin*60;
+        const startCandle = smNearestCandle(candles, target);
+        pending = false;
+        // Si la vela más cercana queda a más de 4h del horario real
+        // buscado, el historial cargado no alcanza hacia atrás como para
+        // tener esa vela (típicamente el PRIMER período del historial
+        // cargado) — mejor no generar un setup mal anclado que uno
+        // silenciosamente desplazado varias horas.
+        if (prevCompleted && Math.abs(startCandle.time - target) <= 4*3600){
+          setups.push({ openPrice:startCandle.open, startTime:startCandle.time, high:prevCompleted.high, low:prevCompleted.low });
+        }
+        continue;
+      }
     } else {
       if (c.high>cur.high) cur.high=c.high;
       if (c.low<cur.low) cur.low=c.low;
