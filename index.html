@@ -3765,6 +3765,7 @@ const SNIPER_DEFAULTS = {
   // FVG activo de M15/H4 con penetración suficiente.
   requireHtfFvg:true, reqFvgM15:true, reqFvgH4:true,
   fvgMinPenetration:'deep_or_more', // 'any' | 'deep_or_more' | 'through_only'
+  behindCandles:false,
 };
 // Port de la parte "Sweeps en TF actual" de "SweepS Fractales HTF + Actual"
 // (Pine v6) — nombres de inputs conservados del original (alcista/bajista).
@@ -3813,7 +3814,7 @@ const STATE = {
   magnetMode: (() => { const v = lsGet(lsKey('td_magnet')); return (v==='strong'||v==='1') ? 'strong' : v==='weak' ? 'weak' : 'off'; })(),
   watchtower: Object.assign({
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
-    orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
+    orgColor:'#ffeb3b', boxOpacity:10, histDays:3, behindCandles:false,
   }, _wtSaved, { kz: _wtKz }),
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
@@ -5588,6 +5589,8 @@ class ZentinelBehindDrawingsPrimitive {
               drawBehindDrawingSeries(ctx, d);
               drawBehindDrawingSvgParts(ctx, d);
             });
+            if (STATE.watchtower.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._watchtowerSvg);
+            if (STATE.sniper.behindCandles) drawIndicatorSvgBehindCandles(ctx, window._sniperSvg);
           });
         },
       }),
@@ -5661,6 +5664,56 @@ function drawBehindDrawingSvgParts(ctx, d) {
     ctx.stroke();
     ctx.restore();
   }
+}
+// Mismo truco que drawBehindDrawingSvgParts, pero genérico para una capa
+// SVG entera de un indicador (Watchtower/Sniper) en vez de un dibujo
+// puntual — Watchtower y Sniper arman TODO su dibujo con wtRect/wtLine/
+// wtLabel (ver esas 3 funciones), así que sólo hacen falta 'rect' y 'line';
+// 'text' se deja afuera a propósito, igual que las etiquetas de los
+// dibujos propios — quedan siempre legibles adelante. Los elementos "hit"
+// (el trazo ancho transparente que wtLine agrega para hacer más fácil
+// clickear una línea fina) no pintan nada igual (fill/stroke 'transparent'),
+// así que no hace falta filtrarlos aparte.
+function drawIndicatorSvgBehindCandles(ctx, svg) {
+  if (!svg) return;
+  Array.from(svg.children).forEach(el => {
+    const tag = el.tagName;
+    if (tag === 'rect') {
+      const w = parseFloat(el.getAttribute('width')), h = parseFloat(el.getAttribute('height'));
+      if (!(w > 0) || !(h > 0)) return;
+      const fill = el.getAttribute('fill');
+      if (fill && fill !== 'none' && fill !== 'transparent') {
+        ctx.save();
+        ctx.globalAlpha = parseFloat(el.getAttribute('fill-opacity') || '1');
+        ctx.fillStyle = fill;
+        ctx.fillRect(parseFloat(el.getAttribute('x')), parseFloat(el.getAttribute('y')), w, h);
+        ctx.restore();
+      }
+      const stroke = el.getAttribute('stroke');
+      if (stroke && stroke !== 'none' && stroke !== 'transparent') {
+        ctx.save();
+        ctx.globalAlpha = parseFloat(el.getAttribute('stroke-opacity') || '1');
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+        ctx.strokeRect(parseFloat(el.getAttribute('x')), parseFloat(el.getAttribute('y')), w, h);
+        ctx.restore();
+      }
+    } else if (tag === 'line') {
+      const stroke = el.getAttribute('stroke');
+      if (!stroke || stroke === 'none' || stroke === 'transparent') return;
+      ctx.save();
+      ctx.globalAlpha = parseFloat(el.getAttribute('stroke-opacity') || '1');
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+      const dash = el.getAttribute('stroke-dasharray');
+      ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+      ctx.beginPath();
+      ctx.moveTo(parseFloat(el.getAttribute('x1')), parseFloat(el.getAttribute('y1')));
+      ctx.lineTo(parseFloat(el.getAttribute('x2')), parseFloat(el.getAttribute('y2')));
+      ctx.stroke();
+      ctx.restore();
+    }
+  });
 }
 // Visibilidad "de fondo" de cada serie de un dibujo, SIN contar
 // d.sendToBack (esa parte la decide applyDrawingZOrder) — mismos flags que
@@ -7296,6 +7349,7 @@ function openIndicatorSettings(name) {
       </div>`;
     }).join('');
     body.innerHTML = togglesHtml
+      + `<label class="wt-set-row"><span>Show behind candles</span><input type="checkbox" data-wt-key="behindCandles" ${STATE.watchtower.behindCandles ? 'checked' : ''}></label>`
       + `<div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Box transparency (all)</span>
         <input type="number" id="wt-box-opacity" min="0" max="100" step="1" value="${STATE.watchtower.boxOpacity}" style="width:56px">
@@ -7317,6 +7371,7 @@ function openIndicatorSettings(name) {
     const sweepLow = snParseRgba(sn.colorSweepLow), sweepHigh = snParseRgba(sn.colorSweepHigh);
     const cisdBull = snParseRgba(sn.colorCisdBull), cisdBear = snParseRgba(sn.colorCisdBear);
     body.innerHTML = `
+      <label class="wt-set-row"><span>Show behind candles</span><input type="checkbox" id="sn-behind-candles" ${sn.behindCandles?'checked':''}></label>
       <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">HTF Sweep</div>
       <label class="wt-set-row"><span>Detect bullish reversal (low sweep)</span><input type="checkbox" id="sn-mostrar-alcista" ${sn.mostrarAlcista?'checked':''}></label>
       <label class="wt-set-row"><span>Detect bearish reversal (high sweep)</span><input type="checkbox" id="sn-mostrar-bajista" ${sn.mostrarBajista?'checked':''}></label>
@@ -7604,6 +7659,7 @@ function applyIndSettingsForm() {
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
   } else if (_indSettingsTarget === 'Sniper') {
     const g = id => document.getElementById(id);
+    STATE.sniper.behindCandles  = g('sn-behind-candles').checked;
     STATE.sniper.mostrarAlcista = g('sn-mostrar-alcista').checked;
     STATE.sniper.mostrarBajista = g('sn-mostrar-bajista').checked;
     STATE.sniper.colorSweepLow  = snRgba(g('sn-color-sweep-low').value, Number(g('sn-color-sweep-low-tr').value)||0);
@@ -8232,6 +8288,17 @@ function renderWatchtower(){
   if(wt.mno)       renderWtMNO(svg, byDate, dateKeys, lastTime, barStep);
   if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
   if(wt.bias)      renderWtBias(byDate, dateKeys, lastTime);
+  if (wt.behindCandles) hideSvgShapesBehindCandles(svg);
+}
+// "Atrás de las velas": oculta solo los rect/line recién armados (los
+// redibuja ZentinelBehindDrawingsPrimitive sobre el canvas, detrás del
+// cuerpo de las velas — ver drawIndicatorSvgBehindCandles). Los 'text'
+// (las etiquetas PDH/PDL/CISD/etc.) NO se tocan — igual que en los dibujos
+// propios, quedan siempre legibles adelante.
+function hideSvgShapesBehindCandles(svg) {
+  Array.from(svg.children).forEach(el => {
+    if (el.tagName === 'rect' || el.tagName === 'line') el.style.visibility = 'hidden';
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -8937,7 +9004,7 @@ function renderSniper(){
   }
 
   const cfg = SNIPER_HTF_MAP[STATE.timeframe];
-  if (!cfg) return; // TF sin HTF en el Pine original -> el sweep/CISD no corre, igual que en TV (el FVG arriba sí queda)
+  if (!cfg) { if (sn.behindCandles) hideSvgShapesBehindCandles(svg); return; } // TF sin HTF en el Pine original -> el sweep/CISD no corre, igual que en TV (el FVG arriba sí queda)
   const { bullSetups, bearSetups, barStep } = snReplayCached(candles, cfg, {
     mostrarAlcista: sn.mostrarAlcista, mostrarBajista: sn.mostrarBajista,
     margenReclamo: sn.margenReclamo, maxSetupAge: sn.maxSetupAge,
@@ -8968,6 +9035,7 @@ function renderSniper(){
   }
   draw(bullSetups, true);
   draw(bearSetups, false);
+  if (sn.behindCandles) hideSvgShapesBehindCandles(svg);
 }
 
 // ══════════════════════════════════════════════════════════
