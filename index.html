@@ -9685,8 +9685,16 @@ function smDrawSetup(svg, setup, durationSec, lastTime, barInterval, opts){
   const range = setup.high - setup.low;
   const naturalEnd = setup.startTime + durationSec;
   const liveEnd = Math.min(naturalEnd, lastTime + LEVEL_EXTEND_BARS*barInterval);
-  const t2 = lastTime < naturalEnd ? liveEnd : naturalEnd;
-  const t1 = setup.startTime;
+  // naturalEnd (startTime + duración en segundos) casi nunca cae justo en
+  // el horario de una vela/whitespace real de ESTE panel — probado a mano:
+  // un setup mensual (483h) vencido en H4 tenía t2 un rato después de la
+  // última vela cargada, pero NI AHÍ coincidía con el grid de H4 (que no
+  // es cada hora, es cada 4h con su propio offset), y timeToCoordinate()
+  // devolvía null → el setup entero no dibujaba nada, en silencio. Mismo
+  // motivo documentado junto a safeLineTime (hline/trendline/fib) — acá
+  // hace falta el mismo redondeo.
+  const t2 = safeLineTime(lastTime < naturalEnd ? liveEnd : naturalEnd);
+  const t1 = safeLineTime(setup.startTime);
   for (let i=0;i<SM_LEVEL_OFFSETS.length;i++){
     const off = SM_LEVEL_OFFSETS[i];
     const isInner = off === 0.0 || off === 1.0;
