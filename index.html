@@ -9595,27 +9595,42 @@ function smMonthKey(t){
   return d.getUTCFullYear()*12 + d.getUTCMonth();
 }
 
-// Setups de la sesión diaria: ancla en CUALQUIER vela cuya hora:min NY
-// coincida con anchorHour:anchorMin — sin "pending/gating" (un horario de
-// reloj exacto solo puede coincidir una vez por día, así que no hace
-// falta). "Rango anterior" = el día calendario NY completo inmediatamente
-// previo (mismo criterio que prevDayHigh/prevDayLow del Pine).
+// Setups de la sesión diaria: ancla en el PRIMER candle de cada día
+// calendario NY cuya hora:min sea >= anchorHour:anchorMin — NO un match
+// exacto de horario. Bug encontrado al probar en H4: el bridge arma sus
+// velas de TF "sintéticos" (2H/3H/4H/6H/8H/12H/D) con un offset propio
+// (confirmado a mano: H4 solo tiene velas en NY 01/05/09/13/17/21, nunca
+// en 00:00 — ningún TF por encima de 1H tiene una vela exacta a
+// medianoche) — con el match exacto de antes, el anchor por defecto
+// (00:00) nunca disparaba en NINGÚN TF mayor a 1H, no solo en H4. "a
+// partir de" en vez de "exacto" resuelve esto para cualquier TF/horario:
+// agarra la PRIMERA vela del día que ya llegó (o pasó) la hora elegida,
+// sea cual sea el TF. Gateado una vez por día (pending), igual que
+// semanal/mensual más abajo — si no, CUALQUIER vela del día que siga
+// estando después del horario también dispararía.
+// "Rango anterior" = el día calendario NY completo inmediatamente previo
+// (mismo criterio que prevDayHigh/prevDayLow del Pine).
 function smBuildDailySetups(candles, anchorHour, anchorMin, lookback){
   const setups = [];
-  let cur = null, prevCompleted = null;
+  let cur = null, prevCompleted = null, pending = false;
+  const targetMin = anchorHour*60 + anchorMin;
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = smDayKey(c.time);
     if (!cur || cur.key !== k){
       if (cur) prevCompleted = cur;
       cur = { key:k, high:c.high, low:c.low };
+      pending = true;
     } else {
       if (c.high>cur.high) cur.high=c.high;
       if (c.low<cur.low) cur.low=c.low;
     }
-    const d = new Date(c.time*1000);
-    if (prevCompleted && d.getUTCHours()===anchorHour && d.getUTCMinutes()===anchorMin){
-      setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
+    if (pending){
+      const d = new Date(c.time*1000);
+      if (d.getUTCHours()*60 + d.getUTCMinutes() >= targetMin){
+        pending = false;
+        if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
+      }
     }
   }
   while (setups.length>lookback) setups.shift();
@@ -9623,16 +9638,19 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback){
 }
 
 // Setups semanales/mensuales: anclan en el PRIMER candle del período (modo
-// 'open') o en el primer candle del período cuya hora:min NY coincida con
-// anchorHour:anchorMin (modo 'custom') — "pending" se resetea en cada
-// período nuevo, así que si ese horario exacto no aparece antes de que
-// termine el período, ese período simplemente no genera setup (igual que
-// el Pine, sin el bug: acá "período nuevo" lo decide keyFn, robusto —
-// wtWeekKey ya probado para PWH/PWL de Watchtower, no un match de horario
-// exacto como tenía el Pine original para la semanal).
+// 'open') o en el primer candle del período cuya hora:min NY ya llegó (o
+// pasó) anchorHour:anchorMin (modo 'custom', mismo criterio ">=" que el
+// diario de arriba — mismo bug de TF sintéticos sin vela exacta a esa hora,
+// ver el comentario grande ahí) — "pending" se resetea en cada período
+// nuevo, así que si ese horario no llega a aparecer antes de que termine
+// el período, ese período simplemente no genera setup (igual que el Pine,
+// sin el bug: acá "período nuevo" lo decide keyFn, robusto — wtWeekKey ya
+// probado para PWH/PWL de Watchtower, no un match de horario exacto como
+// tenía el Pine original para la semanal).
 function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin){
   const setups = [];
   let cur = null, prevCompleted = null, pending = false;
+  const targetMin = anchorHour*60 + anchorMin;
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = keyFn(c.time);
@@ -9647,7 +9665,7 @@ function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorM
     }
     if (pending){
       const d = new Date(c.time*1000);
-      const hit = mode === 'open' ? isNewPeriod : (d.getUTCHours()===anchorHour && d.getUTCMinutes()===anchorMin);
+      const hit = mode === 'open' ? isNewPeriod : (d.getUTCHours()*60 + d.getUTCMinutes() >= targetMin);
       if (hit){
         pending = false;
         if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
