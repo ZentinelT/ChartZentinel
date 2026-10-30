@@ -3799,6 +3799,47 @@ const FRACTAL_MODEL_DEFAULTS = {
   showTSpot:true, tSpotBullColor:'rgba(165,214,167,0.18)', tSpotBearColor:'rgba(144,144,144,0.18)',
   showLabels:true,
 };
+// Puerto de "Stat Map – NY Levels" (Pine v6, pegado por el usuario) — niveles
+// proyectados desde la apertura de sesión/semana/mes ± fracciones del rango
+// del período anterior. Reescrito con un replay determinístico sobre las
+// velas cargadas (mismo patrón que Sniper/Fractal Model) en vez de portar
+// el array-shift + line.set_x2 incremental del Pine — ESO evitaba 2 bugs
+// reales encontrados al revisar el Pine original:
+//  1) isNewWeekNY exigía una vela exacta en domingo 18:00:00 NY — en la
+//     mayoría de los TF no hay vela justo ahí, así que la apertura semanal
+//     casi nunca disparaba de nuevo (confirmado por el usuario: al probarlo
+//     en TV, "los niveles semanales" terminaban siendo un único nivel viejo
+//     estancado). Acá se usa wtWeekKey (ya probado para PWH/PWL de
+//     Watchtower) para detectar el PRIMER candle de cada semana NY, sin
+//     depender de que exista una vela en un minuto exacto.
+//  2) Al nacer un setup nuevo, el Pine dibujaba la línea/caja/etiqueta de
+//     una con el largo COMPLETO (hasta el final del período) y recién en la
+//     vela siguiente la "encogía" de vuelta al presente — un parpadeo de
+//     ida y vuelta en cada apertura. Acá cada nivel se dibuja siempre
+//     clampeado a "dónde estamos ahora" (mismo criterio que el resto de los
+//     niveles vigentes de la app, ver LEVEL_EXTEND_BARS), así que nunca
+//     salta a futuro y nunca necesita "encogerse" — crece solo, de a poco.
+// line/zoneColor en gris claro (no negro, como venía el Pine) — un fondo
+// oscuro como el de ChartZentinel vuelve invisible una línea negra.
+const STAT_MAP_DEFAULTS = {
+  enabled:false, behindCandles:false,
+  // Sesión diaria
+  anchorHour:0, anchorMin:0, anchorStep:24, lookbackCount:1,
+  // Apertura semanal
+  showWeekly:false, wAnchorMode:'open', wAnchorHour:0, wAnchorMin:0,
+  wLineColor:'rgba(0,150,150,1)', wMidColor:'rgba(0,150,150,0.7)',
+  wLineWidth:1, wLineStyle:'dashed', wZoneColor:'rgba(0,150,150,0.10)', wLookback:1,
+  // Apertura mensual
+  showMonthly:false, mAnchorMode:'open', mAnchorHour:0, mAnchorMin:0,
+  mLineColor:'rgba(170,0,170,1)', mMidColor:'rgba(170,0,170,0.7)',
+  mLineWidth:1, mLineStyle:'dashed', mZoneColor:'rgba(170,0,170,0.10)', mLookback:1,
+  // Líneas (diario)
+  lineWidth:1, lineStyle:'solid', lineColor:'rgba(208,208,208,1)', midColor:'rgba(255,165,0,1)',
+  // Zonas
+  showInner:true, zoneColor:'rgba(255,255,255,0.15)', zoneSize:4, zoneSizeOuter:8,
+  // Etiquetas
+  showLabels:true, labelSide:'right', labelColor:'rgba(255,255,255,0.5)', midLblColor:'rgba(255,165,0,1)',
+};
 const STATE = {
   symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
@@ -3818,6 +3859,7 @@ const STATE = {
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   fractalModel: Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(lsGet(lsKey('td_fractal_model')) || '{}')),
+  statMap: Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(lsGet(lsKey('td_stat_map')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
   // Templates NOMBRADOS por indicador — {nombreIndicador: {nombreTemplate:
@@ -3843,10 +3885,12 @@ STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
+STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
 function saveFractalModelState(){ lsSet(lsKey('td_fractal_model'), JSON.stringify(STATE.fractalModel)); }
 function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
+function saveStatMapState(){ lsSet(lsKey('td_stat_map'), JSON.stringify(STATE.statMap)); }
 function saveHiddenIndicatorsState(){ lsSet(lsKey('td_ind_hidden'), JSON.stringify(STATE.hiddenIndicators)); }
 function isIndicatorHidden(name){ return STATE.hiddenIndicators.includes(name); }
 function toggleIndicatorVisibility(name){
@@ -3858,6 +3902,7 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
+  else if (name === 'Stat Map') renderStatMap();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
 }
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
@@ -3874,6 +3919,7 @@ function getIndSettingsObject(name){
   if (name === 'Sniper') return STATE.sniper;
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
+  if (name === 'Stat Map') return STATE.statMap;
   const def = INDICATOR_DEFS.find(d => d.name === name);
   return getIndicatorStyle(name, def || {});
 }
@@ -3891,6 +3937,9 @@ function setIndSettingsObject(name, obj){
   } else if (name === 'Fractal Model') {
     STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, obj, { enabled: STATE.fractalModel.enabled });
     saveFractalModelState(); renderFractalModel();
+  } else if (name === 'Stat Map') {
+    STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, obj, { enabled: STATE.statMap.enabled });
+    saveStatMapState(); renderStatMap();
   } else {
     STATE.indicatorStyles[name] = obj;
     saveIndicatorStylesState();
@@ -5921,6 +5970,7 @@ function initChart() {
     renderSniper();
     renderSweeps();
     renderFractalModel();
+    renderStatMap();
     syncOverlayPositions();
   }).observe(container);
 
@@ -5936,6 +5986,7 @@ function initChart() {
     renderSniper();
     renderSweeps();
     renderFractalModel();
+    renderStatMap();
     syncOverlayPositions();
   });
 
@@ -5953,9 +6004,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -5972,6 +6023,7 @@ function initChart() {
   initSniperLayer();
   initSweepsLayer();
   initFractalModelLayer();
+  initStatMapLayer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
   // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
@@ -7161,6 +7213,7 @@ const INDICATOR_DEFS = [
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
+  { name:'Stat Map', desc:'Niveles proyectados desde apertura de sesión/semana/mes (Stat Map NY Levels)', color:'#d0d0d0', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -7187,6 +7240,7 @@ function applyIndicators() {
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
+      else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   });
@@ -7209,6 +7263,7 @@ function addIndicatorSeries(name) {
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
+    else if(name==='Stat Map'){ STATE.statMap.enabled=true; saveStatMapState(); renderStatMap(); }
     return;
   }
   if(overlays[name])return;
@@ -7493,6 +7548,110 @@ function openIndicatorSettings(name) {
         <input type="color" id="fm-tspot-bear-color" value="${snParseRgba(fm.tSpotBearColor).hex}">
         <input type="number" id="fm-tspot-bear-tr" min="0" max="100" step="1" value="${snParseRgba(fm.tSpotBearColor).transparency}" style="width:48px" title="Transparency %">
       </div>`;
+  } else if (name === 'Stat Map') {
+    const sm = STATE.statMap;
+    const lc = snParseRgba(sm.lineColor), mc = snParseRgba(sm.midColor), zc = snParseRgba(sm.zoneColor);
+    const lblc = snParseRgba(sm.labelColor), mlblc = snParseRgba(sm.midLblColor);
+    const wlc = snParseRgba(sm.wLineColor), wmc = snParseRgba(sm.wMidColor), wzc = snParseRgba(sm.wZoneColor);
+    const mlc = snParseRgba(sm.mLineColor), mmc = snParseRgba(sm.mMidColor), mzc = snParseRgba(sm.mZoneColor);
+    const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
+    body.innerHTML = `
+      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">⏱ Sesión Diaria</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Apertura NY (hora:min)</span>
+        <input type="number" id="sm-anchor-hour" min="0" max="23" step="1" value="${sm.anchorHour}" style="width:48px">
+        <input type="number" id="sm-anchor-min" min="0" max="59" step="1" value="${sm.anchorMin}" style="width:48px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Duración (h)</span>
+        <input type="number" id="sm-anchor-step" min="1" max="24" step="1" value="${sm.anchorStep}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Setups a mostrar</span>
+        <input type="number" id="sm-lookback" min="1" max="20" step="1" value="${sm.lookbackCount}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📅 Apertura Semanal</div>
+      <label class="wt-set-row"><span>Mostrar niveles semanal</span><input type="checkbox" id="sm-show-weekly" ${sm.showWeekly?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Anclar en</span>
+        <select id="sm-w-anchor-mode" class="dtb-select" style="flex:1;">
+          <option value="open" ${sm.wAnchorMode==='open'?'selected':''}>Vela de apertura</option>
+          <option value="custom" ${sm.wAnchorMode==='custom'?'selected':''}>Hora personalizada</option>
+        </select>
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Hora NY (si personalizada)</span>
+        <input type="number" id="sm-w-anchor-hour" min="0" max="23" step="1" value="${sm.wAnchorHour}" style="width:48px">
+        <input type="number" id="sm-w-anchor-min" min="0" max="59" step="1" value="${sm.wAnchorMin}" style="width:48px">
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-w-line-color" value="${wlc.hex}"><input type="number" id="sm-w-line-tr" min="0" max="100" step="1" value="${wlc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-w-mid-color" value="${wmc.hex}"><input type="number" id="sm-w-mid-tr" min="0" max="100" step="1" value="${wmc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Grosor / Estilo</span>
+        <input type="number" id="sm-w-line-width" min="1" max="5" step="1" value="${sm.wLineWidth}" style="width:48px">
+        <select id="sm-w-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.wLineStyle)}</select>
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-w-zone-color" value="${wzc.hex}"><input type="number" id="sm-w-zone-tr" min="0" max="100" step="1" value="${wzc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Semanas a mostrar</span>
+        <input type="number" id="sm-w-lookback" min="1" max="8" step="1" value="${sm.wLookback}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📆 Apertura Mensual</div>
+      <label class="wt-set-row"><span>Mostrar niveles mensual</span><input type="checkbox" id="sm-show-monthly" ${sm.showMonthly?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Anclar en</span>
+        <select id="sm-m-anchor-mode" class="dtb-select" style="flex:1;">
+          <option value="open" ${sm.mAnchorMode==='open'?'selected':''}>Vela de apertura</option>
+          <option value="custom" ${sm.mAnchorMode==='custom'?'selected':''}>Hora personalizada</option>
+        </select>
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Hora NY (si personalizada)</span>
+        <input type="number" id="sm-m-anchor-hour" min="0" max="23" step="1" value="${sm.mAnchorHour}" style="width:48px">
+        <input type="number" id="sm-m-anchor-min" min="0" max="59" step="1" value="${sm.mAnchorMin}" style="width:48px">
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-m-line-color" value="${mlc.hex}"><input type="number" id="sm-m-line-tr" min="0" max="100" step="1" value="${mlc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-m-mid-color" value="${mmc.hex}"><input type="number" id="sm-m-mid-tr" min="0" max="100" step="1" value="${mmc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Grosor / Estilo</span>
+        <input type="number" id="sm-m-line-width" min="1" max="5" step="1" value="${sm.mLineWidth}" style="width:48px">
+        <select id="sm-m-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.mLineStyle)}</select>
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-m-zone-color" value="${mzc.hex}"><input type="number" id="sm-m-zone-tr" min="0" max="100" step="1" value="${mzc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Meses a mostrar</span>
+        <input type="number" id="sm-m-lookback" min="1" max="6" step="1" value="${sm.mLookback}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">〰 Líneas (diario)</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Grosor / Estilo</span>
+        <input type="number" id="sm-line-width" min="1" max="5" step="1" value="${sm.lineWidth}" style="width:48px">
+        <select id="sm-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.lineStyle)}</select>
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-line-color" value="${lc.hex}"><input type="number" id="sm-line-tr" min="0" max="100" step="1" value="${lc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-mid-color" value="${mc.hex}"><input type="number" id="sm-mid-tr" min="0" max="100" step="1" value="${mc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">▭ Zonas</div>
+      <label class="wt-set-row"><span>Mostrar niveles 0 / 1</span><input type="checkbox" id="sm-show-inner" ${sm.showInner?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-zone-color" value="${zc.hex}"><input type="number" id="sm-zone-tr" min="0" max="100" step="1" value="${zc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Interior (%)</span>
+        <input type="number" id="sm-zone-size" min="0" max="5" step="0.5" value="${sm.zoneSize}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Exterior (%)</span>
+        <input type="number" id="sm-zone-size-outer" min="0" max="8" step="0.5" value="${sm.zoneSizeOuter}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🏷 Etiquetas</div>
+      <label class="wt-set-row"><span>Mostrar</span><input type="checkbox" id="sm-show-labels" ${sm.showLabels?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Lado</span>
+        <select id="sm-label-side" class="dtb-select" style="flex:1;">
+          <option value="left" ${sm.labelSide==='left'?'selected':''}>Izquierda</option>
+          <option value="right" ${sm.labelSide==='right'?'selected':''}>Derecha</option>
+        </select>
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-label-color" value="${lblc.hex}"><input type="number" id="sm-label-tr" min="0" max="100" step="1" value="${lblc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media (diario)</span><input type="color" id="sm-mid-lbl-color" value="${mlblc.hex}"><input type="number" id="sm-mid-lbl-tr" min="0" max="100" step="1" value="${mlblc.transparency}" style="width:48px" title="Transparency %"></div>`;
   } else {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     const style = getIndicatorStyle(name, def);
@@ -7670,6 +7829,53 @@ function applyIndSettingsForm() {
     STATE.fractalModel.tSpotBearColor = snRgba(g('fm-tspot-bear-color').value, Number(g('fm-tspot-bear-tr').value)||0);
     saveFractalModelState();
     renderFractalModel();
+  } else if (_indSettingsTarget === 'Stat Map') {
+    const g = id => document.getElementById(id);
+    const sm = STATE.statMap;
+    sm.anchorHour = Math.max(0, Math.min(23, Number(g('sm-anchor-hour').value)||0));
+    sm.anchorMin  = Math.max(0, Math.min(59, Number(g('sm-anchor-min').value)||0));
+    sm.anchorStep = Math.max(1, Math.min(24, Number(g('sm-anchor-step').value)||24));
+    sm.lookbackCount = Math.max(1, Math.min(20, Number(g('sm-lookback').value)||1));
+
+    sm.showWeekly = g('sm-show-weekly').checked;
+    sm.wAnchorMode = g('sm-w-anchor-mode').value;
+    sm.wAnchorHour = Math.max(0, Math.min(23, Number(g('sm-w-anchor-hour').value)||0));
+    sm.wAnchorMin  = Math.max(0, Math.min(59, Number(g('sm-w-anchor-min').value)||0));
+    sm.wLineColor = snRgba(g('sm-w-line-color').value, Number(g('sm-w-line-tr').value)||0);
+    sm.wMidColor  = snRgba(g('sm-w-mid-color').value, Number(g('sm-w-mid-tr').value)||0);
+    sm.wLineWidth = Math.max(1, Math.min(5, Number(g('sm-w-line-width').value)||1));
+    sm.wLineStyle = g('sm-w-line-style').value;
+    sm.wZoneColor = snRgba(g('sm-w-zone-color').value, Number(g('sm-w-zone-tr').value)||0);
+    sm.wLookback  = Math.max(1, Math.min(8, Number(g('sm-w-lookback').value)||1));
+
+    sm.showMonthly = g('sm-show-monthly').checked;
+    sm.mAnchorMode = g('sm-m-anchor-mode').value;
+    sm.mAnchorHour = Math.max(0, Math.min(23, Number(g('sm-m-anchor-hour').value)||0));
+    sm.mAnchorMin  = Math.max(0, Math.min(59, Number(g('sm-m-anchor-min').value)||0));
+    sm.mLineColor = snRgba(g('sm-m-line-color').value, Number(g('sm-m-line-tr').value)||0);
+    sm.mMidColor  = snRgba(g('sm-m-mid-color').value, Number(g('sm-m-mid-tr').value)||0);
+    sm.mLineWidth = Math.max(1, Math.min(5, Number(g('sm-m-line-width').value)||1));
+    sm.mLineStyle = g('sm-m-line-style').value;
+    sm.mZoneColor = snRgba(g('sm-m-zone-color').value, Number(g('sm-m-zone-tr').value)||0);
+    sm.mLookback  = Math.max(1, Math.min(6, Number(g('sm-m-lookback').value)||1));
+
+    sm.lineWidth = Math.max(1, Math.min(5, Number(g('sm-line-width').value)||1));
+    sm.lineStyle = g('sm-line-style').value;
+    sm.lineColor = snRgba(g('sm-line-color').value, Number(g('sm-line-tr').value)||0);
+    sm.midColor  = snRgba(g('sm-mid-color').value, Number(g('sm-mid-tr').value)||0);
+
+    sm.showInner = g('sm-show-inner').checked;
+    sm.zoneColor = snRgba(g('sm-zone-color').value, Number(g('sm-zone-tr').value)||0);
+    sm.zoneSize = Math.max(0, Math.min(5, Number(g('sm-zone-size').value)||0));
+    sm.zoneSizeOuter = Math.max(0, Math.min(8, Number(g('sm-zone-size-outer').value)||0));
+
+    sm.showLabels = g('sm-show-labels').checked;
+    sm.labelSide = g('sm-label-side').value;
+    sm.labelColor = snRgba(g('sm-label-color').value, Number(g('sm-label-tr').value)||0);
+    sm.midLblColor = snRgba(g('sm-mid-lbl-color').value, Number(g('sm-mid-lbl-tr').value)||0);
+
+    saveStatMapState();
+    renderStatMap();
   } else {
     const colorEl=document.getElementById('ind-style-color');
     const widthEl=document.getElementById('ind-style-width');
@@ -7696,6 +7902,7 @@ function removeIndicator(name){
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
+    else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); renderStatMap(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
@@ -9029,6 +9236,17 @@ function initFractalModelLayer() {
   syncSize();
 }
 
+function initStatMapLayer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:19;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._statMapSvg = svg;
+  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  new ResizeObserver(syncSize).observe(container);
+  syncSize();
+}
+
 // Agrupa las velas cargadas en períodos HTF igual que snBuildHtfRunning,
 // pero además rastrea el ÍNDICE de vela (no solo el precio) del high/low
 // corrido de CADA período — el Pine original necesita ese índice para
@@ -9352,6 +9570,161 @@ function renderFractalModel(){
   }
   bullSetups.forEach(drawSetup);
   bearSetups.forEach(drawSetup);
+}
+
+// ══════════════════════════════════════════════════════════
+//  STAT MAP — ver el comentario grande arriba de STAT_MAP_DEFAULTS para
+//  los 2 bugs del Pine original que este replay determinístico evita de
+//  raíz (apertura semanal que casi nunca disparaba + parpadeo al nacer
+//  un setup nuevo).
+// ══════════════════════════════════════════════════════════
+const SM_LEVEL_OFFSETS = [0.0, -0.5, 0.2, 0.5, 0.8, 1.0, 1.5];
+const SM_LEVEL_NAMES   = ['', '-D', '+M', '0.5', '-M', '', '+D'];
+function smIsOuterOffset(o){ return o === -0.5 || o === 1.5; }
+function smDash(styleStr){ return styleStr === 'dashed' ? '6,4' : styleStr === 'dotted' ? '2,2' : null; }
+
+// "Día" calendario NY medianoche-a-medianoche — DISTINTO de wtDayKey (que
+// usa el rollover 18:00 del D1 de MT5, para PDH/PDL de Watchtower): el
+// Stat Map original ancla en dayofmonth()/month() de Pine, calendario puro.
+function smDayKey(t){
+  const d = new Date(t*1000);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+function smMonthKey(t){
+  const d = new Date(t*1000);
+  return d.getUTCFullYear()*12 + d.getUTCMonth();
+}
+
+// Setups de la sesión diaria: ancla en CUALQUIER vela cuya hora:min NY
+// coincida con anchorHour:anchorMin — sin "pending/gating" (un horario de
+// reloj exacto solo puede coincidir una vez por día, así que no hace
+// falta). "Rango anterior" = el día calendario NY completo inmediatamente
+// previo (mismo criterio que prevDayHigh/prevDayLow del Pine).
+function smBuildDailySetups(candles, anchorHour, anchorMin, lookback){
+  const setups = [];
+  let cur = null, prevCompleted = null;
+  for (let i=0;i<candles.length;i++){
+    const c = candles[i];
+    const k = smDayKey(c.time);
+    if (!cur || cur.key !== k){
+      if (cur) prevCompleted = cur;
+      cur = { key:k, high:c.high, low:c.low };
+    } else {
+      if (c.high>cur.high) cur.high=c.high;
+      if (c.low<cur.low) cur.low=c.low;
+    }
+    const d = new Date(c.time*1000);
+    if (prevCompleted && d.getUTCHours()===anchorHour && d.getUTCMinutes()===anchorMin){
+      setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
+    }
+  }
+  while (setups.length>lookback) setups.shift();
+  return setups;
+}
+
+// Setups semanales/mensuales: anclan en el PRIMER candle del período (modo
+// 'open') o en el primer candle del período cuya hora:min NY coincida con
+// anchorHour:anchorMin (modo 'custom') — "pending" se resetea en cada
+// período nuevo, así que si ese horario exacto no aparece antes de que
+// termine el período, ese período simplemente no genera setup (igual que
+// el Pine, sin el bug: acá "período nuevo" lo decide keyFn, robusto —
+// wtWeekKey ya probado para PWH/PWL de Watchtower, no un match de horario
+// exacto como tenía el Pine original para la semanal).
+function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin){
+  const setups = [];
+  let cur = null, prevCompleted = null, pending = false;
+  for (let i=0;i<candles.length;i++){
+    const c = candles[i];
+    const k = keyFn(c.time);
+    const isNewPeriod = !cur || cur.key !== k;
+    if (isNewPeriod){
+      if (cur) prevCompleted = cur;
+      cur = { key:k, high:c.high, low:c.low };
+      pending = true;
+    } else {
+      if (c.high>cur.high) cur.high=c.high;
+      if (c.low<cur.low) cur.low=c.low;
+    }
+    if (pending){
+      const d = new Date(c.time*1000);
+      const hit = mode === 'open' ? isNewPeriod : (d.getUTCHours()===anchorHour && d.getUTCMinutes()===anchorMin);
+      if (hit){
+        pending = false;
+        if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
+      }
+    }
+  }
+  while (setups.length>lookback) setups.shift();
+  return setups;
+}
+
+// Dibuja los 7 niveles de UN setup (diario/semanal/mensual comparten esta
+// misma geometría, solo cambian estilo/prefijo/duración) — t2 siempre
+// clampeado a "dónde estamos ahora" (LEVEL_EXTEND_BARS, mismo criterio que
+// cualquier otro nivel vigente de la app) en vez de saltar al largo
+// completo de una, que era el bug #2 del Pine original.
+function smDrawSetup(svg, setup, durationSec, lastTime, barInterval, opts){
+  const range = setup.high - setup.low;
+  const naturalEnd = setup.startTime + durationSec;
+  const liveEnd = Math.min(naturalEnd, lastTime + LEVEL_EXTEND_BARS*barInterval);
+  const t2 = lastTime < naturalEnd ? liveEnd : naturalEnd;
+  const t1 = setup.startTime;
+  for (let i=0;i<SM_LEVEL_OFFSETS.length;i++){
+    const off = SM_LEVEL_OFFSETS[i];
+    const isInner = off === 0.0 || off === 1.0;
+    if (isInner && !opts.showInner) continue;
+    const lvl = setup.openPrice + (off-0.5)*range;
+    const isMiddle = off === 0.5;
+    const halfZone = range * (smIsOuterOffset(off) ? opts.zoneSizeOuter : opts.zoneSize) / 100;
+    wtLine(svg, t1, t2, lvl, isMiddle?opts.midColor:opts.lineColor, opts.lineWidth, opts.dash, 'Stat Map');
+    if (!isMiddle) wtRect(svg, t1, t2, lvl+halfZone, lvl-halfZone, opts.zoneColor, 1, 'none', 'Stat Map');
+    if (opts.showLabels){
+      const lblX = opts.labelSide==='left' ? t1 : t2;
+      wtLabel(svg, lblX, lvl, opts.labelPrefix+SM_LEVEL_NAMES[i], isMiddle?opts.midLblColor:opts.labelColor, 'Stat Map');
+    }
+  }
+}
+
+function renderStatMap(){
+  if (!window._statMapSvg) return;
+  const svg = window._statMapSvg;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Stat Map');
+  if (!STATE.statMap.enabled || isIndicatorHidden('Stat Map')) return;
+  const candles = window._lastCandles||[];
+  if (candles.length<2) return;
+  const sm = STATE.statMap;
+  const barInterval = candles[1].time - candles[0].time;
+  const lastTime = candles[candles.length-1].time;
+  const labelSide = sm.labelSide === 'left' ? 'left' : 'right';
+
+  const dailySetups = smBuildDailySetups(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount);
+  dailySetups.forEach(s => smDrawSetup(svg, s, sm.anchorStep*3600, lastTime, barInterval, {
+    lineColor: sm.lineColor, midColor: sm.midColor, lineWidth: sm.lineWidth, dash: smDash(sm.lineStyle),
+    zoneColor: sm.zoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
+    showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
+    labelColor: sm.labelColor, midLblColor: sm.midLblColor, labelPrefix: '',
+  }));
+
+  if (sm.showWeekly){
+    const weeklySetups = smBuildPeriodSetups(candles, wtWeekKey, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin);
+    weeklySetups.forEach(s => smDrawSetup(svg, s, 118*3600, lastTime, barInterval, {
+      lineColor: sm.wLineColor, midColor: sm.wMidColor, lineWidth: sm.wLineWidth, dash: smDash(sm.wLineStyle),
+      zoneColor: sm.wZoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
+      showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
+      labelColor: sm.wLineColor, midLblColor: sm.wMidColor, labelPrefix: 'W ',
+    }));
+  }
+
+  if (sm.showMonthly){
+    const monthlySetups = smBuildPeriodSetups(candles, smMonthKey, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin);
+    monthlySetups.forEach(s => smDrawSetup(svg, s, 483*3600, lastTime, barInterval, {
+      lineColor: sm.mLineColor, midColor: sm.mMidColor, lineWidth: sm.mLineWidth, dash: smDash(sm.mLineStyle),
+      zoneColor: sm.mZoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
+      showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
+      labelColor: sm.mLineColor, midLblColor: sm.mMidColor, labelPrefix: 'M ',
+    }));
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -9913,6 +10286,7 @@ function captureCurrentDesign(){
     sniper: STATE.sniper,
     sweeps: STATE.sweeps,
     fractalModel: STATE.fractalModel,
+    statMap: STATE.statMap,
     // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
     // tal cual quedan en pantalla, con sus horarios/precios crudos — igual
     // que la sincronización entre paneles (ver zentinelDrawingsSync),
@@ -9967,11 +10341,13 @@ function applyPreset(name){
   STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(p.sniper || {})));
   STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(p.sweeps || {})));
   STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(p.fractalModel || {})));
+  STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(JSON.stringify(p.statMap || {})));
   STATE.indicators = [...(p.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
+  STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
 
   // Dibujos: solo si el preset los trae — uno guardado antes de esto no
   // tiene drawings, y aplicarlo no debería borrar los que el usuario ya
@@ -10003,6 +10379,7 @@ function applyPreset(name){
   renderSniper();
   renderSweeps();
   renderFractalModel();
+  renderStatMap();
   fillChartSettingsForm(STATE.chartSettings);
 }
 
@@ -10300,6 +10677,7 @@ function renderSeries(timeframe){
   renderSniper();
   renderSweeps();
   renderFractalModel();
+  renderStatMap();
   renderTradeMarkers();
 }
 
@@ -10322,6 +10700,7 @@ function updateFormingCandleLive(bar){
   renderSniper();
   renderSweeps();
   renderFractalModel();
+  renderStatMap();
   renderTradeMarkers();
 }
 
@@ -10835,6 +11214,7 @@ function _resyncChartLayout(){
   renderSniper();
   renderSweeps();
   renderFractalModel();
+  renderStatMap();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
