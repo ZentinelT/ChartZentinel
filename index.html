@@ -6779,6 +6779,15 @@ function initDrawingLayer() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
       e.preventDefault();
       refreshChart();
+    } else if (e.code === 'Space' && window._replay) {
+      // Barra espaciadora = play/pause, pero SOLO con el replay activo —
+      // si no, sería demasiado fácil scrollear la página sin querer (el
+      // comportamiento nativo del espacio) cada vez que el foco cae afuera
+      // de un input, igual que el resto de estos atajos de una sola tecla.
+      const tag = document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+      e.preventDefault();
+      toggleReplayPlay();
     }
   });
 }
