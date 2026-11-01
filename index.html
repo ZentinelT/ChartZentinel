@@ -10073,6 +10073,13 @@ async function changeReplayTimeframe(newTf){
     window._lastCandles = candles;
     startReplay(idx);
     window._replay.speedMs = speedMs;
+    // setActiveTF (arriba) solo resalta el botón del TF-bar — sin esto el
+    // título del panel ("NAS100.fs · 5m") se quedaba pegado al TF viejo
+    // después de cambiarlo en medio de un replay, aunque las velas de abajo
+    // sí fueran las correctas del TF nuevo (bug real, encontrado probando
+    // replay sincronizado multi-panel).
+    updateTfBarSymbol(STATE.symbol, newTf);
+    _notifySymbolTfChange(STATE.symbol, newTf);
     if (wasPlaying) replayPlay();
   } catch(e){
     exitReplay();
@@ -10132,6 +10139,17 @@ async function _ensureFollowMasterCandles(){
     // sin red/MT5 un instante: el próximo tick de sync vuelve a intentar.
   } finally {
     f.fetchingMasterTF = false;
+    // window._replayFollow !== f: este fetch de 5000 velas (puede tardar
+    // varios segundos, sobre todo con el puente ocupado con otros paneles)
+    // terminó DESPUÉS de que el replay ya se cerró — probado a mano: salir
+    // del replay con un fetch de este tipo todavía en vuelo revivía el modo
+    // follow para siempre (_applyFollowSync de abajo llama a
+    // _startFollowReplay si window._replayFollow es null), con el panel
+    // trabado ahí porque el maestro ya no manda más sync que lo saque. `f`
+    // es la clausura de CUANDO arrancó este fetch — si el replay actual ya
+    // es otro (o ninguno), este resultado quedó viejo, no corresponde
+    // aplicarlo.
+    if (window._replayFollow !== f) return;
     if (f.pendingTime != null) { const t = f.pendingTime; f.pendingTime = null; _applyFollowSync(f.masterTF, t); }
   }
 }
