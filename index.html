@@ -2011,6 +2011,20 @@
       </select>
     </div>
 
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><circle cx="5.5" cy="7" r="1.3"/><path d="M14.3 10.5 10.8 7l-6 6"/></svg>
+        Logo
+      </div>
+      <div class="cs-row" style="align-items:center;gap:10px;margin-bottom:0;">
+        <img id="cs-logo-preview" src="logo-unicorn.png" style="height:28px;width:auto;border-radius:3px;background:#111;padding:2px;flex:none;">
+        <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Subir mi logo</button>
+        <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Quitar</button>
+      </div>
+      <input type="file" id="cs-logo-file" accept="image/*" style="display:none;" onchange="onLogoFileChosen(event)">
+      <div class="cs-field-label" style="margin-top:8px;opacity:.65;">Reemplaza el logo en toda la plataforma (incluye modo multigráficos). Recomendado: PNG con fondo transparente.</div>
+    </div>
+
     <div class="modal-btns">
       <button class="btn-ghost" onclick="resetChartSettings()">Reset to default</button>
       <button class="btn-primary" onclick="saveChartSettings()">Save</button>
@@ -2374,6 +2388,7 @@ function getTfFavorites(){
 }
 function setTfFavorites(list){ lsSet('td_tf_favorites', JSON.stringify(list)); }
 window.addEventListener('storage', e => {
+  if (e.key === 'zentinel_custom_logo') { applyCustomLogo(); return; }
   if (e.key !== 'td_tf_favorites') return;
   if (typeof renderTfBar === 'function') { renderTfBar(); setActiveTF(STATE.timeframe); }
   const popup = document.getElementById('tf-fav-popup');
@@ -2388,7 +2403,7 @@ window.addEventListener('message', e => { if (e.data && e.data.type === 'zentine
 // Diferido: deja que el resto del script (definiciones de funciones,
 // listeners sobre elementos que está por reemplazar) termine de correr
 // sin tirar errores antes de vaciar el <body>.
-if (LAYOUT_N > 1 && !EMBED_MODE) setTimeout(() => renderLayoutGrid(LAYOUT_N), 0);
+if (LAYOUT_N > 1 && !EMBED_MODE) setTimeout(() => { renderLayoutGrid(LAYOUT_N); applyCustomLogo(); }, 0);
 function renderLayoutGrid(n){
   document.body.innerHTML = '';
   document.body.style.cssText = 'margin:0;height:100vh;display:flex;flex-direction:column;background:var(--bg-primary);';
@@ -10409,7 +10424,46 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-axis-color').value=cs.axisColor||CHART_SETTINGS_DEFAULTS.axisColor;
   document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
 }
-function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); openModal('modal-chart-settings'); }
+function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); refreshLogoPreview(); openModal('modal-chart-settings'); }
+
+// Logo propio del cliente — a diferencia del resto de Chart Settings (que es
+// por preset/panel, vive en STATE.chartSettings), el logo es una sola marca
+// para TODA la plataforma: una clave global en localStorage (sin lsKey/pane
+// suffix), igual de accesible desde el panel único como desde cada iframe
+// del modo grilla (mismo origin → mismo localStorage). Se aplica al toque,
+// sin pasar por Save/Reset del modal.
+const CUSTOM_LOGO_KEY = 'zentinel_custom_logo';
+function applyCustomLogo(){
+  let custom = null;
+  try { custom = localStorage.getItem(CUSTOM_LOGO_KEY); } catch(e){}
+  document.querySelectorAll('.logo img').forEach(img => { img.src = custom || 'logo-unicorn.png'; });
+}
+function setCustomLogo(dataUrl){
+  try {
+    if (dataUrl) localStorage.setItem(CUSTOM_LOGO_KEY, dataUrl);
+    else localStorage.removeItem(CUSTOM_LOGO_KEY);
+  } catch(e){
+    alert('No se pudo guardar el logo (¿imagen muy pesada?). Probá con un archivo más chico.');
+    return;
+  }
+  applyCustomLogo();
+}
+function onLogoFileChosen(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { setCustomLogo(reader.result); refreshLogoPreview(); };
+  reader.readAsDataURL(file);
+}
+function clearCustomLogo(){ setCustomLogo(null); refreshLogoPreview(); }
+function refreshLogoPreview(){
+  const prev = document.getElementById('cs-logo-preview');
+  if (!prev) return;
+  let custom = null;
+  try { custom = localStorage.getItem(CUSTOM_LOGO_KEY); } catch(e){}
+  prev.src = custom || 'logo-unicorn.png';
+}
 
 function commitChartSettingsForm(){
   STATE.chartSettings = {
@@ -13616,6 +13670,7 @@ function downloadTradesCsv(){
 // ══════════════════════════════════════════════════════════
 (function boot(){
   if (LAYOUT_N > 1 && !EMBED_MODE) return; // grid shell: no chart here, just the iframes
+  applyCustomLogo();
   initChart();
   initDrawingLayer();
   renderWatchlist();
