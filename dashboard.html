@@ -1112,7 +1112,7 @@ body.dark-mode .page-heading { border-bottom-color: rgba(201,168,76,0.1); }
 </div>
 
 <!-- AUTH SCREEN -->
-<div id="authScreen">
+<div id="authScreen" style="display:none">
   <div class="auth-wrap">
     <!-- Left decorative panel -->
     <div class="auth-left">
@@ -2235,7 +2235,21 @@ async function sbDel(p){
 // confirmó su cierre), nunca duplica.
 // ══════════════════════════════════════════════════════════
 function _czMapTrade(t){
-  const iso = sec => new Date(sec*1000).toISOString();
+  // t.open_time/close_time vienen de ChartZentinel como "hora de pared de
+  // NY disfrazada de epoch UTC" (mismo truco que usa en todo el programa
+  // — ver utcMsToNyFakeEpochSeconds en index.html): si los pasamos directo
+  // por toISOString(), el string queda con esos mismos números pero
+  // marcados "Z" (UTC real). El resto de este Dashboard (heredado de
+  // zentinelpro) lee esas fechas con getters LOCALES del navegador
+  // (toLocaleString, getHours, getDate...) — como vienen marcadas "Z", el
+  // navegador les resta/suma SU propio huso horario para mostrarlas, y el
+  // resultado queda corrido respecto a la hora NY que muestra el gráfico
+  // (en Argentina, 3-4h de diferencia). Para que los getters locales del
+  // navegador terminen mostrando el mismo número que ya trae t.open_time
+  // (la hora NY), hay que pre-compensar ACÁ el huso horario local antes
+  // de armar el ISO — así los dos corrimientos se cancelan entre sí.
+  const localOffsetSec = new Date().getTimezoneOffset() * 60; // ya viene con el signo que hace falta sumar
+  const iso = sec => new Date((sec + localOffsetSec) * 1000).toISOString();
   return {
     position_id: String(t.ticket || t.id),
     symbol: t.symbol,
