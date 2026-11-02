@@ -2631,6 +2631,15 @@ function renderLayoutGrid(n){
       <span class="tb-label">Indicators</span>
       <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
+    <select id="gc-datasource" class="topbar-input" title="Fuente de datos — se aplica al panel Activo o a Todos según el selector de arriba">
+      <option value="mt5">MT5</option>
+      <option value="binance">Binance</option>
+      <option value="bybit">Bybit</option>
+    </select>
+    <button class="topbar-btn" id="gc-dashboard" title="Abrir el Dashboard/Journal (pestaña nueva)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      <span class="tb-label">Dashboard</span>
+    </button>
     <div id="gc-replay-wrap" style="display:flex;align-items:center;gap:4px;">
       <button class="topbar-btn" id="gc-replay-btn" title="Synced replay: click a candle in the active panel to start — other panels with the same symbol follow it, even on a different TF">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -3056,6 +3065,9 @@ function renderLayoutGrid(n){
     shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
     // btn-ind-legend NO se resincroniza acá: es una preferencia global
     // (ver toggleIndicatorLegend), no cambia según qué panel esté activo.
+    const dsSel = document.getElementById('gc-datasource');
+    const ds = paneEval(f, 'STATE.dataSource');
+    if (dsSel && ds) dsSel.value = ds;
     renderShellTfQuick();
     closeTfFavPopupShell();
   }
@@ -3239,6 +3251,26 @@ function renderLayoutGrid(n){
   // Indicators — como Settings, siempre sobre el panel activo.
   gbar.querySelector('#gc-indicators').addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openIndicators' }, '*');
+  });
+
+  // Dashboard — global, no depende de qué panel esté activo (las
+  // operaciones del Dashboard son las mismas sin importar el panel).
+  gbar.querySelector('#gc-dashboard').addEventListener('click', ()=>{
+    window.open('dashboard.html', '_blank');
+  });
+  // Fuente de datos — a diferencia de Settings/Indicators (siempre panel
+  // activo), esta SÍ respeta el selector Activo/Todos de arriba (mismo
+  // criterio que símbolo/TF — ver targetFrames()): tiene sentido cambiar
+  // la fuente de varios paneles cripto a la vez, por ejemplo. Dispara el
+  // mismo <select id="data-source-select"> que ya existe adentro de cada
+  // panel (ver su propio listener en loadChart/STATE.dataSource) en vez
+  // de duplicar esa lógica acá.
+  gbar.querySelector('#gc-datasource').addEventListener('change', (e) => {
+    const val = e.target.value;
+    targetFrames().forEach(f => paneEval(f,
+      `document.getElementById('data-source-select').value=${JSON.stringify(val)};`+
+      `document.getElementById('data-source-select').dispatchEvent(new Event('change'));`
+    ));
   });
 
   // Operaciones (paper trading) — el journal es GLOBAL (localStorage sin
