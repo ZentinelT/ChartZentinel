@@ -8058,13 +8058,21 @@ function wtOverlapsWindow(t, barStep, start, end){
   if ((end[0]*60+end[1]) <= (start[0]*60+start[1])) sEnd += 86400; // ventana cruza medianoche
   return t < sEnd && (t + barStep) > sStart;
 }
-// La vela diaria del broker (MT5 D1) abre a las 18:00 NY, no a medianoche.
-// wtDayKey devuelve el epoch de ese límite de 18:00 que arranca el "día"
+// La vela diaria del broker (MT5 D1) abre a las 17:00 NY, no a medianoche
+// (verificado directo sobre 2000 velas reales, desde 2019 hasta hoy: la hora
+// UTC de cada vela diaria es SIEMPRE 17, nunca 18 — sin excepción ni siquiera
+// cruzando cambios de DST, porque el tiempo ya viene en la convención
+// "hora NY disfrazada de UTC" de todo ChartZentinel). Antes este corte
+// estaba en 18:00: quedaba 1h tarde respecto a la vela real, y aunque para
+// PDH/PDL no se notaba (cada vela cae siempre en el día anterior, de forma
+// pareja), para PWH/PWL sí rompía: la vela del domingo que abre la semana
+// nueva quedaba del lado de la semana VIEJA, mezclando ambas semanas.
+// wtDayKey devuelve el epoch de ese límite de 17:00 que arranca el "día"
 // que contiene t — así PDH/PDL/PDM/ORG/bias usan el mismo día que ve MT5,
 // en vez de nacer a las 00:00 (que es un concepto aparte: MNO).
 function wtDayKey(t){
   const d=new Date(t*1000);
-  let base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),18,0,0));
+  let base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),17,0,0));
   if(t*1000 < base.getTime()) base.setUTCDate(base.getUTCDate()-1);
   return Math.floor(base.getTime()/1000);
 }
@@ -8074,7 +8082,7 @@ function wtTimestampSameCalDay(refTime, hh, mm){
 }
 function wtWeekKey(t){
   const d=new Date(t*1000);
-  let base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),18,0,0));
+  let base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),17,0,0));
   base.setUTCDate(base.getUTCDate()-d.getUTCDay());
   if(t*1000 < base.getTime()) base.setUTCDate(base.getUTCDate()-7);
   return Math.floor(base.getTime()/1000);
@@ -8307,9 +8315,9 @@ function renderWtMNO(svg, byDate, dateKeys, lastTime, barStep){
   dateKeys.slice(-histDays).forEach(dayKey=>{
     const dayCandles=byDate.get(dayKey);
     if(!dayCandles || !dayCandles.length) return;
-    // El día-broker (18:00->18:00) contiene la medianoche NY 6h después de su
+    // El día-broker (17:00->17:00) contiene la medianoche NY 7h después de su
     // apertura; buscamos la primera vela a partir de ese punto exacto.
-    const midnightTs=dayKey+6*3600;
+    const midnightTs=dayKey+7*3600;
     const mnoCandle=dayCandles.find(c=>c.time>=midnightTs);
     if(!mnoCandle) return;
     const isCurrentDay = dayKey===todayKey;
