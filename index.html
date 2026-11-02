@@ -2619,12 +2619,13 @@ function renderLayoutGrid(n){
     </div>
     <div class="tf-sep"></div>
     <div id="gc-scope" style="display:flex;gap:2px;"></div>
-    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Symbol…" autocomplete="off" title="Symbol for the active panel or all — Enter to apply" style="width:120px;">
+    <input id="gc-symbol" class="topbar-input" type="text" placeholder="Symbol…" autocomplete="off" title="Symbol for the active panel or all — Enter to apply" style="width:76px;">
     <div id="gc-symbol-suggestions" class="add-sym-suggestions"></div>
-    <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:6px;">
-      <span class="tb-label" style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;">Preset:</span>
-      <select id="gc-preset" class="topbar-input" style="width:auto;padding:4px 8px;font-size:11px;text-transform:none;letter-spacing:normal;"></select>
-      <button id="gc-preset-apply" class="topbar-btn">Apply</button>
+    <div id="tf-bar-symbol" style="display:flex;align-items:center;gap:2px;">
+      <select id="gc-preset" class="topbar-input" title="Preset — se aplica al panel Activo o a Todos según el selector de arriba" style="width:84px;padding:4px 6px;font-size:11px;text-transform:none;letter-spacing:normal;text-overflow:ellipsis;"></select>
+      <button id="gc-preset-apply" class="topbar-btn" title="Aplicar preset">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
     </div>
     <button class="topbar-btn" id="gc-indicators" title="Active panel indicators">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -3095,9 +3096,19 @@ function renderLayoutGrid(n){
 
   // Scope: Activo / Todos
   const scopeWrap = gbar.querySelector('#gc-scope');
+  // Antes: dos botones de texto ("Active"/"All") — bastante ancho para lo
+  // que dicen. Mismos dos estados, en iconos (un panel vs. una grilla de
+  // paneles) con el detalle en el title — pedido explícito del usuario
+  // para compactar esta barra (venía desbordando en pantallas angostas).
+  const SCOPE_ICONS = {
+    active: '<rect x="4" y="4" width="16" height="16" rx="2"/>',
+    all: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+  };
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
-      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="Which panel(s) does this bar's symbol, quick TFs and 'Apply preset' affect?">${s==='active'?'Active':'All'}</button>`
+      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="${s==='active'?'Panel activo':'Todos los paneles'} — a quién afecta el símbolo, TF rápido y 'Aplicar preset' de esta barra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">${SCOPE_ICONS[s]}</svg>
+      </button>`
     ).join('');
     scopeWrap.querySelectorAll('[data-scope]').forEach(b=>{
       b.addEventListener('click', ()=>{ scope=b.dataset.scope; renderScopeBtns(); });
@@ -3222,7 +3233,7 @@ function renderLayoutGrid(n){
     const names = Object.keys(presets).sort();
     presetSel.innerHTML = names.length
       ? names.map(nm=>`<option value="${nm}">${nm}</option>`).join('')
-      : `<option value="">(no saved presets)</option>`;
+      : `<option value="">(sin presets)</option>`;
     if (names.includes(current)) presetSel.value = current;
   }
   renderPresetOptions();
