@@ -8218,11 +8218,25 @@ function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke,indName){
   svg.appendChild(el);
   registerIndicatorHit(indName, {kind:'rect', x1:Math.min(x1,x2), y1:Math.min(y1,y2), x2:Math.max(x1,x2), y2:Math.max(y1,y2), tol:3});
 }
+// chart-container tiene DOS zonas: el plot real (donde viven las velas) y,
+// a la derecha, la franja del eje de precio (números tipo "78.600") — esa
+// franja nunca es parte del plot, así que timeToCoordinate() de hecho
+// puede devolver una x ahí adentro (es una coordenada de TIEMPO, no sabe
+// nada del eje). Usada para que las líneas/etiquetas de los indicadores no
+// terminen mostrándose "de fondo" detrás de los números del eje — mismo
+// borde en el que las velas ya se cortan solas.
+function wtPlotRight(){
+  const cc = document.getElementById('chart-container');
+  return cc.clientWidth - chart.priceScale('right').width();
+}
 function wtLine(svg,t1,t2,y,color,width,dash,indName){
   indName = indName || 'Watchtower';
-  const x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
+  let x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
   const yy=candleSeries.priceToCoordinate(y);
   if(x1===null||x2===null||yy===null) return;
+  const plotRight = wtPlotRight();
+  if (x1>plotRight) x1=plotRight;
+  if (x2>plotRight) x2=plotRight;
   const el=document.createElementNS(WT_SVG_NS,'line');
   el.setAttribute('x1',x1); el.setAttribute('x2',x2); el.setAttribute('y1',yy); el.setAttribute('y2',yy);
   el.setAttribute('stroke',color); el.setAttribute('stroke-width',width||1);
@@ -8243,21 +8257,31 @@ function wtLabel(svg,t,y,text,color,indName){
   indName = indName || 'Watchtower';
   const x=chart.timeScale().timeToCoordinate(t), yy=candleSeries.priceToCoordinate(y);
   if(x===null||yy===null) return;
+  const w = Math.max(40,text.length*6);
+  // Las etiquetas cortas (PDH, PWH...) ya quedaban justo dentro del plot
+  // porque el punto de anclaje (x) se eligió para que entraran — pero una
+  // etiqueta más larga (ej. "ORG CE  +405.0 pts") sigue creciendo para la
+  // derecha desde ESE MISMO punto y termina asomando en la franja del eje
+  // de precio, mostrándose "de fondo" detrás de los números — algo que a
+  // las velas nunca les pasa. Si no entra, la hacemos crecer para la
+  // izquierda en vez de dejarla desbordar.
+  const plotRight = wtPlotRight();
+  const boxX = (x + w > plotRight) ? Math.max(0, plotRight - w) : x;
   // Caja invisible detrás del texto: amplía el área de click más allá del
   // trazo fino de las letras.
   const hit=document.createElementNS(WT_SVG_NS,'rect');
-  hit.setAttribute('x',x); hit.setAttribute('y',yy-13);
-  hit.setAttribute('width',Math.max(40,text.length*6)); hit.setAttribute('height','18');
+  hit.setAttribute('x',boxX); hit.setAttribute('y',yy-13);
+  hit.setAttribute('width',w); hit.setAttribute('height','18');
   hit.setAttribute('fill','transparent');
   tagIndicatorEl(hit,indName);
   svg.appendChild(hit);
   const el=document.createElementNS(WT_SVG_NS,'text');
-  el.setAttribute('x',x+4); el.setAttribute('y',yy-3);
+  el.setAttribute('x',boxX+4); el.setAttribute('y',yy-3);
   el.setAttribute('fill',color); el.setAttribute('font-size','10'); el.setAttribute('font-family',"'DM Mono',monospace");
   el.textContent=text;
   tagIndicatorEl(el,indName);
   svg.appendChild(el);
-  registerIndicatorHit(indName, {kind:'rect', x1:x, y1:yy-13, x2:x+Math.max(40,text.length*6), y2:yy+5, tol:0});
+  registerIndicatorHit(indName, {kind:'rect', x1:boxX, y1:yy-13, x2:boxX+w, y2:yy+5, tol:0});
 }
 
 function wtGroupByDay(candles){
