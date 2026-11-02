@@ -5631,42 +5631,50 @@ function clearSvgHighlights() {
 // ══════════════════════════════════════════════════════════
 //  CHART INIT
 // ══════════════════════════════════════════════════════════
-// El contorno "interno" del panel es el borde del propio eje de precio que
-// dibuja lightweight-charts (línea fija, del color de axisColor — SIEMPRE
-// pintada, esté o no activo el panel); el "externo" es el borde del propio
+// El contorno "interno" del panel es el borde del propio plot que dibuja
+// lightweight-charts — a la DERECHA, el eje de precio (números tipo
+// "29.560"), y ABAJO, el eje de tiempo (horas tipo "03:00") — ambos SIEMPRE
+// pintados, esté o no activo el panel. El "externo" es el borde del propio
 // iframe (el anillo de color, solo pintado en el panel activo, pero el que
-// de verdad delimita cada panel). Entre esos dos bordes vive la franja de
-// números de precio — ahí NINGUNA vela entra nunca (lightweight-charts la
-// reserva aparte del área de ploteo), pero las capas SVG de los
-// indicadores (Watchtower, Sniper, Sweeps, Fractal Model, Stat Map, y la
-// de selección de dibujos) son overlays libres del tamaño COMPLETO del
-// panel, sin este límite — así que una línea o caja que llega cerca del
-// borde derecho se seguía viendo "de fondo", atravesando el contorno
-// interno, cosa que a una vela no le puede pasar. clip-path acá corta
-// cualquier cosa que esas capas dibujen justo en ese mismo borde, sea cual
-// sea el indicador — ningún dibujo puede quedar nunca "más afuera" que
-// una vela.
+// de verdad delimita cada panel). Entre el interno y el externo viven esas
+// dos franjas de etiquetas — ahí NINGUNA vela entra nunca (lightweight-
+// charts las reserva aparte del área de ploteo, a los dos lados), pero las
+// capas SVG de los indicadores (Watchtower, Sniper, Sweeps, Fractal Model,
+// Stat Map, y la de selección de dibujos) son overlays libres del tamaño
+// COMPLETO del panel, sin este límite — así que una línea o caja que llega
+// cerca del borde derecho O del borde de abajo se seguía viendo "de fondo",
+// atravesando el contorno interno (reportado: cajas de Stat Map asomando
+// entre los números de hora, abajo), cosa que a una vela no le puede
+// pasar. clip-path acá corta cualquier cosa que esas capas dibujen justo
+// en esos mismos bordes, sea cual sea el indicador — ningún dibujo puede
+// quedar nunca "más afuera" que una vela, ni a la derecha ni abajo.
 function chartGutterWidth(){
   try { return chart.priceScale('right').width() || 0; } catch(e){ return 0; }
+}
+function chartGutterHeight(){
+  try { return chart.timeScale().height() || 0; } catch(e){ return 0; }
+}
+function overlayClipPath(){
+  const g = chartGutterWidth(), h = chartGutterHeight();
+  return (g > 0 || h > 0) ? `inset(0 ${g}px ${h}px 0)` : 'none';
 }
 function syncOverlaySvgSize(svg, container){
   svg.setAttribute('width', container.clientWidth);
   svg.setAttribute('height', container.clientHeight);
-  const g = chartGutterWidth();
-  svg.style.clipPath = g > 0 ? `inset(0 ${g}px 0 0)` : 'none';
+  svg.style.clipPath = overlayClipPath();
 }
-// chart.priceScale('right').width() da 0 hasta que el eje termina de medir
-// el texto de sus etiquetas (recién tiene precio real para mostrar después
-// de la primera carga de velas) — el ResizeObserver de cada capa solo
-// reacciona a cambios de TAMAÑO DEL CONTENEDOR, nunca a esto, así que el
-// clip-path de arriba quedaba fijado en "sin recortar" para siempre. Este
-// poll barato (recorta solo si cambió) corrige eso para las 6 capas apenas
-// el ancho real está disponible, y de paso sigue a mano si el ancho del
-// eje cambia más tarde (precio con más/menos dígitos).
+// chart.priceScale('right').width()/chart.timeScale().height() dan 0 hasta
+// que los ejes terminan de medir sus etiquetas (recién tienen precio/hora
+// real para mostrar después de la primera carga de velas) — el
+// ResizeObserver de cada capa solo reacciona a cambios de TAMAÑO DEL
+// CONTENEDOR, nunca a esto, así que el clip-path de arriba quedaba fijado
+// en "sin recortar" para siempre. Este poll barato (recorta solo si
+// cambió) corrige eso para las 6 capas apenas el ancho/alto real está
+// disponible, y de paso lo sigue a mano si cambia más tarde (precio con
+// más/menos dígitos, etc).
 setInterval(() => {
-  const g = chartGutterWidth();
-  if (g <= 0) return;
-  const clip = `inset(0 ${g}px 0 0)`;
+  const clip = overlayClipPath();
+  if (clip === 'none') return;
   [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMapSvg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
