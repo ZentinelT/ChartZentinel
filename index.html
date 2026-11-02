@@ -3193,6 +3193,15 @@ function renderLayoutGrid(n){
   // tener que re-atar listeners cada vez que se re-renderiza.
   const tfWrap = gbar.querySelector('#tf-bar-tfs');
   function renderShellTfQuick(){
+    // Esta fila tiene scroll propio (flechitas de desplazamiento, ver
+    // initTfBarScrollFade) porque casi nunca entran todos los favoritos en
+    // el espacio que le queda — innerHTML de golpe reinicia scrollLeft a 0,
+    // así que cada vez que se llama (CADA click en un panel de la grilla,
+    // vía syncShellControls) el usuario perdía su posición de scroll y
+    // "saltaban" los TF visibles. Reportado como un movimiento raro en la
+    // barra al cambiar de panel activo — no era un cambio de tamaño (no
+    // disparaba Layout Shift), era justo esto: un reset de scroll.
+    const prevScroll = tfWrap.scrollLeft;
     const f = iframeEls[activePane-1];
     const tf = f ? paneEval(f, 'STATE.timeframe') : null;
     const visible = new Set(getTfFavorites());
@@ -3204,6 +3213,7 @@ function renderLayoutGrid(n){
       lastGroup = t.group;
     });
     tfWrap.innerHTML = html;
+    tfWrap.scrollLeft = prevScroll;
   }
   tfWrap.addEventListener('click', (e) => {
     const btn = e.target.closest('.tf-btn');
@@ -7094,6 +7104,9 @@ wireSymbolSearch(document.getElementById('add-sym-inp'), document.getElementById
 // ══════════════════════════════════════════════════════════
 function renderTfBar() {
   const bar = document.getElementById('tf-bar-tfs');
+  // Preserva el scroll propio de esta fila (ver el mismo fix en
+  // renderShellTfQuick) — innerHTML de golpe lo resetea a 0 si no.
+  const prevScroll = bar.scrollLeft;
   const visible = new Set(getTfFavorites());
   let html = '';
   let lastGroup = null;
@@ -7104,6 +7117,7 @@ function renderTfBar() {
     lastGroup = t.group;
   });
   bar.innerHTML = html;
+  bar.scrollLeft = prevScroll;
 }
 function updateTfBarSymbol(symbol, timeframe) {
   const badge = document.getElementById('pane-symbol-badge');
