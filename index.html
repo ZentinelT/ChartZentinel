@@ -5631,13 +5631,52 @@ function clearSvgHighlights() {
 // ══════════════════════════════════════════════════════════
 //  CHART INIT
 // ══════════════════════════════════════════════════════════
+// El contorno "interno" del panel es el borde del propio eje de precio que
+// dibuja lightweight-charts (línea fija, del color de axisColor — SIEMPRE
+// pintada, esté o no activo el panel); el "externo" es el borde del propio
+// iframe (el anillo de color, solo pintado en el panel activo, pero el que
+// de verdad delimita cada panel). Entre esos dos bordes vive la franja de
+// números de precio — ahí NINGUNA vela entra nunca (lightweight-charts la
+// reserva aparte del área de ploteo), pero las capas SVG de los
+// indicadores (Watchtower, Sniper, Sweeps, Fractal Model, Stat Map, y la
+// de selección de dibujos) son overlays libres del tamaño COMPLETO del
+// panel, sin este límite — así que una línea o caja que llega cerca del
+// borde derecho se seguía viendo "de fondo", atravesando el contorno
+// interno, cosa que a una vela no le puede pasar. clip-path acá corta
+// cualquier cosa que esas capas dibujen justo en ese mismo borde, sea cual
+// sea el indicador — ningún dibujo puede quedar nunca "más afuera" que
+// una vela.
+function chartGutterWidth(){
+  try { return chart.priceScale('right').width() || 0; } catch(e){ return 0; }
+}
+function syncOverlaySvgSize(svg, container){
+  svg.setAttribute('width', container.clientWidth);
+  svg.setAttribute('height', container.clientHeight);
+  const g = chartGutterWidth();
+  svg.style.clipPath = g > 0 ? `inset(0 ${g}px 0 0)` : 'none';
+}
+// chart.priceScale('right').width() da 0 hasta que el eje termina de medir
+// el texto de sus etiquetas (recién tiene precio real para mostrar después
+// de la primera carga de velas) — el ResizeObserver de cada capa solo
+// reacciona a cambios de TAMAÑO DEL CONTENEDOR, nunca a esto, así que el
+// clip-path de arriba quedaba fijado en "sin recortar" para siempre. Este
+// poll barato (recorta solo si cambió) corrige eso para las 6 capas apenas
+// el ancho real está disponible, y de paso sigue a mano si el ancho del
+// eje cambia más tarde (precio con más/menos dígitos).
+setInterval(() => {
+  const g = chartGutterWidth();
+  if (g <= 0) return;
+  const clip = `inset(0 ${g}px 0 0)`;
+  [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMapSvg, window._drawingLayerSvg]
+    .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
+}, 1000);
 function initWatchtowerLayer() {
   const container = document.getElementById('chart-container');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:15;pointer-events:none;overflow:hidden;';
   container.appendChild(svg);
   window._watchtowerSvg = svg;
-  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  function syncSize(){ syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSize).observe(container);
   syncSize();
 }
@@ -6204,10 +6243,7 @@ function initDrawingLayer() {
   let previewEl = null;
   let drawStart = null;
 
-  function syncSvgSize() {
-    svg.setAttribute('width',  container.clientWidth);
-    svg.setAttribute('height', container.clientHeight);
-  }
+  function syncSvgSize() { syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSvgSize).observe(container);
   syncSvgSize();
 
@@ -8227,7 +8263,7 @@ function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke,indName){
 // borde en el que las velas ya se cortan solas.
 function wtPlotRight(){
   const cc = document.getElementById('chart-container');
-  return cc.clientWidth - chart.priceScale('right').width();
+  return cc.clientWidth - chartGutterWidth();
 }
 function wtLine(svg,t1,t2,y,color,width,dash,indName){
   indName = indName || 'Watchtower';
@@ -8654,7 +8690,7 @@ function initSniperLayer() {
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:16;pointer-events:none;overflow:hidden;';
   container.appendChild(svg);
   window._sniperSvg = svg;
-  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  function syncSize(){ syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSize).observe(container);
   syncSize();
 }
@@ -8665,7 +8701,7 @@ function initSweepsLayer() {
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:14;pointer-events:none;overflow:hidden;';
   container.appendChild(svg);
   window._sweepsSvg = svg;
-  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  function syncSize(){ syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSize).observe(container);
   syncSize();
 }
@@ -9423,7 +9459,7 @@ function initFractalModelLayer() {
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:17;pointer-events:none;overflow:hidden;';
   container.appendChild(svg);
   window._fractalModelSvg = svg;
-  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  function syncSize(){ syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSize).observe(container);
   syncSize();
 }
@@ -9434,7 +9470,7 @@ function initStatMapLayer() {
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:19;pointer-events:none;overflow:hidden;';
   container.appendChild(svg);
   window._statMapSvg = svg;
-  function syncSize(){ svg.setAttribute('width',container.clientWidth); svg.setAttribute('height',container.clientHeight); }
+  function syncSize(){ syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSize).observe(container);
   syncSize();
 }
