@@ -2032,6 +2032,26 @@
   </div>
 </div>
 
+<!-- ══ MODAL: LOGO CROP (pan + zoom, estilo "foto de perfil" de X) ═ -->
+<div class="modal-overlay" id="modal-logo-crop">
+  <div class="modal" style="width:320px;">
+    <h2>Recortar logo</h2>
+    <div id="logo-crop-frame" style="position:relative;width:260px;height:260px;margin:0 auto;overflow:hidden;border-radius:10px;background:#0a0a0a;cursor:grab;touch-action:none;">
+      <img id="logo-crop-img" draggable="false" style="position:absolute;top:0;left:0;user-select:none;-webkit-user-drag:none;pointer-events:none;">
+    </div>
+    <div class="cs-row" style="margin-top:14px;align-items:center;gap:10px;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex:none;opacity:.6;"><circle cx="7" cy="7" r="5.5"/><path d="M4.5 7h5M13 13l-2.5-2.5"/></svg>
+      <input type="range" id="logo-crop-zoom" min="0" max="100" value="0" style="flex:1;" oninput="onLogoCropZoom(this.value)">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex:none;opacity:.6;"><circle cx="7" cy="7" r="5.5"/><path d="M4.5 7h5M7 4.5v5M13 13l-2.5-2.5"/></svg>
+    </div>
+    <div class="cs-field-label" style="margin-top:10px;opacity:.65;text-align:center;">Arrastrá para mover, deslizá para hacer zoom</div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeLogoCropModal()">Cancelar</button>
+      <button class="btn-primary" onclick="applyLogoCrop()">Usar este recorte</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL: INDICATORS ════════════════════════════════ -->
 <!-- ══ MODAL: SAVE AS (nombre) — reemplaza prompt()/confirm() nativos para
      guardar presets/templates, que aparecían como un banner del NAVEGADOR
@@ -10453,10 +10473,93 @@ function onLogoFileChosen(ev){
   ev.target.value = '';
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => { setCustomLogo(reader.result); refreshLogoPreview(); };
+  reader.onload = () => openLogoCropModal(reader.result);
   reader.readAsDataURL(file);
 }
 function clearCustomLogo(){ setCustomLogo(null); refreshLogoPreview(); }
+
+// Recortador estilo "foto de perfil" de X: marco cuadrado fijo (LOGO_CROP_FRAME
+// px en pantalla), la imagen se cubre (como background-size:cover) y el
+// usuario la arrastra/zoomea DETRÁS del marco — nunca al revés — así siempre
+// hay imagen real cubriendo el recorte, sin huecos. _logoCrop guarda el
+// estado en coordenadas de PANTALLA (offsetX/Y = posición del <img>, scale =
+// su escala) porque así el drag es una resta directa de píxeles de mouse,
+// sin tener que ir y volver a coordenadas de imagen en cada frame.
+const LOGO_CROP_FRAME = 260;
+let _logoCrop = null;
+function openLogoCropModal(dataUrl){
+  const img = document.getElementById('logo-crop-img');
+  img.onload = () => {
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    const baseScale = Math.max(LOGO_CROP_FRAME/nw, LOGO_CROP_FRAME/nh);
+    _logoCrop = { nw, nh, scale: baseScale, minScale: baseScale, maxScale: baseScale*4,
+      offsetX: (LOGO_CROP_FRAME - nw*baseScale)/2, offsetY: (LOGO_CROP_FRAME - nh*baseScale)/2 };
+    document.getElementById('logo-crop-zoom').value = 0;
+    _renderLogoCrop();
+  };
+  img.src = dataUrl;
+  openModal('modal-logo-crop');
+}
+function closeLogoCropModal(){ closeModal('modal-logo-crop'); _logoCrop = null; }
+function _clampLogoCropOffsets(){
+  const c = _logoCrop, f = LOGO_CROP_FRAME;
+  const w = c.nw*c.scale, h = c.nh*c.scale;
+  c.offsetX = Math.min(0, Math.max(f-w, c.offsetX));
+  c.offsetY = Math.min(0, Math.max(f-h, c.offsetY));
+}
+function _renderLogoCrop(){
+  const img = document.getElementById('logo-crop-img');
+  const c = _logoCrop;
+  img.style.width = (c.nw*c.scale)+'px';
+  img.style.height = (c.nh*c.scale)+'px';
+  img.style.transform = `translate(${c.offsetX}px, ${c.offsetY}px)`;
+}
+function onLogoCropZoom(val){
+  const c = _logoCrop; if(!c) return;
+  const newScale = c.minScale + (val/100)*(c.maxScale-c.minScale);
+  // Mantiene fijo el punto de la imagen que hoy está en el centro del marco,
+  // si no el zoom "salta" en vez de sentirse anclado al medio del recorte.
+  const f = LOGO_CROP_FRAME;
+  const cx = (f/2 - c.offsetX)/c.scale, cy = (f/2 - c.offsetY)/c.scale;
+  c.scale = newScale;
+  c.offsetX = f/2 - cx*c.scale;
+  c.offsetY = f/2 - cy*c.scale;
+  _clampLogoCropOffsets();
+  _renderLogoCrop();
+}
+(function initLogoCropDrag(){
+  const frame = document.getElementById('logo-crop-frame');
+  if (!frame) return;
+  let dragging=false, lastX=0, lastY=0;
+  frame.addEventListener('pointerdown', e => {
+    if (!_logoCrop) return;
+    dragging=true; lastX=e.clientX; lastY=e.clientY;
+    frame.setPointerCapture(e.pointerId); frame.style.cursor='grabbing';
+  });
+  frame.addEventListener('pointermove', e => {
+    if (!dragging || !_logoCrop) return;
+    _logoCrop.offsetX += e.clientX-lastX; _logoCrop.offsetY += e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    _clampLogoCropOffsets();
+    _renderLogoCrop();
+  });
+  const endDrag = () => { dragging=false; frame.style.cursor='grab'; };
+  frame.addEventListener('pointerup', endDrag);
+  frame.addEventListener('pointerleave', endDrag);
+  frame.addEventListener('pointercancel', endDrag);
+})();
+function applyLogoCrop(){
+  const c = _logoCrop; if (!c) return;
+  const outSize = 400; // resolución de salida, más nítida que los 260px del marco en pantalla
+  const k = outSize/LOGO_CROP_FRAME;
+  const canvas = document.createElement('canvas');
+  canvas.width = outSize; canvas.height = outSize;
+  canvas.getContext('2d').drawImage(document.getElementById('logo-crop-img'),
+    c.offsetX*k, c.offsetY*k, c.nw*c.scale*k, c.nh*c.scale*k);
+  setCustomLogo(canvas.toDataURL('image/png'));
+  refreshLogoPreview();
+  closeLogoCropModal();
+}
 function refreshLogoPreview(){
   const prev = document.getElementById('cs-logo-preview');
   if (!prev) return;
