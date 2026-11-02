@@ -6840,8 +6840,11 @@ function fetchBrokerSymbols(){
   if (_brokerSymbolsCache && _brokerSymbolsCacheSource === STATE.dataSource) return Promise.resolve(_brokerSymbolsCache);
   if (_brokerSymbolsFetching) return _brokerSymbolsFetching;
   const src = STATE.dataSource;
+  // ticker/price (no exchangeInfo): mismo listado de símbolos activos, pero
+  // ~150KB en vez de ~18MB — exchangeInfo trae reglas/filtros de cada
+  // símbolo que acá no usamos para nada, solo hace falta el nombre.
   const req = src === 'binance'
-    ? fetch(`${BINANCE_URL}/api/v3/exchangeInfo`).then(r=>r.json()).then(j => (j.symbols||[]).map(s=>s.symbol))
+    ? fetch(`${BINANCE_URL}/api/v3/ticker/price`).then(r=>r.json()).then(j => (Array.isArray(j)?j:[]).map(s=>s.symbol))
     : fetch(`${BRIDGE_URL}/symbols`).then(r=>r.json());
   _brokerSymbolsFetching = req.then(list => {
     _brokerSymbolsCache = Array.isArray(list) ? list : [];
