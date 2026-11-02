@@ -10858,24 +10858,36 @@ function isBinanceTf(tf){ return !!BINANCE_TF_MAP[tf]; }
 // El bridge MT5 entrega bars.time como la hora NY (ya tiene el offset fijo
 // de ese bróker descontado — ver mt5_broker_time_offset en memoria), y todo
 // el resto del código (killzones, Watchtower, etc.) asume que getUTCHours()
-// sobre ese time da la hora de NY. Binance da epoch UTC real, así que hay
-// que convertir a "hora de pared de NY disfrazada de UTC" para que el resto
-// de los indicadores funcione igual. Usamos Intl con la DB de timezones del
-// navegador para que el horario de verano de NY se maneje solo.
-function utcMsToNyFakeEpochSeconds(utcMs){
+// sobre ese time da la hora de NY. Binance/Bybit dan epoch UTC real, así
+// que hay que convertir a "hora de pared de NY disfrazada de UTC".
+//
+// OJO acá: la primera versión de esto recalculaba el offset de NY (vía
+// Intl) POR CADA VELA, haciendo DST-aware de verdad (-4h en verano, -5h en
+// invierno). Se ve "más correcto", pero rompe algo que el resto del código
+// necesita: lightweight-charts exige tiempos estrictamente ascendentes, y
+// un offset que cambia a mitad de la serie (exactamente en el borde del
+// cambio de horario de EEUU) hace que dos velas reales distintas, una hora
+// aparte, caigan en el MISMO "time" falso (fall back) — el array deja de
+// ser estrictamente ascendente y la librería se queda en blanco, sin tirar
+// ningún error visible. Reproducido a mano: Bybit 5min con suficiente
+// historial como para cruzar el 1/11/2026 (cambio a horario de invierno).
+// Por eso ahora el offset se calcula UNA sola vez (como el bridge MT5, que
+// por construcción nunca tiene este problema: resta un número fijo) y se
+// aplica como simple corrimiento — nunca puede romper el orden ascendente.
+// Costo: velas de varios meses atrás (del otro lado del próximo cambio de
+// horario) pueden quedar una hora corridas en los cálculos de sesión — un
+// error chico y aceptable, contra un gráfico directamente roto.
+function computeNyOffsetSeconds(){
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year:'numeric', month:'2-digit', day:'2-digit',
-    hour:'2-digit', minute:'2-digit', second:'2-digit',
-    hour12:false
-  }).formatToParts(new Date(utcMs));
-  const get = t => parts.find(p=>p.type===t).value;
-  let hh = parseInt(get('hour'),10);
-  if (hh === 24) hh = 0;
-  return Math.floor(Date.UTC(
-    parseInt(get('year'),10), parseInt(get('month'),10)-1, parseInt(get('day'),10),
-    hh, parseInt(get('minute'),10), parseInt(get('second'),10)
-  )/1000);
+    timeZone: 'America/New_York', timeZoneName: 'shortOffset'
+  }).formatToParts(new Date());
+  const tz = (parts.find(p=>p.type==='timeZoneName')||{}).value || 'GMT-5';
+  const m = /GMT([+-]\d+)/.exec(tz);
+  return (m ? parseInt(m[1],10) : -5) * 3600;
+}
+const NY_OFFSET_SECONDS = computeNyOffsetSeconds();
+function utcMsToNyFakeEpochSeconds(utcMs){
+  return Math.floor(utcMs/1000) + NY_OFFSET_SECONDS;
 }
 
 async function fetchOhlcvBinance(symbol, interval, bars, before){
@@ -11850,7 +11862,9 @@ function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
   _wtNowAnchorServerTime = serverTimeAtLoad;
   _wtNowAnchorPerfMs = loadedAtMs;
 
+  let _tickCount=0;
   function tick(){
+    _tickCount++;
     const elapsed=(performance.now()-loadedAtMs)/1000;
     const nowServer=serverTimeAtLoad+elapsed;
     if(close!==null){
@@ -11866,7 +11880,15 @@ function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
         : `${m}:${String(s).padStart(2,'0')}`;
       badge.classList.toggle('soon', remain<=10);
     }
-    refreshFormingCandle(STATE.symbol, timeframe);
+    // El bridge MT5 es local, sin límite de uso — pedir la vela en formación
+    // cada 1s no tiene costo. Binance/Bybit son APIs públicas con límite de
+    // pedidos por IP: pedirles lo mismo cada 1s sin parar (todo el rato que
+    // el usuario tiene la app abierta) las satura — probado a mano: esto
+    // provocaba respuestas de 20-45s en vez de las ~400ms normales, con el
+    // gráfico pareciendo "colgado" durante ese tramo. Cada 5s alcanza
+    // sobrado para una vela en formación y no las satura.
+    const pollEverySec = (STATE.dataSource==='mt5') ? 1 : 5;
+    if (_tickCount % pollEverySec === 0) refreshFormingCandle(STATE.symbol, timeframe);
   }
   tick();
   _countdownTimer=setInterval(tick,1000);
