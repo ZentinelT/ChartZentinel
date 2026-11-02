@@ -512,6 +512,15 @@
     color: var(--text-dim);
     cursor: pointer;
     transition: all .2s;
+    /* Ancho fijo: el texto cambia solo ("BRIDGE…" / "MT5 BRIDGE ✓" / "BYBIT
+       OFF"...), cada uno de largo distinto — sin esto, cada cambio corre
+       un par de px todo lo que viene después en la barra (reportado: un
+       "salto" al cambiar de panel activo en la grilla, porque ahí el
+       badge se re-chequea contra la fuente de ESE panel cada vez). El
+       texto más largo real ("MT5 BRIDGE ✓") entra cómodo en 100px. */
+    display: inline-block;
+    min-width: 100px;
+    text-align: center;
   }
   #api-badge.connected { color: var(--green); border-color: rgba(38,166,154,.4); }
   #api-badge:hover { color: var(--gold); border-color: var(--gold-dim); }
@@ -594,7 +603,13 @@
     color: var(--text-secondary);
     font-family: var(--font-ui);
     font-size: 12px;
-    font-weight: 500;
+    /* 600 siempre (no 500 normal / 600 activo): un font-weight más pesado
+       mide un poco más ancho, así que resaltar un TF distinto (ej. al
+       cambiar de panel activo en la grilla, cada uno puede tener su
+       propio TF) corría unos px todo lo que viene después en la fila —
+       reportado como un "salto" de la barra entera. Con el mismo peso
+       siempre, solo cambian color/fondo, nunca el ancho. */
+    font-weight: 600;
     padding: 5px 7px;
     border-radius: 6px;
     cursor: pointer;
@@ -602,7 +617,7 @@
     transition: background .15s, color .15s;
   }
   .tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .tf-btn.active { background: var(--gold-glow); color: var(--gold); font-weight: 600; }
+  .tf-btn.active { background: var(--gold-glow); color: var(--gold); }
   .tf-sep { width: 1px; height: 16px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
 
   /* ─── Favoritos de TF (popup tipo TV, lista completa + estrella) ─ */
