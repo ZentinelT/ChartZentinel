@@ -17,6 +17,8 @@ import socketserver
 import threading
 import time
 import urllib.parse
+import urllib.request
+import urllib.error
 
 PORT = 8787
 
@@ -167,6 +169,57 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 content = fetch_order(fields)
                 self._send_json(200, content)
             except RuntimeError as e:
+                self._send_json(502, json.dumps({"error": str(e)}))
+            return
+
+        if parsed.path == "/ai-proxy":
+            # El Dashboard local (dashboard.html) pide acá en vez de pegarle
+            # directo a la API de Anthropic desde el navegador — Anthropic no
+            # manda los headers de CORS que hacen falta para eso (mismo
+            # problema que Yahoo Finance, ver memoria del proyecto), y
+            # además no es buena idea exponer la clave en una llamada que
+            # cualquiera puede inspeccionar en el navegador. Acá, corriendo
+            # en Python del lado del usuario, ninguna de las dos cosas
+            # aplica: no hay CORS entre procesos, y la clave nunca sale de
+            # su propia PC (no pasa por ningún servidor nuestro).
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length) if length else b"{}"
+                payload = json.loads(raw.decode("utf-8") or "{}")
+            except (ValueError, json.JSONDecodeError):
+                self._send_json(400, json.dumps({"error": "JSON inválido"}))
+                return
+
+            api_key = payload.get("apiKey", "")
+            prompt = payload.get("prompt", "")
+            if not api_key:
+                self._send_json(400, json.dumps({"error": "Falta la clave de IA (configurala en el Dashboard)."}))
+                return
+            if not prompt:
+                self._send_json(400, json.dumps({"error": "Falta el prompt"}))
+                return
+
+            body = json.dumps({
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=body,
+                method="POST",
+                headers={
+                    "content-type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    self._send_json(200, resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                self._send_json(e.code, e.read().decode("utf-8"))
+            except Exception as e:
                 self._send_json(502, json.dumps({"error": str(e)}))
             return
 
