@@ -4298,27 +4298,37 @@ window.applyExternalDrawings = function(list){
 let _undoStack = [];
 let _redoStack = [];
 const UNDO_LIMIT = 60;
+// Cada paso del historial es { drawings, full }: `drawings` es siempre un
+// serializeDrawings() (como antes); `full` es null salvo que el paso
+// venga de algo que pisa MÁS que dibujos (hoy: aplicar un preset, que
+// cambia indicadores/Watchtower/Sniper/colores también) — ahí guarda una
+// foto completa (captureAppState/restoreAppState, mismo shape que un
+// preset). Reportado por el usuario: aplicó un preset "sin querer" en un
+// panel y Ctrl+Z no deshizo nada, porque antes el undo solo sabía de
+// dibujos — si el preset no traía drawings, ni siquiera se snapshoteaba.
 // Llamarla SIEMPRE antes de mutar `drawings` o un dibujo existente — NUNCA
 // desde adentro de applyExternalDrawings/removeDrawingById (eso es la
 // reconstrucción de bajo nivel que usan tanto el sync entre paneles como
 // este mismo undo/redo; snapshotear ahí adentro se pisaría con lo que
 // está restaurando).
-function captureUndoSnapshot(){
-  _undoStack.push(serializeDrawings());
+function captureUndoSnapshot(opts){
+  _undoStack.push({ drawings: serializeDrawings(), full: (opts && opts.full) ? captureAppState() : null });
   if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
   _redoStack = [];
 }
 function undoDrawing(){
   if (!_undoStack.length) return;
   const prev = _undoStack.pop();
-  _redoStack.push(serializeDrawings());
-  applyExternalDrawings(prev);
+  _redoStack.push({ drawings: serializeDrawings(), full: prev.full ? captureAppState() : null });
+  applyExternalDrawings(prev.drawings);
+  if (prev.full) restoreAppState(prev.full);
 }
 function redoDrawing(){
   if (!_redoStack.length) return;
   const next = _redoStack.pop();
-  _undoStack.push(serializeDrawings());
-  applyExternalDrawings(next);
+  _undoStack.push({ drawings: serializeDrawings(), full: next.full ? captureAppState() : null });
+  applyExternalDrawings(next.drawings);
+  if (next.full) restoreAppState(next.full);
 }
 // Posiciona el <div> de un dibujo 'text' sincronizado (igual que el drag
 // de texto hace al revés: acá partimos de p1.price/time, no al revés).
@@ -6582,7 +6592,7 @@ function initDrawingLayer() {
     const before = _pendingDragUndoSnapshot;
     _pendingDragUndoSnapshot = null;
     if (JSON.stringify(before) === JSON.stringify(serializeDrawings())) return; // no cambió nada
-    _undoStack.push(before);
+    _undoStack.push({ drawings: before, full: null });
     if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
     _redoStack = [];
   }
@@ -10734,39 +10744,37 @@ function applySelectedPreset(){
   applyPreset(name);
 }
 
-function applyPreset(name){
-  // Relee del storage en vez de confiar en STATE.presets: ese objeto se
-  // cargó una sola vez al arrancar este panel, así que si el preset se
-  // guardó después (desde este mismo panel más tarde, o desde otro panel
-  // en el modo multi-chart) no estaría todavía en memoria.
-  try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
-  const p = STATE.presets[name];
-  if (!p) return;
-  STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(JSON.stringify(p.chartSettings || {})));
-  STATE.indicatorStyles = JSON.parse(JSON.stringify(p.indicatorStyles || {}));
-  STATE.watchtower = JSON.parse(JSON.stringify(p.watchtower || STATE.watchtower));
-  STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(p.sniper || {})));
-  STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(p.sweeps || {})));
-  STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(p.fractalModel || {})));
-  STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(JSON.stringify(p.statMap || {})));
-  STATE.indicators = [...(p.indicators || [])];
+// captureAppState/restoreAppState: todo lo que un preset puede pisar
+// (chart settings, indicadores activos, Watchtower/Sniper/Sweeps/Fractal
+// Model/Stat Map, toolDefaults) SIN los dibujos — esos ya tienen su propio
+// snapshot en el historial de undo (ver captureUndoSnapshot). Mismo shape
+// que captureCurrentDesign() (así restoreAppState también sirve para
+// aplicar un preset, ver applyPreset) pero clonado hondo, para que guardar
+// esto en el historial de undo no deje una referencia viva a STATE que
+// un cambio posterior termine mutando por accidente.
+function captureAppState(){
+  const d = captureCurrentDesign();
+  return JSON.parse(JSON.stringify({
+    chartSettings: d.chartSettings, indicators: d.indicators, indicatorStyles: d.indicatorStyles,
+    watchtower: d.watchtower, sniper: d.sniper, sweeps: d.sweeps,
+    fractalModel: d.fractalModel, statMap: d.statMap, toolDefaults: d.toolDefaults,
+  }));
+}
+function restoreAppState(s){
+  STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(JSON.stringify(s.chartSettings || {})));
+  STATE.indicatorStyles = JSON.parse(JSON.stringify(s.indicatorStyles || {}));
+  STATE.watchtower = JSON.parse(JSON.stringify(s.watchtower || STATE.watchtower));
+  STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(s.sniper || {})));
+  STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(s.sweeps || {})));
+  STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(s.fractalModel || {})));
+  STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(JSON.stringify(s.statMap || {})));
+  STATE.indicators = [...(s.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
   STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
-
-  // Dibujos: solo si el preset los trae — uno guardado antes de esto no
-  // tiene drawings, y aplicarlo no debería borrar los que el usuario ya
-  // tiene puestos en el panel. captureUndoSnapshot() ANTES de reemplazar:
-  // aplicar un preset de dibujos es tan "destructivo" como cualquier otro
-  // cambio de dibujos, tiene que poder deshacerse con Ctrl+Z igual que el resto.
-  if (Array.isArray(p.drawings)) {
-    captureUndoSnapshot();
-    applyExternalDrawings(JSON.parse(JSON.stringify(p.drawings)));
-    markDrawingsDirty();
-  }
-  if (p.toolDefaults) Object.assign(toolDefaults, p.toolDefaults);
+  if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
   saveChartSettingsState();
   saveIndicatorStylesState();
@@ -10788,6 +10796,33 @@ function applyPreset(name){
   renderFractalModel();
   renderStatMap();
   fillChartSettingsForm(STATE.chartSettings);
+}
+
+function applyPreset(name){
+  // Relee del storage en vez de confiar en STATE.presets: ese objeto se
+  // cargó una sola vez al arrancar este panel, así que si el preset se
+  // guardó después (desde este mismo panel más tarde, o desde otro panel
+  // en el modo multi-chart) no estaría todavía en memoria.
+  try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
+  const p = STATE.presets[name];
+  if (!p) return;
+
+  // Aplicar un preset pisa indicadores/Watchtower/Sniper/colores (no solo
+  // dibujos) — tiene que poder deshacerse COMPLETO con Ctrl+Z. Antes solo
+  // se snapshoteaba cuando el preset traía dibujos; si no, el resto del
+  // cambio quedaba sin forma de deshacer (reportado: un preset aplicado
+  // "sin querer" sobre un panel no se pudo deshacer con undo).
+  captureUndoSnapshot({ full: true });
+
+  restoreAppState(p);
+
+  // Dibujos: solo si el preset los trae — uno guardado antes de esto no
+  // tiene drawings, y aplicarlo no debería borrar los que el usuario ya
+  // tiene puestos en el panel.
+  if (Array.isArray(p.drawings)) {
+    applyExternalDrawings(JSON.parse(JSON.stringify(p.drawings)));
+    markDrawingsDirty();
+  }
 }
 
 function deleteSelectedPreset(){
