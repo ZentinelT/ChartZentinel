@@ -1438,6 +1438,12 @@
   </div>
   <div class="tf-sep"></div>
 
+  <select id="data-source-select" class="topbar-input" title="Fuente de datos">
+    <option value="mt5">MT5</option>
+    <option value="binance">Binance</option>
+  </select>
+  <div class="tf-sep"></div>
+
   <div id="symbol-search-wrap">
     <input id="symbol-input" class="topbar-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
     <div id="symbol-input-suggestions" class="add-sym-suggestions"></div>
@@ -3841,6 +3847,7 @@ const STAT_MAP_DEFAULTS = {
   showLabels:true, labelSide:'right', labelColor:'rgba(255,255,255,0.5)', midLblColor:'rgba(255,165,0,1)',
 };
 const STATE = {
+  dataSource: lsGet(lsKey('td_datasource')) || 'mt5', // 'mt5' | 'binance'
   symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
   watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
@@ -6827,14 +6834,20 @@ document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==
 //  que usa ESTE broker (p.ej. "BTCUSD", no "BTC" ni "BTC/USD" ni "BTC-USD").
 // ══════════════════════════════════════════════════════════
 let _brokerSymbolsCache = null;
+let _brokerSymbolsCacheSource = null; // para invalidar el cache si cambia STATE.dataSource
 let _brokerSymbolsFetching = null;
 function fetchBrokerSymbols(){
-  if (_brokerSymbolsCache) return Promise.resolve(_brokerSymbolsCache);
+  if (_brokerSymbolsCache && _brokerSymbolsCacheSource === STATE.dataSource) return Promise.resolve(_brokerSymbolsCache);
   if (_brokerSymbolsFetching) return _brokerSymbolsFetching;
-  _brokerSymbolsFetching = fetch(`${BRIDGE_URL}/symbols`).then(r=>r.json()).then(list => {
+  const src = STATE.dataSource;
+  const req = src === 'binance'
+    ? fetch(`${BINANCE_URL}/api/v3/exchangeInfo`).then(r=>r.json()).then(j => (j.symbols||[]).map(s=>s.symbol))
+    : fetch(`${BRIDGE_URL}/symbols`).then(r=>r.json());
+  _brokerSymbolsFetching = req.then(list => {
     _brokerSymbolsCache = Array.isArray(list) ? list : [];
+    _brokerSymbolsCacheSource = src;
     return _brokerSymbolsCache;
-  }).catch(() => []);
+  }).catch(() => []).finally(() => { _brokerSymbolsFetching = null; });
   return _brokerSymbolsFetching;
 }
 // root: document (modo 1 gráfico) o shellSidebar (grilla) — ambos tienen
@@ -8295,9 +8308,7 @@ function wtPriceAtBoundary(dayCandles, boundaryTime, barStep){
 const _wtOrgCache = {};
 async function wtFetchBoundaryPrice(symbol, boundaryTime){
   try {
-    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=1min&bars=3&before=${boundaryTime+120}`;
-    const res = await fetch(url);
-    const json = await res.json();
+    const json = await fetchOhlcvData(symbol, '1min', 3, boundaryTime+120);
     if (json.error || !Array.isArray(json.bars) || !json.bars.length) return null;
     const exact = json.bars.find(b => b.time === boundaryTime);
     if (exact) return exact.open;
@@ -8902,9 +8913,7 @@ const SN_FVG_REFRESH_MS = 5*60*1000;
 
 async function snFetchTf(symbol, interval, bars, before){
   try {
-    const beforeParam = before ? `&before=${before}` : '';
-    const res = await fetch(`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}${beforeParam}`);
-    const json = await res.json();
+    const json = await fetchOhlcvData(symbol, interval, bars, before);
     if (json.error || !Array.isArray(json.bars)) return null;
     return json.bars;
   } catch(e){ return null; }
@@ -10063,9 +10072,7 @@ async function changeReplayTimeframe(newTf){
     // TF calculaba su propio cutTime a partir de esa vela en vivo en vez
     // de la original — de ahí la fecha posterior a la que se había cortado.
     const beforeCut = cutTime + tfToSeconds(newTf);
-    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${newTf}&bars=1500&before=${beforeCut}`;
-    const res = await fetch(url);
-    const json = await res.json();
+    const json = await fetchOhlcvData(STATE.symbol, newTf, 1500, beforeCut);
     if (json.error || !Array.isArray(json.bars) || json.bars.length===0) throw new Error(json.error||'no data');
     const candles = json.bars;
     let idx = 0;
@@ -10131,9 +10138,7 @@ async function _ensureFollowMasterCandles(){
     // la mayoría de los replays. Si el replay arranca más atrás que eso,
     // esa porción vieja simplemente se queda sin vela parcial (se ve como
     // si todavía no hubiese cerrado) hasta que el reloj la alcance.
-    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${f.masterTF}&bars=5000`;
-    const res = await fetch(url);
-    const json = await res.json();
+    const json = await fetchOhlcvData(STATE.symbol, f.masterTF, 5000);
     if (!json.error && Array.isArray(json.bars)) f.masterCandles = json.bars;
   } catch(e){
     // sin red/MT5 un instante: el próximo tick de sync vuelve a intentar.
@@ -10779,7 +10784,7 @@ function setStatus(cls,txt){
 function showOverlay(show){document.getElementById('loading-overlay').classList.toggle('hidden',!show);}
 function setLoaderMsg(msg){document.getElementById('loader-msg').textContent=msg;}
 function showLoader(msg){setLoaderMsg(msg);showOverlay(true);}
-function saveState(){lsSet(lsKey('td_symbol'),STATE.symbol);lsSet(lsKey('td_tf'),STATE.timeframe);lsSet(lsKey('td_watchlist'),JSON.stringify(STATE.watchlist));lsSet(lsKey('td_indicators'),JSON.stringify(STATE.indicators));}
+function saveState(){lsSet(lsKey('td_datasource'),STATE.dataSource);lsSet(lsKey('td_symbol'),STATE.symbol);lsSet(lsKey('td_tf'),STATE.timeframe);lsSet(lsKey('td_watchlist'),JSON.stringify(STATE.watchlist));lsSet(lsKey('td_indicators'),JSON.stringify(STATE.indicators));}
 
 function applySymbolInputValue(){
   const inp = document.getElementById('symbol-input');
@@ -10787,6 +10792,20 @@ function applySymbolInputValue(){
   if(!STATE.watchlist.includes(sym))STATE.watchlist.push(sym);
   STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
 }
+const _dataSourceSelect = document.getElementById('data-source-select');
+_dataSourceSelect.value = STATE.dataSource;
+// Último símbolo usado en cada fuente — cambiar de MT5 a Binance y volver no
+// debe intentar cargar "ETHUSDT" en MT5 ni "NAS100.fs" en Binance.
+const _lastSymbolBySource = { mt5: STATE.dataSource==='mt5' ? STATE.symbol : 'NAS100.fs',
+                               binance: STATE.dataSource==='binance' ? STATE.symbol : 'BTCUSDT' };
+_dataSourceSelect.addEventListener('change', () => {
+  _lastSymbolBySource[STATE.dataSource] = STATE.symbol;
+  STATE.dataSource = _dataSourceSelect.value;
+  _brokerSymbolsCache = null; // la lista de símbolos válidos cambia con la fuente
+  STATE.symbol = _lastSymbolBySource[STATE.dataSource];
+  saveState();
+  loadChart(STATE.symbol, STATE.timeframe);
+});
 document.getElementById('symbol-input').addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;
   applySymbolInputValue();
@@ -10797,6 +10816,70 @@ wireSymbolSearch(document.getElementById('symbol-input'), document.getElementByI
 //  loadChart  (vía mt5_bridge/bridge_server.py -> MT5/Axi)
 // ══════════════════════════════════════════════════════════
 const BRIDGE_URL = 'http://localhost:8787';
+
+// ══════════════════════════════════════════════════════════
+//  Conector de datos — Binance (alternativa al bridge MT5)
+// ══════════════════════════════════════════════════════════
+// STATE.dataSource: 'mt5' (bridge local, default) | 'binance' (API pública,
+// sin bridge, sin cuenta, directo desde el navegador).
+// Todo el resto del código sigue pidiendo velas vía fetchOhlcvData(...) y
+// recibe siempre la misma forma {serverTime, bars:[{time,open,high,low,close,volume}]}
+// que ya devuelve el bridge MT5 — así no hay que tocar nada más.
+const BINANCE_URL = 'https://api.binance.com';
+const BINANCE_TF_MAP = {
+  '1min':'1m', '3min':'3m', '5min':'5m', '15min':'15m', '30min':'30m',
+  '1h':'1h', '2h':'2h', '4h':'4h', '6h':'6h', '8h':'8h', '12h':'12h',
+  '1day':'1d', '1week':'1w', '1month':'1M'
+};
+function isBinanceTf(tf){ return !!BINANCE_TF_MAP[tf]; }
+
+// El bridge MT5 entrega bars.time como la hora NY (ya tiene el offset fijo
+// de ese bróker descontado — ver mt5_broker_time_offset en memoria), y todo
+// el resto del código (killzones, Watchtower, etc.) asume que getUTCHours()
+// sobre ese time da la hora de NY. Binance da epoch UTC real, así que hay
+// que convertir a "hora de pared de NY disfrazada de UTC" para que el resto
+// de los indicadores funcione igual. Usamos Intl con la DB de timezones del
+// navegador para que el horario de verano de NY se maneje solo.
+function utcMsToNyFakeEpochSeconds(utcMs){
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit',
+    hour12:false
+  }).formatToParts(new Date(utcMs));
+  const get = t => parts.find(p=>p.type===t).value;
+  let hh = parseInt(get('hour'),10);
+  if (hh === 24) hh = 0;
+  return Math.floor(Date.UTC(
+    parseInt(get('year'),10), parseInt(get('month'),10)-1, parseInt(get('day'),10),
+    hh, parseInt(get('minute'),10), parseInt(get('second'),10)
+  )/1000);
+}
+
+async function fetchOhlcvBinance(symbol, interval, bars, before){
+  const binInt = BINANCE_TF_MAP[interval];
+  if (!binInt) throw new Error('Timeframe no soportado en Binance: '+interval);
+  let url = `${BINANCE_URL}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${binInt}&limit=${Math.min(Math.max(1,bars||500),1000)}`;
+  if (before) url += `&endTime=${Math.floor(before*1000)}`;
+  const res = await fetch(url);
+  const rows = await res.json();
+  if (!Array.isArray(rows)) throw new Error((rows && rows.msg) || 'Error de Binance');
+  const outBars = rows.map(r => ({
+    time: utcMsToNyFakeEpochSeconds(r[0]),
+    open:+r[1], high:+r[2], low:+r[3], close:+r[4], volume:+r[5]
+  }));
+  return { serverTime: utcMsToNyFakeEpochSeconds(Date.now()), bars: outBars };
+}
+
+// Reemplazo centralizado de todo fetch(`${BRIDGE_URL}/ohlcv?...`).json() —
+// misma firma, misma forma de respuesta, elige la fuente según STATE.dataSource.
+async function fetchOhlcvData(symbol, interval, bars, before){
+  if (STATE.dataSource === 'binance') return fetchOhlcvBinance(symbol, interval, bars, before);
+  let url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}`;
+  if (before) url += `&before=${before}`;
+  const res = await fetch(url);
+  return res.json();
+}
 
 // Redibuja toda la serie (velas reales + puntos fantasma a futuro, en su
 // propia serie invisible — ver futureAxisSeries). Para cambios ESTRUCTURALES
@@ -10935,9 +11018,7 @@ async function goToDateTime(dateStr, timeStr){
       // descuadrando el rango visible que esta función recién había
       // calculado.
       const margin = 1000 * tfToSeconds(STATE.timeframe);
-      const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=2000&before=${target + margin}`;
-      const res = await fetch(url);
-      const json = await res.json();
+      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, target + margin);
       if (!json.error && Array.isArray(json.bars) && json.bars.length) {
         window._lastCandles = json.bars;
         renderSeries(STATE.timeframe);
@@ -11058,9 +11139,7 @@ async function loadMoreHistory(){
     // 500 en vez de 300: menos viajes de ida y vuelta al bridge en un
     // arrastre largo hacia atrás (cada uno tarda lo suyo — ver el comentario
     // de ensureWeeklyHistoryForWatchtower sobre la latencia del bridge).
-    const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=1500&before=${oldest}`;
-    const res = await fetch(url);
-    const json = await res.json();
+    const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 1500, oldest);
     if (json.error || !Array.isArray(json.bars) || json.bars.length===0) return;
     if (_myGen !== _loadChartGen) return; // superado por un loadChart() más nuevo
     const older = json.bars.filter(b => b.time < oldest);
@@ -11169,9 +11248,7 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
 
     try {
       const oldest = candles[0].time;
-      const url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(STATE.symbol)}&interval=${STATE.timeframe}&bars=${extraBars}&before=${oldest}`;
-      const res = await fetch(url);
-      const json = await res.json();
+      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, extraBars, oldest);
       if (_myGen !== _loadChartGen) { fetchedMore = false; break; } // superado por un loadChart() más nuevo — descartar todo
       // Mismo motivo que el guard de entrada de arriba: este fetch pudo
       // arrancar ANTES de que el usuario cortara el replay y recién
@@ -11257,9 +11334,7 @@ async function appendNewBar(symbol, timeframe){
     const _prevLastTimeForGap = window._lastCandles[window._lastCandles.length-1].time;
     const _gapBars = Math.ceil(Math.max(0, (getSimNow() - _prevLastTimeForGap)) / tfToSeconds(timeframe)) + 2;
     const barsToFetch = Math.min(500, Math.max(3, _gapBars));
-    const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=${barsToFetch}`;
-    const res=await fetch(url);
-    const json=await res.json();
+    const json = await fetchOhlcvData(symbol, timeframe, barsToFetch);
     if(json.error||!Array.isArray(json.bars)||json.bars.length===0)throw new Error(json.error||'no data');
     // Mismo motivo que el guard de arriba: este fetch pudo arrancar ANTES
     // de que el usuario cortara el replay y recién contesta ahora — sin
@@ -11420,11 +11495,8 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
   // de Watchtower (que suele requerir que MT5 vaya a buscar velas que
   // todavía no tiene, mucho más lento) se completa aparte, en segundo
   // plano, después de este primer pintado — ver ensureWeeklyHistoryForWatchtower.
-  const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=500`;
-
   try {
-    const res=await fetch(url);
-    const json=await res.json();
+    const json = await fetchOhlcvData(symbol, timeframe, 500);
     if(json.error)throw new Error(json.error);
     const candles=json.bars;
     if(!Array.isArray(candles)||candles.length===0)throw new Error('no data for '+symbol);
@@ -11653,9 +11725,7 @@ async function refreshFormingCandle(symbol, timeframe){
   if (window._dragSession) return;
   _formingFetchInFlight=true;
   try{
-    const url=`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${timeframe}&bars=1`;
-    const res=await fetch(url);
-    const json=await res.json();
+    const json = await fetchOhlcvData(symbol, timeframe, 1);
     if(json.error||!Array.isArray(json.bars)||json.bars.length===0)return;
     if (window._replay || window._replayFollow) return; // ver mismo guard en appendNewBar
     // Si el usuario cambió de símbolo/TF MIENTRAS este fetch estaba en
