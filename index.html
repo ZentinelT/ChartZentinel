@@ -3107,6 +3107,7 @@ function renderLayoutGrid(n){
     const dsSel = document.getElementById('gc-datasource');
     const ds = paneEval(f, 'STATE.dataSource');
     if (dsSel && ds) dsSel.value = ds;
+    if (ds) updateApiBadge(document.getElementById('api-badge'), ds);
     renderShellTfQuick();
     closeTfFavPopupShell();
   }
@@ -3297,20 +3298,18 @@ function renderLayoutGrid(n){
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
   });
 
-  // Badge de estado del bridge: antes decía "MULTI" fijo (sin información
-  // real) porque este documento (el shell) no carga velas — pero SÍ puede
-  // pegarle al bridge directo, igual que el modo 1 gráfico, así que
-  // mostramos el mismo estado real en vez de un cartel sin uso. Clickear
-  // abre Settings del panel activo (ahí vive la config real del bridge).
+  // Badge de estado: antes decía "MULTI" fijo (sin información real) y
+  // después pegaba SIEMPRE al bridge de MT5 sin importar la fuente — con
+  // un panel en Binance/Bybit decía "BRIDGE OFF" (o "✓") sin que tuviera
+  // nada que ver con lo que ese panel estaba mostrando. Ahora refleja la
+  // fuente del panel ACTIVO (misma fuente que ya se ve en gc-datasource —
+  // ver syncShellControls, que la vuelve a llamar cada vez que cambia el
+  // panel activo o su fuente). Clickear abre Settings del panel activo.
   const gcBadge = gbar.querySelector('#api-badge');
   gcBadge.addEventListener('click', ()=>{
     iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
   });
-  fetch(`${BRIDGE_URL}/health`).then(r=>r.ok?r.json():Promise.reject()).then(()=>{
-    gcBadge.textContent='MT5 BRIDGE ✓'; gcBadge.classList.add('connected');
-  }).catch(()=>{
-    gcBadge.textContent='BRIDGE OFF'; gcBadge.classList.remove('connected');
-  });
+  updateApiBadge(gcBadge, STATE.dataSource);
 
   // Indicators — como Settings, siempre sobre el panel activo.
   gbar.querySelector('#gc-indicators').addEventListener('click', ()=>{
@@ -3335,6 +3334,7 @@ function renderLayoutGrid(n){
       `document.getElementById('data-source-select').value=${JSON.stringify(val)};`+
       `document.getElementById('data-source-select').dispatchEvent(new Event('change'));`
     ));
+    updateApiBadge(document.getElementById('api-badge'), val);
   });
 
   // Operaciones (paper trading) — el journal es GLOBAL (localStorage sin
@@ -11065,6 +11065,7 @@ _dataSourceSelect.addEventListener('change', () => {
   _brokerSymbolsCache = null; // la lista de símbolos válidos cambia con la fuente
   STATE.symbol = _lastSymbolBySource[STATE.dataSource];
   saveState();
+  updateApiBadge(document.getElementById('api-badge'), STATE.dataSource);
   loadChart(STATE.symbol, STATE.timeframe);
 });
 document.getElementById('symbol-input').addEventListener('keydown',e=>{
@@ -11157,6 +11158,29 @@ function isSupportedTfForSource(tf, source){
   if (source==='binance') return !!BINANCE_TF_MAP[tf];
   if (source==='bybit') return !!BYBIT_TF_MAP[tf];
   return true;
+}
+
+// Badge de estado (api-badge, arriba de todo): antes SIEMPRE pegaba al
+// bridge local de MT5, sin importar STATE.dataSource — con Binance/Bybit
+// activo decía "BRIDGE OFF" (en rojo, alarmante) aunque esas fuentes no
+// necesitan el bridge para nada, y al revés, mostraba "MT5 BRIDGE ✓" sin
+// que MT5 tuviera nada que ver con lo que se estaba mirando. Esto refleja
+// la fuente REALMENTE activa, pegándole a SU propio endpoint de salud.
+const DATASOURCE_BADGE_LABEL = { mt5:'MT5 BRIDGE', binance:'BINANCE', bybit:'BYBIT' };
+function checkDataSourceHealth(source){
+  if (source === 'binance') return fetch(`${BINANCE_URL}/api/v3/ping`).then(r=>r.ok).catch(()=>false);
+  if (source === 'bybit') return fetch(`${BYBIT_URL}/v5/market/time`).then(r=>r.ok).catch(()=>false);
+  return fetch(`${BRIDGE_URL}/health`).then(r=>r.ok).catch(()=>false);
+}
+function updateApiBadge(badgeEl, source){
+  if (!badgeEl) return Promise.resolve(false);
+  const label = DATASOURCE_BADGE_LABEL[source] || String(source).toUpperCase();
+  badgeEl.textContent = label + '…';
+  return checkDataSourceHealth(source).then(ok => {
+    badgeEl.textContent = label + (ok ? ' ✓' : ' OFF');
+    badgeEl.classList.toggle('connected', ok);
+    return ok;
+  });
 }
 async function fetchOhlcvBybit(symbol, interval, bars, before){
   const bbInt = BYBIT_TF_MAP[interval];
@@ -13808,26 +13832,31 @@ function downloadTradesCsv(){
   // prender el modo de nuevo a mano.
   _syncLivePollTimer();
 
-  const badge=document.getElementById('api-badge');
-  fetch(`${BRIDGE_URL}/health`).then(r=>r.ok?r.json():Promise.reject()).then(()=>{
-    badge.textContent='MT5 BRIDGE ✓';badge.classList.add('connected');
-    // Los dibujos recién se pueden reconstruir con el chart ya armado y
-    // las velas cargadas (buildDrawingOnChart las necesita) — por eso se
-    // espera a que termine este primer loadChart() antes de restaurarlos,
-    // en vez de precargar `drawings` de entrada. applyExternalDrawings ya
-    // sabe reconstruir TODO desde una lista plana (lo reusa el sync entre
-    // paneles y el undo/redo) — texto incluido, que buildDrawingOnChart
-    // solo no sabe armar.
-    loadChart(STATE.symbol,STATE.timeframe).then(() => {
-      try {
-        const saved = JSON.parse(lsGet(lsKey('td_drawings')) || '[]');
-        if (Array.isArray(saved) && saved.length) applyExternalDrawings(saved);
-      } catch(e){}
-    });
-  }).catch(()=>{
-    badge.textContent='BRIDGE OFF';badge.classList.remove('connected');
-    showLoader('Not connected to the MT5 bridge — run bridge_server.py and open MT5 with the ZentinelBridge Service');
-    setStatus('err','● no bridge');
+  // Antes esto pegaba SIEMPRE al bridge de MT5, y recién si contestaba OK
+  // se cargaba el gráfico — con Binance/Bybit activo y el bridge local
+  // apagado (algo totalmente normal: esas fuentes no lo necesitan), el
+  // gráfico nunca llegaba a cargar, aunque la fuente elegida anduviera
+  // perfecto. El badge ahora chequea la fuente real (updateApiBadge), y
+  // loadChart corre siempre, sin esperar a ese resultado — si de verdad
+  // falla, loadChart ya se encarga de mostrar el error (ver su catch).
+  updateApiBadge(document.getElementById('api-badge'), STATE.dataSource).then(ok => {
+    if (STATE.dataSource === 'mt5' && !ok) {
+      showLoader('Not connected to the MT5 bridge — run bridge_server.py and open MT5 with the ZentinelBridge Service');
+      setStatus('err','● no bridge');
+    }
+  });
+  // Los dibujos recién se pueden reconstruir con el chart ya armado y las
+  // velas cargadas (buildDrawingOnChart las necesita) — por eso se espera
+  // a que termine este primer loadChart() antes de restaurarlos, en vez
+  // de precargar `drawings` de entrada. applyExternalDrawings ya sabe
+  // reconstruir TODO desde una lista plana (lo reusa el sync entre
+  // paneles y el undo/redo) — texto incluido, que buildDrawingOnChart
+  // solo no sabe armar.
+  loadChart(STATE.symbol,STATE.timeframe).then(() => {
+    try {
+      const saved = JSON.parse(lsGet(lsKey('td_drawings')) || '[]');
+      if (Array.isArray(saved) && saved.length) applyExternalDrawings(saved);
+    } catch(e){}
   });
 })();
 </script>
