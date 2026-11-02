@@ -8471,7 +8471,17 @@ function renderWatchtower(){
   const candles=window._lastCandles||[];
   if(candles.length<2) return;
   const wt=STATE.watchtower;
-  const barStep=candles[1].time-candles[0].time;
+  // Antes: candles[1].time-candles[0].time — el hueco REAL entre esas dos
+  // velas puntuales. Anda bien en TF intradía (hueco uniforme), pero en
+  // Diario/Semanal/Mensual ese par puede cruzar un fin de semana: el "ancho
+  // de vela" medido ahí da 3 días en vez de 1, y LEVEL_EXTEND_BARS*barStep
+  // (la extensión del nivel del día/semana ACTUAL hacia el futuro, más
+  // abajo) termina apuntando mucho más lejos de lo que el gráfico tiene
+  // whitespace dibujado — timeToCoordinate devuelve null ahí y esa línea
+  // (justo la del día/semana más reciente, la que más importa) no se
+  // dibuja. tfToSeconds ya existe para esto exacto: un ancho NOMINAL del
+  // TF, sin depender de qué par de velas se mire.
+  const barStep=tfToSeconds(STATE.timeframe);
   const lastTime=candles[candles.length-1].time;
   const byDate=wtGroupByDay(candles);
   const dateKeys=[...byDate.keys()].sort((a,b)=>a-b);
