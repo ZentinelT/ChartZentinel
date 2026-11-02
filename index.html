@@ -1455,10 +1455,8 @@
     <span id="price-change" class="">—</span>
   </div>
 
-  <button class="topbar-btn" id="btn-indicators" onclick="openIndicatorModal()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    <span class="tb-label">Indicators</span>
-    <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+  <button class="topbar-btn" id="btn-indicators" title="Indicators" onclick="openIndicatorModal()">
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="1" y="18" font-family="Georgia,'Times New Roman',serif" font-size="16" font-style="italic" font-weight="700">ƒ</text><text x="13" y="19" font-family="Georgia,'Times New Roman',serif" font-size="9" font-style="italic" font-weight="700">x</text></svg>
   </button>
   <button class="topbar-btn" id="btn-replay" title="Replay: click a candle to start" onclick="toggleReplayPicker()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -2662,10 +2660,8 @@ function renderLayoutGrid(n){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
     </div>
-    <button class="topbar-btn" id="gc-indicators" title="Active panel indicators">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      <span class="tb-label">Indicators</span>
-      <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+    <button class="topbar-btn" id="gc-indicators" title="Indicators (panel activo)">
+      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="1" y="18" font-family="Georgia,'Times New Roman',serif" font-size="16" font-style="italic" font-weight="700">ƒ</text><text x="13" y="19" font-family="Georgia,'Times New Roman',serif" font-size="9" font-style="italic" font-weight="700">x</text></svg>
     </button>
     <select id="gc-datasource" class="topbar-input" title="Fuente de datos — se aplica al panel Activo o a Todos según el selector de arriba">
       <option value="mt5">MT5</option>
