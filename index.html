@@ -1441,6 +1441,7 @@
   <select id="data-source-select" class="topbar-input" title="Fuente de datos">
     <option value="mt5">MT5</option>
     <option value="binance">Binance</option>
+    <option value="bybit">Bybit</option>
   </select>
   <div class="tf-sep"></div>
 
@@ -6845,6 +6846,8 @@ function fetchBrokerSymbols(){
   // símbolo que acá no usamos para nada, solo hace falta el nombre.
   const req = src === 'binance'
     ? fetch(`${BINANCE_URL}/api/v3/ticker/price`).then(r=>r.json()).then(j => (Array.isArray(j)?j:[]).map(s=>s.symbol))
+    : src === 'bybit'
+    ? fetch(`${BYBIT_URL}/v5/market/instruments-info?category=spot`).then(r=>r.json()).then(j => ((j.result&&j.result.list)||[]).map(s=>s.symbol))
     : fetch(`${BRIDGE_URL}/symbols`).then(r=>r.json());
   _brokerSymbolsFetching = req.then(list => {
     _brokerSymbolsCache = Array.isArray(list) ? list : [];
@@ -10800,7 +10803,8 @@ _dataSourceSelect.value = STATE.dataSource;
 // Último símbolo usado en cada fuente — cambiar de MT5 a Binance y volver no
 // debe intentar cargar "ETHUSDT" en MT5 ni "NAS100.fs" en Binance.
 const _lastSymbolBySource = { mt5: STATE.dataSource==='mt5' ? STATE.symbol : 'NAS100.fs',
-                               binance: STATE.dataSource==='binance' ? STATE.symbol : 'BTCUSDT' };
+                               binance: STATE.dataSource==='binance' ? STATE.symbol : 'BTCUSDT',
+                               bybit: STATE.dataSource==='bybit' ? STATE.symbol : 'BTCUSDT' };
 _dataSourceSelect.addEventListener('change', () => {
   _lastSymbolBySource[STATE.dataSource] = STATE.symbol;
   STATE.dataSource = _dataSourceSelect.value;
@@ -10874,10 +10878,43 @@ async function fetchOhlcvBinance(symbol, interval, bars, before){
   return { serverTime: utcMsToNyFakeEpochSeconds(Date.now()), bars: outBars };
 }
 
+// Bybit — misma idea que Binance, pero en algunos países/ISPs Binance está
+// bloqueado y Bybit no (confirmado a mano: api.binance.com se cuelga sin
+// responder, api.bybit.com contesta normal). Mismo patrón de conector.
+const BYBIT_URL = 'https://api.bybit.com';
+const BYBIT_TF_MAP = {
+  '1min':'1', '3min':'3', '5min':'5', '15min':'15', '30min':'30',
+  '1h':'60', '2h':'120', '4h':'240', '6h':'360', '12h':'720',
+  '1day':'D', '1week':'W', '1month':'M'
+};
+function isSupportedTfForSource(tf, source){
+  if (source==='binance') return !!BINANCE_TF_MAP[tf];
+  if (source==='bybit') return !!BYBIT_TF_MAP[tf];
+  return true;
+}
+async function fetchOhlcvBybit(symbol, interval, bars, before){
+  const bbInt = BYBIT_TF_MAP[interval];
+  if (!bbInt) throw new Error('Timeframe no soportado en Bybit: '+interval);
+  let url = `${BYBIT_URL}/v5/market/kline?category=spot&symbol=${encodeURIComponent(symbol)}&interval=${bbInt}&limit=${Math.min(Math.max(1,bars||500),1000)}`;
+  if (before) url += `&end=${Math.floor(before*1000)}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.retCode !== 0 || !json.result || !Array.isArray(json.result.list)) throw new Error((json && json.retMsg) || 'Error de Bybit');
+  // Bybit devuelve la lista del más nuevo al más viejo — al revés de lo que
+  // espera el resto del código (más viejo primero, como ya vienen MT5/Binance).
+  const rows = json.result.list.slice().reverse();
+  const outBars = rows.map(r => ({
+    time: utcMsToNyFakeEpochSeconds(Number(r[0])),
+    open:+r[1], high:+r[2], low:+r[3], close:+r[4], volume:+r[5]
+  }));
+  return { serverTime: utcMsToNyFakeEpochSeconds(Date.now()), bars: outBars };
+}
+
 // Reemplazo centralizado de todo fetch(`${BRIDGE_URL}/ohlcv?...`).json() —
 // misma firma, misma forma de respuesta, elige la fuente según STATE.dataSource.
 async function fetchOhlcvData(symbol, interval, bars, before){
   if (STATE.dataSource === 'binance') return fetchOhlcvBinance(symbol, interval, bars, before);
+  if (STATE.dataSource === 'bybit') return fetchOhlcvBybit(symbol, interval, bars, before);
   let url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}`;
   if (before) url += `&before=${before}`;
   const res = await fetch(url);
