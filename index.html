@@ -5970,7 +5970,7 @@ function initChart() {
     window.top.zentinelCrosshairBroadcast(nextTime, PANE_ID, nextPrice);
   });
 
-  new ResizeObserver(() => {
+  function _forceFullRedraw(){
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
     if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
@@ -5980,7 +5980,22 @@ function initChart() {
     renderFractalModel();
     renderStatMap();
     syncOverlayPositions();
-  }).observe(container);
+  }
+  new ResizeObserver(_forceFullRedraw).observe(container);
+  // Chrome (y otros) frenan los timers de una pestaña en segundo plano —
+  // el countdown de 1s que dispara los refrescos en vivo puede quedar
+  // atascado a ~1 vuelta por minuto mientras la pestaña no está activa.
+  // Las velas ya están cargadas en memoria (setData ya corrió), pero el
+  // canvas no se repinta hasta el próximo tick real — se siente como "el
+  // gráfico quedó colgado/vacío" hasta volver a la pestaña. Forzar un
+  // repintado completo apenas la pestaña vuelve a estar visible evita esa
+  // espera (detectado probando con fuentes de datos externas: cada pedido
+  // real por internet, aunque sea rápido, ya no es instantáneo como el
+  // bridge local, y con la pestaña en segundo plano el primer resultado
+  // podía tardar minutos en verse en pantalla aunque ya estuviera listo).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') _forceFullRedraw();
+  });
 
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
     // 50 antes: a 8px/vela típico eso es apenas ~400px de margen — con el
