@@ -3123,7 +3123,7 @@ function renderLayoutGrid(n){
     const ds = paneEval(f, 'STATE.dataSource');
     if (dsSel && ds) dsSel.value = ds;
     if (ds) updateApiBadge(document.getElementById('api-badge'), ds);
-    renderShellTfQuick();
+    syncShellTfActiveClass();
     closeTfFavPopupShell();
   }
 
@@ -3214,6 +3214,24 @@ function renderLayoutGrid(n){
     });
     tfWrap.innerHTML = html;
     tfWrap.scrollLeft = prevScroll;
+  }
+  // Solo cambia qué botón tiene .active — usada en cada click sobre un
+  // panel de la grilla (switchear el panel activo no cambia la LISTA de
+  // favoritos, solo cuál está resaltado). A diferencia de
+  // renderShellTfQuick(), no toca innerHTML: tirar abajo y reconstruir
+  // TODOS los botones de golpe, con la barra entera ya apretada de lugar
+  // (el spacer que la separa de los íconos de la derecha suele estar en
+  // 0px — no entra todo), hacía que el motor de flexbox recalculara el
+  // ancho de cada elemento de cero en cada click, y esa recomputación no
+  // siempre da el mismo resultado al pixel (redondeos) — se veía como un
+  // temblor de 1px en los íconos de la derecha (selector de multigráficos
+  // en adelante), reportado por el usuario y confirmado con DevTools que
+  // NO era un layout shift real sino este recálculo. Si no hace falta
+  // reconstruir nada, no se reconstruye.
+  function syncShellTfActiveClass(){
+    const f = iframeEls[activePane-1];
+    const tf = f ? paneEval(f, 'STATE.timeframe') : null;
+    tfWrap.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.dataset.tf === tf));
   }
   tfWrap.addEventListener('click', (e) => {
     const btn = e.target.closest('.tf-btn');
