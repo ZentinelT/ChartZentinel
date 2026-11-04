@@ -294,6 +294,22 @@
     color: inherit; cursor: pointer; flex-shrink: 0;
   }
   .ind-eye-btn:hover { color: var(--gold); }
+  /* Colapsar la LISTA (los nombres) — separado de ocultar los dibujos de
+     cada indicador (eso lo hace el ojo de la toolbar, ver
+     toggleAllIndicatorsVisibility). Vive como última fila de la lista,
+     debajo del último chip, para que al colapsar se sienta como que la
+     lista se repliega hacia arriba, detrás del símbolo. */
+  #chart-indicator-chips.legend-collapsed .ind-chip { display: none; }
+  .ind-legend-collapse-btn {
+    pointer-events: auto;
+    display: flex; align-items: center; justify-content: center;
+    width: 16px; height: 10px; padding: 0; margin: 0;
+    background: none; border: none; color: inherit; opacity: .5;
+    cursor: pointer;
+    filter: var(--ind-chip-icon-shadow, drop-shadow(0 1px 2px rgba(0,0,0,.9)));
+  }
+  .ind-legend-collapse-btn:hover { opacity: 1; color: var(--gold); }
+  .ind-legend-collapse-btn svg { width: 11px; height: 11px; }
 
   /* ─── Replay mode ──── */
   #replay-pick-hint {
@@ -1641,7 +1657,7 @@
         <rect x="16" y="4" width="4" height="17" rx="1"/>
       </svg>
     </button>
-    <button class="tool-btn" id="btn-ind-legend" data-tip="Toggle Indicator Legend" onclick="toggleIndicatorLegend()">
+    <button class="tool-btn" id="btn-ind-legend" data-tip="Mostrar/ocultar los dibujos de los indicadores" onclick="toggleAllIndicatorsVisibility()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
     <div class="tool-sep"></div>
@@ -2358,12 +2374,17 @@ applyTheme(lsGet('td_theme') || 'dark');
 // panel y la barra global son documentos separados), el evento 'storage'
 // avisa acá para que este documento también se actualice al toque.
 window.addEventListener('storage', e => { if (e.key === 'td_theme') applyTheme(e.newValue || 'dark'); });
-// Leyenda de indicadores (los nombres arriba a la izquierda del chart, con
-// el ojito al lado): UNA sola preferencia para TODA la app, no por panel —
-// como pidió el usuario, "que oculte todos los indicadores de todos los
-// gráficos" de un solo toque. Mismo mecanismo que td_theme/td_tf_favorites:
-// sin sufijo de pane, con 'storage' para que un toggle en un panel (o en la
-// barra del shell) se refleje al toque en el resto.
+// Leyenda de indicadores (los nombres arriba a la izquierda del chart):
+// UNA sola preferencia para TODA la app, no por panel — como pidió el
+// usuario, "que oculte la lista de todos los gráficos" de un solo toque.
+// Mismo mecanismo que td_theme/td_tf_favorites: sin sufijo de pane, con
+// 'storage' para que un toggle en un panel se refleje al toque en el
+// resto. El control para esto YA NO vive en la toolbar (ese ojo ahora
+// oculta los DIBUJOS de los indicadores, ver toggleAllIndicatorsVisibility
+// más abajo) — es la última fila de #chart-indicator-chips, debajo del
+// último indicador activo (ver renderIndicatorChips), para que colapsar
+// la lista se sienta como que se repliega hacia arriba, detrás del
+// símbolo.
 function getIndicatorLegendVisible(){
   const v = lsGet('td_ind_legend');
   return v === null ? true : v === '1';
@@ -2372,8 +2393,12 @@ function setIndicatorLegendVisible(visible){ lsSet('td_ind_legend', visible ? '1
 function applyIndicatorLegendVisibility(){
   const visible = getIndicatorLegendVisible();
   const indChips = document.getElementById('chart-indicator-chips');
-  if (indChips) indChips.style.display = visible ? '' : 'none';
-  document.getElementById('btn-ind-legend')?.classList.toggle('active', visible);
+  if (indChips) indChips.classList.toggle('legend-collapsed', !visible);
+  const btn = indChips?.querySelector('.ind-legend-collapse-btn');
+  if (btn) {
+    btn.innerHTML = visible ? IND_CHEVRON_UP_SVG : IND_CHEVRON_DOWN_SVG;
+    btn.title = visible ? 'Ocultar lista de indicadores' : 'Mostrar lista de indicadores';
+  }
 }
 function toggleIndicatorLegend(){
   setIndicatorLegendVisible(!getIndicatorLegendVisible());
@@ -2914,7 +2939,7 @@ function renderLayoutGrid(n){
         <rect x="16" y="4" width="4" height="17" rx="1"/>
       </svg>
     </button>
-    <button class="tool-btn" id="btn-ind-legend" data-tip="Toggle Indicator Legend" onclick="shellToggleIndicatorLegend()">
+    <button class="tool-btn" id="btn-ind-legend" data-tip="Mostrar/ocultar los dibujos de los indicadores" onclick="shellToggleAllIndicators()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
     <div class="tool-sep"></div>
@@ -3101,12 +3126,17 @@ function renderLayoutGrid(n){
       shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
     } catch(e){}
   };
-  // Global de toda la app (no por panel) — el shell corre en el mismo
-  // script que cada panel, así que llama DIRECTO a la misma función
-  // (nada de contentWindow/paneEval): cambia la única preferencia
-  // compartida y cada panel se entera solo por el 'storage' que ya
-  // escuchan (ver toggleIndicatorLegend, cerca de td_theme).
-  window.shellToggleIndicatorLegend = toggleIndicatorLegend;
+  // Por panel (como hiddenIndicators) — mismo criterio que
+  // shellToggleVolume de arriba: llama a la función del panel ACTIVO y
+  // resincroniza el botón del shell con lo que haya quedado.
+  window.shellToggleAllIndicators = function(){
+    const f = iframeEls[activePane-1];
+    if (!f) return;
+    try {
+      f.contentWindow.toggleAllIndicatorsVisibility();
+      shellToolbar.querySelector('#btn-ind-legend').classList.toggle('active', !paneEval(f, 'allIndicatorsHidden()'));
+    } catch(e){}
+  };
   function syncMagnetBtn(f){
     const btn = shellToolbar.querySelector('#btn-magnet');
     const mode = paneEval(f, 'STATE.magnetMode') || 'off';
@@ -3146,8 +3176,10 @@ function renderLayoutGrid(n){
     if (btn) btn.classList.add('active');
     syncMagnetBtn(f);
     shellToolbar.querySelector('#btn-volume').classList.toggle('active', !!paneEval(f, 'volumeVisible'));
-    // btn-ind-legend NO se resincroniza acá: es una preferencia global
-    // (ver toggleIndicatorLegend), no cambia según qué panel esté activo.
+    // btn-ind-legend: por panel (como hiddenIndicators), a diferencia de
+    // la lista colapsable (esa sí es una preferencia global — ver
+    // toggleIndicatorLegend) — sí hay que resincronizarlo acá.
+    shellToolbar.querySelector('#btn-ind-legend').classList.toggle('active', !paneEval(f, 'allIndicatorsHidden()'));
     const dsSel = document.getElementById('gc-datasource');
     const ds = paneEval(f, 'STATE.dataSource');
     if (dsSel && ds) dsSel.value = ds;
@@ -4089,6 +4121,23 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map') renderStatMap();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
+}
+// Ojo de la toolbar (antes ocultaba la LISTA, ver toggleIndicatorLegend —
+// eso se movió a una fila debajo del último chip): ahora oculta/muestra de
+// un toque TODOS los dibujos de los indicadores activos de ESTE panel —
+// el mismo "ojo" de cada chip, pero aplicado a todos juntos. Por panel
+// (como hiddenIndicators, de donde lee/escribe), no global: cada gráfico
+// de la grilla puede tener indicadores distintos.
+function allIndicatorsHidden(){
+  return STATE.indicators.length > 0 && STATE.indicators.every(isIndicatorHidden);
+}
+function toggleAllIndicatorsVisibility(){
+  if (!STATE.indicators.length) return;
+  const makeHidden = !allIndicatorsHidden(); // si no están todos ocultos, los oculta a todos; si ya estaban todos ocultos, los muestra a todos
+  STATE.indicators.forEach(name => { if (isIndicatorHidden(name) !== makeHidden) toggleIndicatorVisibility(name); });
+}
+function syncIndEyeButtonState(){
+  document.getElementById('btn-ind-legend')?.classList.toggle('active', !allIndicatorsHidden());
 }
 function wtTimeToStr(hm){ return String(hm[0]).padStart(2,'0')+':'+String(hm[1]).padStart(2,'0'); }
 function wtStrToTime(s){ const [h,m]=s.split(':').map(Number); return [h||0,m||0]; }
@@ -7649,6 +7698,10 @@ function addIndicatorSeries(name) {
 const IND_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 const IND_EYE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const IND_EYE_OFF_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.4 18.4 0 0 1 4.22-5.07M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+// Fila para colapsar la LISTA (no los dibujos, ver toggleAllIndicatorsVisibility)
+// — chevron hacia arriba: "se repliega para arriba, detrás del símbolo".
+const IND_CHEVRON_UP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>`;
+const IND_CHEVRON_DOWN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`;
 
 // Chips fijos arriba-izq del chart: acceso directo a la config de cada
 // indicador activo — siempre visibles, sin depender de acertarle a un
@@ -7670,6 +7723,20 @@ function renderIndicatorChips() {
     chip.addEventListener('click', () => openIndicatorSettings(name));
     el.appendChild(chip);
   });
+  // Última fila, debajo del último indicador activo — colapsa/expande la
+  // lista entera (ver toggleIndicatorLegend). Nunca lleva la clase
+  // .ind-chip a propósito: así #chart-indicator-chips.legend-collapsed
+  // .ind-chip la deja afuera y sigue pudiéndose clickear para reabrir.
+  if (STATE.indicators.length) {
+    const legendVisible = getIndicatorLegendVisible();
+    const collapseBtn = document.createElement('button');
+    collapseBtn.className = 'ind-legend-collapse-btn';
+    collapseBtn.title = legendVisible ? 'Ocultar lista de indicadores' : 'Mostrar lista de indicadores';
+    collapseBtn.innerHTML = legendVisible ? IND_CHEVRON_UP_SVG : IND_CHEVRON_DOWN_SVG;
+    collapseBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleIndicatorLegend(); });
+    el.appendChild(collapseBtn);
+  }
+  syncIndEyeButtonState();
 }
 
 function renderIndList() {
