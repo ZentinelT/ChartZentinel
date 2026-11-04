@@ -8447,12 +8447,23 @@ function wtPlotRight(){
 }
 function wtLine(svg,t1,t2,y,color,width,dash,indName){
   indName = indName || 'Watchtower';
+  // ANTES clampeaba x1/x2 a wtPlotRight() (el ancho del contenedor) para
+  // que una línea que se extiende "hasta ahora" (PDH/PWH/MNO del día en
+  // curso, ORG, etc — ver LEVEL_EXTEND_BARS) no terminara dibujándose
+  // detrás de los números del eje de precio. Eso funcionaba viendo el
+  // tramo más reciente del chart, pero timeToCoordinate() da la posición
+  // relativa al scroll ACTUAL — con el chart scrolleado hacia atrás, el
+  // punto real (bien a la derecha, fuera de pantalla) quedaba clampeado
+  // DENTRO del viewport visible en vez de simplemente no mostrarse, y
+  // todas esas líneas/etiquetas de niveles "del día" terminaban apiladas
+  // una encima de otra justo en el borde derecho de lo que se ve ahora
+  // (reportado 2026-11-05, con captura). El clip-path del propio layer SVG
+  // (ver overlayClipPath/syncOverlaySvgSize) ya recorta visualmente
+  // cualquier cosa que caiga fuera del plot real — no hace falta este
+  // clamp manual, y dejarlo afuera es lo que evita el apilamiento.
   let x1=chart.timeScale().timeToCoordinate(t1), x2=chart.timeScale().timeToCoordinate(t2);
   const yy=candleSeries.priceToCoordinate(y);
   if(x1===null||x2===null||yy===null) return;
-  const plotRight = wtPlotRight();
-  if (x1>plotRight) x1=plotRight;
-  if (x2>plotRight) x2=plotRight;
   const el=document.createElementNS(WT_SVG_NS,'line');
   el.setAttribute('x1',x1); el.setAttribute('x2',x2); el.setAttribute('y1',yy); el.setAttribute('y2',yy);
   el.setAttribute('stroke',color); el.setAttribute('stroke-width',width||1);
@@ -8481,8 +8492,16 @@ function wtLabel(svg,t,y,text,color,indName){
   // de precio, mostrándose "de fondo" detrás de los números — algo que a
   // las velas nunca les pasa. Si no entra, la hacemos crecer para la
   // izquierda en vez de dejarla desbordar.
+  // OJO: esta corrección (crecer para la izquierda) solo tiene sentido
+  // cuando el ANCLA (x) ya está adentro del plot visible — es el caso real
+  // de "hoy" viendo el tramo más reciente. Si x mismo ya cae lejos a la
+  // derecha (chart scrolleado hacia atrás, el nivel de "hoy" quedando
+  // fuera de pantalla), NO hay que tironearla de vuelta al borde — eso es
+  // justamente lo que apilaba todas las etiquetas ahí (mismo bug que
+  // wtLine, reportado 2026-11-05). Si x ya está lejos, se deja tal cual:
+  // el clip-path del layer la recorta/oculta sola, como corresponde.
   const plotRight = wtPlotRight();
-  const boxX = (x + w > plotRight) ? Math.max(0, plotRight - w) : x;
+  const boxX = (x <= plotRight && x + w > plotRight) ? Math.max(0, plotRight - w) : x;
   // Caja invisible detrás del texto: amplía el área de click más allá del
   // trazo fino de las letras.
   const hit=document.createElementNS(WT_SVG_NS,'rect');
