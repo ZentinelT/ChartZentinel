@@ -2375,21 +2375,20 @@ applyTheme(lsGet('td_theme') || 'dark');
 // avisa acá para que este documento también se actualice al toque.
 window.addEventListener('storage', e => { if (e.key === 'td_theme') applyTheme(e.newValue || 'dark'); });
 // Leyenda de indicadores (los nombres arriba a la izquierda del chart):
-// UNA sola preferencia para TODA la app, no por panel — como pidió el
-// usuario, "que oculte la lista de todos los gráficos" de un solo toque.
-// Mismo mecanismo que td_theme/td_tf_favorites: sin sufijo de pane, con
-// 'storage' para que un toggle en un panel se refleje al toque en el
-// resto. El control para esto YA NO vive en la toolbar (ese ojo ahora
-// oculta los DIBUJOS de los indicadores, ver toggleAllIndicatorsVisibility
-// más abajo) — es la última fila de #chart-indicator-chips, debajo del
-// último indicador activo (ver renderIndicatorChips), para que colapsar
-// la lista se sienta como que se repliega hacia arriba, detrás del
-// símbolo.
+// por panel (como hiddenIndicators/STATE.indicators) — cada gráfico de la
+// grilla puede tener una lista distinta de indicadores activos, así que
+// colapsarla en uno no tiene por qué afectar a los demás. (Antes era una
+// preferencia global de toda la app; el usuario reportó que, en la
+// grilla, colapsar la lista de un panel colapsaba la de los tres —
+// correcto para entonces, ya no.) El control para esto vive en la última
+// fila de #chart-indicator-chips, debajo del último indicador activo (ver
+// renderIndicatorChips) — el ojo de la toolbar ahora oculta los DIBUJOS
+// de los indicadores, ver toggleAllIndicatorsVisibility más abajo.
 function getIndicatorLegendVisible(){
-  const v = lsGet('td_ind_legend');
+  const v = lsGet(lsKey('td_ind_legend'));
   return v === null ? true : v === '1';
 }
-function setIndicatorLegendVisible(visible){ lsSet('td_ind_legend', visible ? '1' : '0'); }
+function setIndicatorLegendVisible(visible){ lsSet(lsKey('td_ind_legend'), visible ? '1' : '0'); }
 function applyIndicatorLegendVisibility(){
   const visible = getIndicatorLegendVisible();
   const indChips = document.getElementById('chart-indicator-chips');
@@ -2404,7 +2403,6 @@ function toggleIndicatorLegend(){
   setIndicatorLegendVisible(!getIndicatorLegendVisible());
   applyIndicatorLegendVisibility();
 }
-window.addEventListener('storage', e => { if (e.key === 'td_ind_legend') applyIndicatorLegendVisibility(); });
 
 // Buy/Sell rápidos (ver quickMarketOrder más abajo, y #quick-trade-overlay
 // en el HTML — centro-arriba del chart) — el toggle que los oculta vive en
@@ -11857,7 +11855,7 @@ async function goToReplayTarget(target, dateStr, timeStr){
   try { chart.timeScale().scrollToPosition(0, false); } catch(e){}
 }
 // Hora objetivo de "Next session" — UNA sola preferencia para TODA la app,
-// no por panel/símbolo (mismo criterio que td_theme/td_ind_legend): el
+// no por panel/símbolo (mismo criterio que td_theme): el
 // usuario la tipea una vez y se mantiene así hasta que la cambie a mano,
 // sin importar en qué gráfico/pane esté parado. Default '17:00' = el
 // corte de día-broker (wtDayKey) que ya usan Watchtower/PD levels, así que
