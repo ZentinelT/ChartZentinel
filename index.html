@@ -275,10 +275,14 @@
     color: inherit; /* lo pone #chart-indicator-chips, desde cs.textColor — ver applyChartSettings */
     cursor: pointer;
     white-space: nowrap;
-    text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.6);
+    /* El halo por defecto asume texto claro sobre fondo oscuro (ver más
+       abajo, #chart-indicator-chips). applyChartSettings() lo recalcula
+       según cs.textColor para que siga siendo legible con texto oscuro
+       (modo claro) en vez de verse difuso (texto oscuro + halo negro). */
+    text-shadow: var(--ind-chip-shadow, 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.6));
   }
   .ind-chip:hover { color: var(--gold); }
-  .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
+  .ind-chip svg { width: 11px; height: 11px; flex-shrink: 0; filter: var(--ind-chip-icon-shadow, drop-shadow(0 1px 2px rgba(0,0,0,.9))); }
   .ind-chip-hidden { opacity: .45; }
   .ind-eye-btn {
     background: none; border: none; padding: 0; margin: 0; display: flex;
@@ -319,9 +323,8 @@
   }
   .wt-set-row:last-child { border-bottom:none; }
   .wt-set-row input[type="time"], .wt-set-row input[type="number"] {
-    background: var(--bg-alt, #15151f); border:1px solid var(--border); border-radius:3px;
-    color: var(--text); font-family: var(--font-mono); font-size:11px; padding:2px 4px;
-    color-scheme: dark;
+    background: var(--bg-secondary); border:1px solid var(--border); border-radius:3px;
+    color: var(--text-primary); font-family: var(--font-mono); font-size:11px; padding:2px 4px;
   }
   .wt-set-row input[type="color"] {
     width:28px; height:20px; padding:0; border:1px solid var(--border); border-radius:3px;
@@ -425,9 +428,8 @@
   .goto-date-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
   .goto-date-row label { font-family: var(--font-ui); font-size: 11px; color: var(--text-dim); }
   .goto-date-row input {
-    background: var(--bg-input, #16161c); border: 1px solid var(--border); border-radius: 5px;
+    background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 5px;
     color: var(--text-primary); font-family: var(--font-mono); font-size: 11.5px; padding: 3px 6px;
-    color-scheme: dark;
   }
   .goto-date-go {
     width: 100%; margin-top: 2px; background: var(--gold); color: #141414; border: none;
@@ -743,20 +745,20 @@
   }
 
   #btn-sidebar-toggle {
-    width: 13px;
+    width: 14px;
     flex-shrink: 0;
-    background: var(--bg-panel);
+    background: var(--bg-hover);
     border: none;
-    border-right: 1px solid var(--border);
-    color: var(--text-dim);
+    border-right: 1px solid var(--border-light);
+    color: var(--text-secondary);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
   }
-  #btn-sidebar-toggle:hover { color: var(--gold); }
-  #btn-sidebar-toggle svg { width: 10px; height: 10px; transition: transform .15s; }
+  #btn-sidebar-toggle:hover { color: var(--gold); background: var(--bg-active); }
+  #btn-sidebar-toggle svg { width: 11px; height: 11px; transition: transform .15s; }
   #btn-sidebar-toggle.collapsed svg { transform: rotate(180deg); }
 
   .sidebar-header {
@@ -1018,9 +1020,8 @@
   #replay-bar button:hover { color: var(--gold); border-color: var(--gold); background: rgba(201,168,76,.15); }
   #replay-bar button svg { width: 11px; height: 11px; }
   #replay-bar select {
-    background: var(--bg-alt, #15151f); border: 1px solid var(--gold-dim); border-radius: 3px;
-    color: var(--text); font-family: var(--font-mono); font-size: 10px; padding: 1px 3px;
-    color-scheme: dark;
+    background: var(--bg-secondary); border: 1px solid var(--gold-dim); border-radius: 3px;
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 10px; padding: 1px 3px;
   }
   #replay-bar #replay-label {
     font-family: var(--font-mono); font-size: 10px; color: var(--gold);
@@ -1869,8 +1870,8 @@
   </button>
   <button class="dtb-btn" id="dtb-send-back" title="Send behind candles / bring to front" onclick="onDtbSendToBack()">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="2" y="2" width="8" height="8" rx="1"/>
-      <rect x="6" y="6" width="8" height="8" rx="1" fill="currentColor" fill-opacity="0.25"/>
+      <rect x="3" y="5" width="7" height="7" rx="1" fill="currentColor" stroke="none"/>
+      <rect x="6" y="2" width="7" height="7" rx="1" stroke-dasharray="1.6 1.4"/>
     </svg>
     <span class="dtb-btn-text">Back</span>
   </button>
@@ -4006,6 +4007,10 @@ const STATE = {
   watchtower: Object.assign({
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
+    // Color de las letras de PDH/PDL/PDM/PWH/PWL/PWM/MNO — antes venían
+    // fijas (blanco los PD, lila los PW, celeste MNO) sin ningún toggle,
+    // así que en modo claro (fondo blanco) el blanco quedaba invisible.
+    labelColor:'#ffffff',
   }, _wtSaved, { kz: _wtKz }),
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
@@ -7603,6 +7608,10 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Killzones visual history (days back)</span>
         <input type="number" id="wt-hist-days" min="1" max="60" step="1" value="${STATE.watchtower.histDays}" style="width:56px">
       </div>`
+      + `<div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">PDH/PDL/PWH/PWL/MNO label color</span>
+        <input type="color" id="wt-label-color" value="${STATE.watchtower.labelColor}">
+      </div>`
       + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Killzone times (NY time)</div>`
       + kzHtml
       + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">ORG (Opening Range Gap)</div>
@@ -7999,9 +8008,11 @@ function applyIndSettingsForm() {
     const colorEl=document.getElementById('wt-org-color');
     const boxOpacityEl=document.getElementById('wt-box-opacity');
     const histDaysEl=document.getElementById('wt-hist-days');
+    const labelColorEl=document.getElementById('wt-label-color');
     if (colorEl) STATE.watchtower.orgColor = colorEl.value;
     if (boxOpacityEl) STATE.watchtower.boxOpacity = Math.max(0, Math.min(100, Number(boxOpacityEl.value) || 0));
     if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
+    if (labelColorEl) STATE.watchtower.labelColor = labelColorEl.value;
     saveWatchtowerState();
     renderWatchtower();
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
@@ -8450,9 +8461,9 @@ function renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep){
     wtLine(svg, x1, x2, high, '#ffffff', 1);
     wtLine(svg, x1, x2, low,  '#ffffff', 1);
     wtLine(svg, x1, x2, mid,  '#ffffff', 1, '4,3');
-    wtLabel(svg, x2, high, 'PDH', '#ffffff');
-    wtLabel(svg, x2, low,  'PDL', '#ffffff');
-    wtLabel(svg, x2, mid,  'PDM', '#ffffff');
+    wtLabel(svg, x2, high, 'PDH', STATE.watchtower.labelColor);
+    wtLabel(svg, x2, low,  'PDL', STATE.watchtower.labelColor);
+    wtLabel(svg, x2, mid,  'PDM', STATE.watchtower.labelColor);
   });
 }
 
@@ -8479,9 +8490,9 @@ function renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep){
     wtLine(svg, x1, x2, high, '#c99cd0', 1);
     wtLine(svg, x1, x2, low,  '#c99cd0', 1);
     wtLine(svg, x1, x2, mid,  '#c99cd0', 1, '4,3');
-    wtLabel(svg, x2, high, 'PWH', '#c99cd0');
-    wtLabel(svg, x2, low,  'PWL', '#c99cd0');
-    wtLabel(svg, x2, mid,  'PWM', '#c99cd0');
+    wtLabel(svg, x2, high, 'PWH', STATE.watchtower.labelColor);
+    wtLabel(svg, x2, low,  'PWL', STATE.watchtower.labelColor);
+    wtLabel(svg, x2, mid,  'PWM', STATE.watchtower.labelColor);
   });
 }
 
@@ -8500,7 +8511,7 @@ function renderWtMNO(svg, byDate, dateKeys, lastTime, barStep){
     const isCurrentDay = dayKey===todayKey;
     const x2 = isCurrentDay ? (lastTime+LEVEL_EXTEND_BARS*barStep) : dayCandles[dayCandles.length-1].time;
     wtLine(svg, mnoCandle.time, x2, mnoCandle.open, '#80deea', 1, '2,2');
-    wtLabel(svg, x2, mnoCandle.open, 'MNO', '#80deea');
+    wtLabel(svg, x2, mnoCandle.open, 'MNO', STATE.watchtower.labelColor);
   });
 }
 
@@ -10752,6 +10763,15 @@ function resetChartSettings(){
   setActiveTF(STATE.timeframe);
 }
 
+// Luminancia aproximada (YIQ) de un color hex '#rrggbb' — usado para elegir
+// un halo de sombra claro u oscuro según qué tan oscuro sea cs.textColor.
+function textColorIsDark(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n>>16)&255, g=(n>>8)&255, b=n&255;
+  return ((r*299 + g*587 + b*114) / 1000) < 140;
+}
 function buildChartBackground(cs){
   // Degradé vertical: lightweight-charts lo soporta nativo (type:'gradient',
   // topColor/bottomColor) desde v4 — no hace falta simularlo con CSS.
@@ -10770,6 +10790,15 @@ function applyChartSettings(){
   const indChips = document.getElementById('chart-indicator-chips');
   if (indChips) {
     indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
+    // El halo de sombra existe para que el nombre se lea encima de
+    // cualquier cosa dibujada atrás (velas, zonas de Watchtower, etc) —
+    // pero un halo negro fijo con texto YA oscuro (cs.textColor elegido
+    // para un fondo claro) se ve difuso en vez de nítido. Se elige el
+    // color del halo según el brillo del texto: texto oscuro → halo
+    // claro, texto claro → halo oscuro (como ya era).
+    const haloColor = textColorIsDark(cs.textColor) ? '255,255,255' : '0,0,0';
+    indChips.style.setProperty('--ind-chip-shadow', `0 1px 3px rgba(${haloColor},.9), 0 0 6px rgba(${haloColor},.6)`);
+    indChips.style.setProperty('--ind-chip-icon-shadow', `drop-shadow(0 1px 2px rgba(${haloColor},.9))`);
   }
   // Reloj de la barra de abajo — mismo color de texto que precio/horario del
   // chart. #sb-clock tiene su propio color en el CSS (más específico que
