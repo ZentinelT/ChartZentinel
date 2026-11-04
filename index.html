@@ -11630,6 +11630,19 @@ function scrollToRealTimeReliably(maxAttempts){
 // simple — no pasa de unos miles, igual que safeLineTime). Compartido por
 // goToDateTime (modo normal) y goToReplayTarget/goToNextSession (modo
 // replay) para no repetir el mismo loop en los tres.
+// Margen (en segundos) para centrar/empujar el cursor "before" al pedir un
+// lote nuevo alrededor de un target. 1000 velas alcanza de sobra en TF
+// grandes, pero en TF chicos (M1/M5) ese margen puede ser de apenas horas
+// — menos que un fin de semana (~48h) o un feriado del broker. Si el
+// target cae justo en uno de esos huecos sin velas, un margen así de corto
+// deja el cursor "before" TODAVÍA adentro del hueco, y el fetch devuelve
+// otra vez el mismo lote de siempre (viernes para atrás) sin avanzar nada
+// — bug real reportado 2026-11-04 con M1/"next session" cruzando un
+// viernes. Un piso fijo de 14 días cubre cualquier cierre de mercado
+// normal sin importar el TF.
+function fetchMarginSeconds(tf){
+  return Math.max(1000 * tfToSeconds(tf), 14*86400);
+}
 function nearestCandleIndex(candles, target){
   let idx = 0, bestDiff = Infinity;
   for (let i = 0; i < candles.length; i++) {
@@ -11677,7 +11690,7 @@ async function goToDateTime(dateStr, timeStr){
       // ese segundo fetch encima del primero era lo que terminaba
       // descuadrando el rango visible que esta función recién había
       // calculado.
-      const margin = 1000 * tfToSeconds(STATE.timeframe);
+      const margin = fetchMarginSeconds(STATE.timeframe);
       const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, target + margin);
       if (!json.error && Array.isArray(json.bars) && json.bars.length) {
         window._lastCandles = json.bars;
@@ -11726,7 +11739,7 @@ async function goToReplayTarget(target, dateStr, timeStr){
   if (target > r.full[r.full.length-1].time || target < r.full[0].time) {
     showLoader(`Going to ${dateStr||''} ${timeStr||''}…`); showOverlay(true);
     try {
-      const margin = 1000 * tfToSeconds(STATE.timeframe);
+      const margin = fetchMarginSeconds(STATE.timeframe);
       const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, target + margin);
       if (!json.error && Array.isArray(json.bars) && json.bars.length) r.full = json.bars;
     } catch(e) {
@@ -11748,43 +11761,56 @@ async function goToReplayTarget(target, dateStr, timeStr){
 // sin tocar nada el botón se comporta como "próximo día" de siempre.
 function getReplayNextSessionTime(){ return lsGet('td_replay_next_session_time') || '17:00'; }
 function setReplayNextSessionTime(v){ lsSet('td_replay_next_session_time', v); }
-// "Próxima sesión": avanza el corte hasta la primera vela cuya hora caiga
-// en o después de getReplayNextSessionTime() del día SIGUIENTE a la vela
-// actual (si esa hora ya pasó hoy) o del mismo día (si todavía no llegó)
-// — así "17:30" parado a las 10:00 salta hoy mismo a las 17:30, pero
-// parado a las 20:00 salta a mañana 17:30. Si esa vela todavía no está en
-// lo cargado, pide más historial (mismo mecanismo que goToReplayTarget) y
-// reintenta la búsqueda.
+// "Próxima sesión": avanza el corte hasta la primera vela que llegue a
+// getReplayNextSessionTime() de la PRÓXIMA sesión (día-broker, mismo corte
+// 17:00 que ya usa wtDayKey para Watchtower/PD levels) — no simplemente
+// "+1 día calendario": un fin de semana (o un feriado del broker) no tiene
+// velas entre el cierre del viernes y la reapertura del domingo a la
+// noche, así que "viernes 9:30 + 1 día = sábado 9:30" caía DENTRO de ese
+// hueco y la primera vela que lo cruzaba de verdad terminaba siendo la
+// apertura del domingo a la noche, no el lunes 9:30 esperado (bug
+// reportado 2026-11-04). Yendo por sesión-broker en vez de por día
+// calendario, "la sesión siguiente" a la del viernes YA es, por
+// definición, la del lunes (domingo 17:00 → lunes 17:00: wtDayKey agrupa
+// la apertura dominical adentro de la sesión del lunes) — sin importar
+// cuántos días sin velas haya en el medio.
 async function goToNextSession(){
   const r = window._replay; if (!r || !r.full.length) return;
   const [hh,mm] = getReplayNextSessionTime().split(':').map(Number);
-  function computeTarget(){
-    const curTime = r.full[r.idx].time;
-    const d = new Date(curTime * 1000);
-    let target = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hh, mm, 0) / 1000;
-    if (target <= curTime) target += 86400;
-    return target;
+  // La hora pedida (ej. 9:30) siempre cae en el día calendario SIGUIENTE al
+  // que arranca la sesión-broker (esa arranca 17:00, y 17:00+16h30 ya es el
+  // día de al lado) — ver wtDayKey: su resultado para CUALQUIER vela de la
+  // mañana de "lunes" es el timestamp de "domingo 17:00".
+  function sessionTargetTime(sessionKey){
+    const d = new Date(sessionKey * 1000);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()+1, hh, mm, 0) / 1000;
   }
-  function findNext(target){
+  function findNext(){
+    const curKey = wtDayKey(r.full[r.idx].time);
+    let nextKey = null;
+    for (let i = r.idx + 1; i < r.full.length; i++) {
+      const dk = wtDayKey(r.full[i].time);
+      if (dk !== curKey) { nextKey = dk; break; } // primera vela de la sesión siguiente, sea cual sea
+    }
+    if (nextKey === null) return -1; // no hay otra sesión todavía cargada
+    const target = sessionTargetTime(nextKey);
     for (let i = r.idx + 1; i < r.full.length; i++) {
       if (r.full[i].time >= target) return i;
     }
-    return -1;
+    return -1; // esa sesión está cargada pero corta ANTES de llegar al horario pedido
   }
-  let target = computeTarget();
-  let idx = findNext(target);
+  let idx = findNext();
   if (idx < 0) {
     showLoader('Going to next session…'); showOverlay(true);
     try {
       const lastLoaded = r.full[r.full.length-1].time;
-      const margin = 1000 * tfToSeconds(STATE.timeframe);
-      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, Math.max(target, lastLoaded) + margin);
+      const margin = fetchMarginSeconds(STATE.timeframe);
+      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, lastLoaded + margin);
       if (!json.error && Array.isArray(json.bars) && json.bars.length) {
         const curTime = r.full[r.idx].time;
         r.full = json.bars;
         r.idx = nearestCandleIndex(r.full, curTime);
-        target = computeTarget();
-        idx = findNext(target);
+        idx = findNext();
       }
     } catch(e) {
     } finally {
