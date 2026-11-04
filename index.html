@@ -12202,13 +12202,35 @@ async function appendNewBar(symbol, timeframe){
 }
 
 // "Refresh" ya NO vuelve a pedir las velas al bridge (eso es lo que hacía
-// loadChart) — el usuario lo pidió así: es un reset de POSICIÓN nada más,
-// deja el chart acomodado como recién abierto (zoom/scroll por defecto,
-// autoScale de precio prendido) sin tocar los datos ya cargados. Mismas 3
-// líneas que loadChart usa para dejar la vista "de apertura" la primera vez.
+// loadChart) — el usuario lo pidió así (2026-10-26): es un reset de
+// POSICIÓN nada más, deja el chart acomodado como recién abierto (zoom/
+// scroll por defecto, autoScale de precio prendido) sin tocar los datos ya
+// cargados. Eso asume que window._lastCandles YA llega hasta ahora (cierto
+// en el uso normal: el polling de refreshFormingCandle/appendNewBar lo
+// mantiene al día solo) — pero "Go to date"/Next session (goToDateTime,
+// goToReplayTarget) puede haber reemplazado ese array por un lote centrado
+// en una fecha vieja, sin necesariamente llegar al presente (a propósito:
+// traer TODO el historial hasta hoy en cada salto sería carísimo en TF
+// chicos). Sin datos nuevos de por medio, un reset de posición solo puede
+// scrollear hasta donde YA llega lo cargado — por eso "Refresh" después de
+// un salto a una fecha vieja se quedaba pegado ahí en vez de llegar al
+// minuto actual (reportado 2026-11-05: fue al 1 de octubre, Refresh lo
+// dejó en el 15). Si lo cargado está "viejo" (más de 3 días Y más de 3
+// velas atrás de ahora — el margen extra evita falsos positivos por un
+// simple cierre de fin de semana) sí hace falta pedir datos de nuevo —
+// ahí cae al mismo loadChart() de siempre, como antes del cambio del
+// 2026-10-26. En el caso normal (ya viendo datos en vivo) se sigue sin
+// pedir nada.
 function refreshChart(){
   const btn = document.getElementById('btn-refresh');
   if (!chart || !candleSeries) return;
+  const last = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+  const stale = last && (Date.now()/1000 - last.time) > Math.max(3*86400, 3*tfToSeconds(STATE.timeframe));
+  if (stale) {
+    btn.classList.add('spinning');
+    loadChart(STATE.symbol, STATE.timeframe).finally(() => btn.classList.remove('spinning'));
+    return;
+  }
   btn.classList.add('spinning');
   chart.priceScale('right').applyOptions({ autoScale: true });
   chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
