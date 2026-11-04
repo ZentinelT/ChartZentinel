@@ -1492,7 +1492,14 @@
       <div class="goto-date-row"><label>Time</label><input type="time" id="goto-time-input" value="00:00"></div>
       <button class="goto-date-go" id="goto-date-go">Go to date/time</button>
       <!-- Solo tiene sentido en Replay (avanza el corte, no solo la vista) —
-           initGoToDatePopup lo muestra/oculta según haya un replay activo. -->
+           initGoToDatePopup muestra/oculta esta fila según haya un replay
+           activo. La hora queda guardada (lsKey td_replay_next_session_time,
+           GLOBAL, no por panel) y se reusa tal cual hasta que el usuario la
+           cambie — no hace falta re-tipearla cada vez que se salta. -->
+      <div class="goto-date-row goto-next-session-row" id="goto-next-session-row" style="display:none">
+        <label>Next session at</label>
+        <input type="time" id="goto-next-session-time" value="17:00">
+      </div>
       <button class="goto-date-go goto-next-session" id="goto-next-session" style="display:none">Next session ▸</button>
     </div>
   </div>
@@ -2749,6 +2756,10 @@ function renderLayoutGrid(n){
         <div class="goto-date-row"><label>Date</label><input type="date" id="gc-goto-date-input"></div>
         <div class="goto-date-row"><label>Time</label><input type="time" id="gc-goto-time-input" value="00:00"></div>
         <button class="goto-date-go" id="gc-goto-date-go">Go to date/time</button>
+        <div class="goto-date-row goto-next-session-row" id="gc-goto-next-session-row" style="display:none">
+          <label>Next session at</label>
+          <input type="time" id="gc-goto-next-session-time" value="17:00">
+        </div>
         <button class="goto-date-go goto-next-session" id="gc-goto-next-session" style="display:none">Next session ▸</button>
       </div>
     </div>
@@ -11729,32 +11740,51 @@ async function goToReplayTarget(target, dateStr, timeStr){
   // en el principio del historial en vez de en la vela recién revelada.
   try { chart.timeScale().scrollToPosition(0, false); } catch(e){}
 }
-// "Próxima sesión": avanza el corte hasta la primera vela de la sesión
-// (día-broker, mismo corte 17:00 NY que ya usan Watchtower/PD levels — ver
-// wtDayKey) siguiente a la actual, sin tener que arrastrar el slider vela
-// por vela. Si ese día todavía no está en lo cargado, pide más historial
-// (mismo mecanismo que goToReplayTarget) y reintenta la búsqueda.
+// Hora objetivo de "Next session" — UNA sola preferencia para TODA la app,
+// no por panel/símbolo (mismo criterio que td_theme/td_ind_legend): el
+// usuario la tipea una vez y se mantiene así hasta que la cambie a mano,
+// sin importar en qué gráfico/pane esté parado. Default '17:00' = el
+// corte de día-broker (wtDayKey) que ya usan Watchtower/PD levels, así que
+// sin tocar nada el botón se comporta como "próximo día" de siempre.
+function getReplayNextSessionTime(){ return lsGet('td_replay_next_session_time') || '17:00'; }
+function setReplayNextSessionTime(v){ lsSet('td_replay_next_session_time', v); }
+// "Próxima sesión": avanza el corte hasta la primera vela cuya hora caiga
+// en o después de getReplayNextSessionTime() del día SIGUIENTE a la vela
+// actual (si esa hora ya pasó hoy) o del mismo día (si todavía no llegó)
+// — así "17:30" parado a las 10:00 salta hoy mismo a las 17:30, pero
+// parado a las 20:00 salta a mañana 17:30. Si esa vela todavía no está en
+// lo cargado, pide más historial (mismo mecanismo que goToReplayTarget) y
+// reintenta la búsqueda.
 async function goToNextSession(){
   const r = window._replay; if (!r || !r.full.length) return;
-  function findNext(){
-    const curKey = wtDayKey(r.full[r.idx].time);
+  const [hh,mm] = getReplayNextSessionTime().split(':').map(Number);
+  function computeTarget(){
+    const curTime = r.full[r.idx].time;
+    const d = new Date(curTime * 1000);
+    let target = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hh, mm, 0) / 1000;
+    if (target <= curTime) target += 86400;
+    return target;
+  }
+  function findNext(target){
     for (let i = r.idx + 1; i < r.full.length; i++) {
-      if (wtDayKey(r.full[i].time) !== curKey) return i;
+      if (r.full[i].time >= target) return i;
     }
     return -1;
   }
-  let idx = findNext();
+  let target = computeTarget();
+  let idx = findNext(target);
   if (idx < 0) {
     showLoader('Going to next session…'); showOverlay(true);
     try {
       const lastLoaded = r.full[r.full.length-1].time;
       const margin = 1000 * tfToSeconds(STATE.timeframe);
-      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, lastLoaded + margin);
+      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, Math.max(target, lastLoaded) + margin);
       if (!json.error && Array.isArray(json.bars) && json.bars.length) {
         const curTime = r.full[r.idx].time;
         r.full = json.bars;
         r.idx = nearestCandleIndex(r.full, curTime);
-        idx = findNext();
+        target = computeTarget();
+        idx = findNext(target);
       }
     } catch(e) {
     } finally {
@@ -11773,7 +11803,17 @@ function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn, nextSessionFn,
   const timeInput = document.getElementById(prefix+'goto-time-input');
   const goBtn = document.getElementById(prefix+'goto-date-go');
   const nextSessionBtn = document.getElementById(prefix+'goto-next-session');
+  const nextSessionRow = document.getElementById(prefix+'goto-next-session-row');
+  const nextSessionTimeInput = document.getElementById(prefix+'goto-next-session-time');
   if (!trigger || !popup) return;
+  // La hora de "Next session" es UNA preferencia global (ver
+  // getReplayNextSessionTime) — single-pane y grilla comparten el mismo
+  // input id-distinto pero misma key de storage, así que cualquiera de los
+  // dos la deja guardada para el otro también.
+  if (nextSessionTimeInput) {
+    nextSessionTimeInput.value = getReplayNextSessionTime();
+    nextSessionTimeInput.addEventListener('change', () => setReplayNextSessionTime(nextSessionTimeInput.value || '17:00'));
+  }
   function submit(){
     if (!dateInput.value) { dateInput.focus(); return; }
     (submitFn || goToDateTime)(dateInput.value, timeInput.value);
@@ -11802,18 +11842,24 @@ function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn, nextSessionFn,
     // no una vez al cargar la página, porque el replay puede arrancar o
     // terminar en cualquier momento mientras el popup sigue cerrado.
     if (willOpen && nextSessionBtn) {
-      nextSessionBtn.style.display = (isReplayActiveFn ? isReplayActiveFn() : !!window._replay) ? '' : 'none';
+      const show = (isReplayActiveFn ? isReplayActiveFn() : !!window._replay) ? '' : 'none';
+      nextSessionBtn.style.display = show;
+      if (nextSessionRow) nextSessionRow.style.display = show;
+      if (nextSessionTimeInput) nextSessionTimeInput.value = getReplayNextSessionTime();
     }
     popup.classList.toggle('open', willOpen);
     trigger.classList.toggle('active', willOpen);
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
   goBtn.addEventListener('click', submit);
-  if (nextSessionBtn) nextSessionBtn.addEventListener('click', () => {
+  function submitNextSession(){
+    if (nextSessionTimeInput) setReplayNextSessionTime(nextSessionTimeInput.value || '17:00');
     (nextSessionFn || goToNextSession)();
     popup.classList.remove('open');
     trigger.classList.remove('active');
-  });
+  }
+  if (nextSessionBtn) nextSessionBtn.addEventListener('click', submitNextSession);
+  if (nextSessionTimeInput) nextSessionTimeInput.addEventListener('keydown', e => { if (e.key==='Enter') submitNextSession(); });
   timeInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
   dateInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
   document.addEventListener('click', (e) => {
