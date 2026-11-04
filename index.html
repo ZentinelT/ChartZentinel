@@ -2926,7 +2926,7 @@ function renderLayoutGrid(n){
     </div>
   `;
   shellSidebar.querySelector('#add-sym-inp').addEventListener('keydown', e => {
-    if (e.key==='Enter') shellAddSymbol();
+    // Enter lo maneja wireSymbolSearch (ver su comentario) — acá solo Escape.
     if (e.key==='Escape') shellSidebar.querySelector('#add-sym-form').classList.remove('open');
   });
 
@@ -3184,10 +3184,7 @@ function renderLayoutGrid(n){
     broadcast({ type:'zentinel:setSymbol', symbol:sym });
     symbolInp.value='';
   }
-  symbolInp.addEventListener('keydown', e=>{
-    if (e.key !== 'Enter') return;
-    applyGcSymbolInput();
-  });
+  // Enter lo maneja wireSymbolSearch (ver su comentario).
   wireSymbolSearch(symbolInp, gbar.querySelector('#gc-symbol-suggestions'), applyGcSymbolInput);
 
   // Un solo selector de TF para toda la grilla — muestra la lista de
@@ -7112,7 +7109,8 @@ function addSymbol() { const inp=document.getElementById('add-sym-inp'); const s
 function removeSymbol(sym,e) { e.stopPropagation(); STATE.watchlist=STATE.watchlist.filter(s=>s!==sym); if(STATE.symbol===sym&&STATE.watchlist.length)selectSymbol(STATE.watchlist[0]); else renderWatchlist(); }
 function toggleAddSym() { const f=document.getElementById('add-sym-form'); f.classList.toggle('open'); if(f.classList.contains('open'))document.getElementById('add-sym-inp').focus(); }
 function updateWLPrice(sym,price) { const key=sym.replace(/[^a-z0-9]/gi,'_'); const el=document.getElementById('wlp-'+key); if(el)el.textContent=fmt(price); }
-document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==='Enter')addSymbol();if(e.key==='Escape')document.getElementById('add-sym-form').classList.remove('open');});
+// Enter lo maneja wireSymbolSearch (ver su comentario) — acá solo Escape.
+document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('add-sym-form').classList.remove('open');});
 
 // ══════════════════════════════════════════════════════════
 //  BUSCADOR DE SÍMBOLO — contra /symbols del bridge (la lista real que el
@@ -7180,11 +7178,25 @@ function wireSymbolSearch(input, box, onAdd){
     const row = e.target.closest('[data-sym]');
     if (row) { e.preventDefault(); pick(row.dataset.sym); }
   });
+  // Enter se maneja ACÁ, una sola vez para todo el buscador (antes cada
+  // llamador de wireSymbolSearch tenía ADEMÁS su propio listener de Enter
+  // por separado — con el dropdown abierto, los dos escuchas terminaban
+  // disparando: el otro cargaba el texto tal cual se había tipeado, y
+  // recién un instante después éste cargaba lo realmente seleccionado con
+  // las flechas. Si el símbolo tipeado a medias no existía, esa primera
+  // carga fallida alcanzaba a mostrar "no encontrado" aunque la selección
+  // correcta llegara enseguida atrás). Con el dropdown abierto y algo
+  // resaltado, Enter confirma ESE; si no, cae al comportamiento de
+  // siempre (onAdd con el texto tipeado tal cual).
   input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (box.classList.contains('open') && hlIdx >= 0) { e.preventDefault(); pick(matches[hlIdx]); }
+      else { close(); onAdd(); }
+      return;
+    }
     if (!box.classList.contains('open')) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); hlIdx = Math.min(matches.length-1, hlIdx+1); renderMatches(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); hlIdx = Math.max(0, hlIdx-1); renderMatches(); }
-    else if (e.key === 'Enter' && hlIdx >= 0) { e.preventDefault(); pick(matches[hlIdx]); }
     else if (e.key === 'Escape') close();
   });
   document.addEventListener('click', (e) => { if (e.target !== input && !box.contains(e.target)) close(); });
@@ -11348,10 +11360,7 @@ _dataSourceSelect.addEventListener('change', () => {
   updateApiBadge(document.getElementById('api-badge'), STATE.dataSource);
   loadChart(STATE.symbol, STATE.timeframe);
 });
-document.getElementById('symbol-input').addEventListener('keydown',e=>{
-  if(e.key!=='Enter')return;
-  applySymbolInputValue();
-});
+// Enter lo maneja wireSymbolSearch (ver su comentario).
 wireSymbolSearch(document.getElementById('symbol-input'), document.getElementById('symbol-input-suggestions'), applySymbolInputValue);
 
 // ══════════════════════════════════════════════════════════
