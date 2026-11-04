@@ -12428,9 +12428,22 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     chart.applyOptions({ width:_cc.clientWidth, height:_cc.clientHeight });
 
     drawings.forEach(d => {
-      d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
-      d.series=[];
-      buildDrawingOnChart(d);
+      // updateDrawingGeometry() primero (reposiciona las series YA
+      // existentes con setData) en vez de sacarlas y reconstruirlas
+      // siempre — mismo criterio que onDtbExtend/el resto de las
+      // ediciones de dibujos. Antes esto SIEMPRE hacía remove+rebuild en
+      // cada cambio de símbolo/TF; si chart.removeSeries(s) fallaba acá
+      // (el catch lo tragaba sin avisar), esa serie vieja quedaba pegada
+      // para siempre en el chart, sin ningún d.series que la referencie —
+      // un "fantasma" (reportado por el usuario: una línea de más
+      // encima del dibujo al cambiar de TF) que solo se notaba en los
+      // timeframes con rango visible suficiente para llegar a su
+      // horario viejo.
+      if (!updateDrawingGeometry(d)) {
+        d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
+        d.series=[];
+        buildDrawingOnChart(d);
+      }
     });
     if(selectedDrawingId)highlightSelectedSvg(selectedDrawingId);
 
