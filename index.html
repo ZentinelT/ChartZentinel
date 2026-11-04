@@ -8607,6 +8607,44 @@ function wtGroupByDay(candles){
   return byDate;
 }
 
+// Huella barata para cachear sobre TODAS las velas cargadas — mismo
+// criterio que snReplayCached (ver ahí, más abajo con Sniper).
+function _candlesFingerprint(candles){
+  return candles.length + '|' + (candles.length?candles[0].time:0) + '|' + (candles.length?candles[candles.length-1].time:0) + '|' + STATE.symbol + '|' + STATE.timeframe;
+}
+
+// Cachea wtGroupByDay(candles) — recorrer TODAS las velas cargadas para
+// agruparlas por día (pueden ser miles, sobre todo con el historial extra
+// que trae Watchtower para la semana anterior, ver
+// ensureWeeklyHistoryForWatchtower) se repetía en CADA frame del loop de
+// 60fps que usa el drag/zoom vertical de precio (_wtDragLoop) — eso se
+// sentía como que las cajas/líneas de Watchtower iban "atrasadas"
+// respecto a las velas mientras se arrastraba (reportado por el usuario:
+// con Sniper no pasaba, porque ESE ya tenía su propio cache desde antes,
+// snReplayCached, por el mismo motivo).
+let _wtByDateCache = null; // {key, byDate, dateKeys}
+function wtGroupByDayCached(candles){
+  const key = _candlesFingerprint(candles);
+  if (_wtByDateCache && _wtByDateCache.key === key) return _wtByDateCache;
+  const byDate = wtGroupByDay(candles);
+  const dateKeys = [...byDate.keys()].sort((a,b)=>a-b);
+  _wtByDateCache = { key, byDate, dateKeys };
+  return _wtByDateCache;
+}
+// Mismo motivo, para el agrupado por SEMANA que renderWtPrevWeek hacía
+// desde cero en cada frame (un segundo recorrido completo de candles,
+// aparte del de wtGroupByDayCached).
+let _wtByWeekCache = null; // {key, byWeek, weekKeys}
+function wtGroupByWeekCached(candles){
+  const key = _candlesFingerprint(candles);
+  if (_wtByWeekCache && _wtByWeekCache.key === key) return _wtByWeekCache;
+  const byWeek=new Map();
+  candles.forEach(c=>{ const wk=wtWeekKey(c.time); if(!byWeek.has(wk))byWeek.set(wk,[]); byWeek.get(wk).push(c); });
+  const weekKeys=[...byWeek.keys()].sort((a,b)=>a-b);
+  _wtByWeekCache = { key, byWeek, weekKeys };
+  return _wtByWeekCache;
+}
+
 function renderWtKillzones(svg, byDate, dateKeys, barStep){
   if (barStep >= 86400) return; // D/W/M: una killzone intradía no tiene sentido acá
   const histDays=Math.max(1, STATE.watchtower.histDays||3);
@@ -8687,9 +8725,7 @@ function renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep){
 // que killzones/ORG/PD, sin un parámetro de historial propio).
 function renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep){
   const histDays=Math.max(1, STATE.watchtower.histDays||3);
-  const byWeek=new Map();
-  candles.forEach(c=>{ const wk=wtWeekKey(c.time); if(!byWeek.has(wk))byWeek.set(wk,[]); byWeek.get(wk).push(c); });
-  const weekKeys=[...byWeek.keys()].sort((a,b)=>a-b);
+  const { byWeek, weekKeys } = wtGroupByWeekCached(candles);
   const curWeek=wtWeekKey(lastTime);
   const recentWeekKeys=[...new Set(dateKeys.slice(-histDays).map(dk=>wtWeekKey(dk)))].sort((a,b)=>a-b);
   recentWeekKeys.forEach(wk=>{
@@ -8948,8 +8984,7 @@ function renderWatchtower(){
   // TF, sin depender de qué par de velas se mire.
   const barStep=tfToSeconds(STATE.timeframe);
   const lastTime=candles[candles.length-1].time;
-  const byDate=wtGroupByDay(candles);
-  const dateKeys=[...byDate.keys()].sort((a,b)=>a-b);
+  const { byDate, dateKeys } = wtGroupByDayCached(candles);
 
   if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
   if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep);
@@ -10304,6 +10339,37 @@ function smDrawSetup(svg, setup, nextStart, durationSec, lastTime, barInterval, 
   }
 }
 
+// Cachea smBuildDailySetups/smBuildPeriodSetups — mismo motivo/mismo
+// patrón que snReplayCached (Sniper) y wtGroupByDayCached (Watchtower):
+// recorrer TODAS las velas cargadas, hasta 3 veces (diario+semanal+
+// mensual), se repetía en CADA frame del loop de 60fps del drag/zoom
+// vertical de precio — se sentía como que las cajas/líneas de Stat Map
+// iban "atrasadas" respecto a las velas mientras se arrastraba (mismo
+// reporte del usuario que con Watchtower; Sniper no lo sufre porque ya
+// tenía su propio cache desde antes).
+let _smDailyCache = null, _smWeeklyCache = null, _smMonthlyCache = null;
+function smBuildDailySetupsCached(candles, anchorHour, anchorMin, lookback, barInterval){
+  const key = _candlesFingerprint(candles) + '|' + anchorHour + '|' + anchorMin + '|' + lookback;
+  if (_smDailyCache && _smDailyCache.key === key) return _smDailyCache.result;
+  const result = smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval);
+  _smDailyCache = { key, result };
+  return result;
+}
+function _smBuildPeriodSetupsCached(cacheGetSet, candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval){
+  const key = _candlesFingerprint(candles) + '|' + lookback + '|' + mode + '|' + anchorHour + '|' + anchorMin;
+  const cached = cacheGetSet.get();
+  if (cached && cached.key === key) return cached.result;
+  const result = smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval);
+  cacheGetSet.set({ key, result });
+  return result;
+}
+function smBuildWeeklySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval){
+  return _smBuildPeriodSetupsCached({ get:()=>_smWeeklyCache, set:v=>_smWeeklyCache=v }, candles, wtWeekKey, lookback, mode, anchorHour, anchorMin, barInterval);
+}
+function smBuildMonthlySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval){
+  return _smBuildPeriodSetupsCached({ get:()=>_smMonthlyCache, set:v=>_smMonthlyCache=v }, candles, smMonthKey, lookback, mode, anchorHour, anchorMin, barInterval);
+}
+
 function renderStatMap(){
   if (!window._statMapSvg) return;
   const svg = window._statMapSvg;
@@ -10323,7 +10389,7 @@ function renderStatMap(){
   const labelSide = sm.labelSide === 'left' ? 'left' : 'right';
 
   if (sm.showDaily !== false){
-    const dailySetups = smBuildDailySetups(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount, barInterval);
+    const dailySetups = smBuildDailySetupsCached(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount, barInterval);
     dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, {
       lineColor: sm.lineColor, midColor: sm.midColor, lineWidth: sm.lineWidth, dash: smDash(sm.lineStyle),
       zoneColor: sm.zoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
@@ -10333,7 +10399,7 @@ function renderStatMap(){
   }
 
   if (sm.showWeekly){
-    const weeklySetups = smBuildPeriodSetups(candles, wtWeekKey, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin, barInterval);
+    const weeklySetups = smBuildWeeklySetupsCached(candles, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin, barInterval);
     // Infinity, NO 118*3600 (la aproximación "~5 días hábiles" del Pine
     // original) como techo: ese techo fijo es lo que generaba el hueco de
     // varios días reportado por el usuario — acá solo sirve de techo
@@ -10350,7 +10416,7 @@ function renderStatMap(){
   }
 
   if (sm.showMonthly){
-    const monthlySetups = smBuildPeriodSetups(candles, smMonthKey, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin, barInterval);
+    const monthlySetups = smBuildMonthlySetupsCached(candles, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin, barInterval);
     // Ver el comentario igual arriba, semanal — mismo motivo exacto (acá
     // es el que el usuario reportó: "los niveles mensuales duran 21 días",
     // que era el techo fijo 483*3600 ("~21 días hábiles" del Pine
