@@ -5850,6 +5850,9 @@ class ZentinelBehindDrawingsPrimitive {
               drawBehindDrawingSeries(ctx, d);
               drawBehindDrawingSvgParts(ctx, d);
             });
+            if (STATE.statMap && STATE.statMap.behindCandles) {
+              paintSvgLayerBehindCandles(ctx, window._statMapSvg);
+            }
           });
         },
       }),
@@ -5864,6 +5867,60 @@ function _behindDashPattern(lineStyle) {
   if (lineStyle === 3) return [10,6];
   if (lineStyle === 4) return [1,4];
   return [];
+}
+// Mismo mecanismo que d.sendToBack (arriba) pero para la capa SVG de un
+// INDICADOR entero (hoy solo Stat Map, vía STATE.statMap.behindCandles) en
+// vez de un dibujo manual puntual: repinta a mano, en el canvas de fondo,
+// los mismos <rect>/<line>/<text> que ya tiene la capa SVG (generados por
+// wtRect/wtLine/wtLabel — mismos atributos, no hace falta recalcular nada),
+// y la capa SVG real se oculta con visibility:hidden (ver renderStatMap)
+// para que no se vea duplicada por encima.
+function paintSvgLayerBehindCandles(ctx, svg) {
+  if (!svg) return;
+  Array.from(svg.children).forEach(el => {
+    if (el.style && el.style.display === 'none') return;
+    const tag = el.tagName;
+    if (tag === 'rect') {
+      const w = parseFloat(el.getAttribute('width')), h = parseFloat(el.getAttribute('height'));
+      if (!(w > 0) || !(h > 0)) return;
+      const x = parseFloat(el.getAttribute('x')), y = parseFloat(el.getAttribute('y'));
+      const fill = el.getAttribute('fill');
+      if (fill && fill !== 'none') {
+        ctx.save();
+        ctx.globalAlpha = parseFloat(el.getAttribute('fill-opacity') || '1');
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, y, w, h);
+        ctx.restore();
+      }
+      const stroke = el.getAttribute('stroke');
+      if (stroke && stroke !== 'none') {
+        ctx.save();
+        ctx.globalAlpha = parseFloat(el.getAttribute('stroke-opacity') || '1');
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+        ctx.strokeRect(x, y, w, h);
+        ctx.restore();
+      }
+    } else if (tag === 'line') {
+      ctx.save();
+      ctx.strokeStyle = el.getAttribute('stroke') || '#fff';
+      ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+      const dash = el.getAttribute('stroke-dasharray');
+      ctx.setLineDash(dash ? dash.split(',').map(Number) : []);
+      ctx.beginPath();
+      ctx.moveTo(parseFloat(el.getAttribute('x1')), parseFloat(el.getAttribute('y1')));
+      ctx.lineTo(parseFloat(el.getAttribute('x2')), parseFloat(el.getAttribute('y2')));
+      ctx.stroke();
+      ctx.restore();
+    } else if (tag === 'text' && el.textContent) {
+      ctx.save();
+      ctx.fillStyle = el.getAttribute('fill') || '#fff';
+      ctx.font = `${el.getAttribute('font-size') || '10'}px ${el.getAttribute('font-family') || "'DM Mono',monospace"}`;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(el.textContent, parseFloat(el.getAttribute('x')), parseFloat(el.getAttribute('y')));
+      ctx.restore();
+    }
+  });
 }
 function drawBehindDrawingSeries(ctx, d) {
   (d.series || []).forEach((s, i) => {
@@ -7808,6 +7865,7 @@ function openIndicatorSettings(name) {
     const mlc = snParseRgba(sm.mLineColor), mmc = snParseRgba(sm.mMidColor), mzc = snParseRgba(sm.mZoneColor);
     const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
     body.innerHTML = `
+      <label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="sm-behind-candles" ${sm.behindCandles?'checked':''}></label>
       <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">⏱ Sesión Diaria</div>
       <label class="wt-set-row"><span>Mostrar niveles diarios</span><input type="checkbox" id="sm-show-daily" ${sm.showDaily!==false?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
@@ -8087,6 +8145,7 @@ function applyIndSettingsForm() {
   } else if (_indSettingsTarget === 'Stat Map') {
     const g = id => document.getElementById(id);
     const sm = STATE.statMap;
+    sm.behindCandles = g('sm-behind-candles').checked;
     sm.showDaily = g('sm-show-daily').checked;
     sm.anchorHour = Math.max(0, Math.min(23, Number(g('sm-anchor-hour').value)||0));
     sm.anchorMin  = Math.max(0, Math.min(59, Number(g('sm-anchor-min').value)||0));
@@ -10084,6 +10143,11 @@ function renderStatMap(){
   const svg = window._statMapSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Stat Map');
+  // Con behindCandles activo, el primitive de arriba (ZentinelBehindDrawingsPrimitive)
+  // repinta estos mismos elementos a mano DETRÁS de las velas — la capa SVG
+  // real se oculta para no verla duplicada por encima.
+  svg.style.visibility = STATE.statMap.behindCandles ? 'hidden' : '';
+  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
   if (!STATE.statMap.enabled || isIndicatorHidden('Stat Map')) return;
   const candles = window._lastCandles||[];
   if (candles.length<2) return;
