@@ -6332,6 +6332,7 @@ function initChart() {
   });
 
   function _forceFullRedraw(){
+    invalidateContainerWidthCache();
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
     if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
@@ -8523,9 +8524,28 @@ function wtRect(svg,t1,t2,top,bottom,fill,opacity,stroke,indName){
 // nada del eje). Usada para que las líneas/etiquetas de los indicadores no
 // terminen mostrándose "de fondo" detrás de los números del eje — mismo
 // borde en el que las velas ya se cortan solas.
+// Cachea cc.clientWidth — leer un clientWidth fuerza un reflow síncrono si
+// el layout quedó "sucio" por una escritura al DOM previa (acá, siempre:
+// wtLabel llama a esto DESPUÉS de appendChild-ear el rect/texto de la
+// etiqueta ANTERIOR), y wtLabel se llama una vez POR ETIQUETA — Watchtower
+// y Stat Map suelen dibujar bastantes (niveles × días de historial /
+// niveles × setups), así que esto terminaba siendo lectura-escritura-
+// lectura-escritura (layout thrashing) decenas de veces por render,
+// justo el que corre en el loop de 60fps del drag/zoom vertical de
+// precio — ESE es el "las velas van más rápido que la línea" que reportó
+// el usuario (el cache de datos de una sesión anterior no alcanzaba:
+// el costo real estaba acá, no en recalcular). Sniper apenas usa wtLabel
+// (una etiqueta por setup, bastantes menos) y por eso no se notaba igual.
+// invalidateContainerWidthCache() la limpia en el ResizeObserver del
+// chart-container (única fuente real de cambios de tamaño — todo lo
+// demás solo LEE clientWidth, no lo cambia).
+let _cachedContainerWidth = null;
+function invalidateContainerWidthCache(){ _cachedContainerWidth = null; }
 function wtPlotRight(){
-  const cc = document.getElementById('chart-container');
-  return cc.clientWidth - chartGutterWidth();
+  if (_cachedContainerWidth === null) {
+    _cachedContainerWidth = document.getElementById('chart-container').clientWidth;
+  }
+  return _cachedContainerWidth - chartGutterWidth();
 }
 function wtLine(svg,t1,t2,y,color,width,dash,indName){
   indName = indName || 'Watchtower';
