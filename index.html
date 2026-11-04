@@ -4988,7 +4988,17 @@ function syncRectFill(d) {
   // pero el relleno (reposicionado acá, a mano, en cada frame) quedaba
   // invisible.
   const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-  const t2 = d.extRight ? chart.timeScale().getVisibleRange()?.to ?? d.p2.time : safeLineTime(Math.max(d.p1.time, d.p2.time));
+  let t2 = d.extRight ? chart.timeScale().getVisibleRange()?.to ?? d.p2.time : safeLineTime(Math.max(d.p1.time, d.p2.time));
+  // Mismo resguardo que buildDrawingOnChart/updateDrawingGeometry: un
+  // dibujo angosto (p.ej. unas pocas velas de 5m) visto en un panel de
+  // timeframe mucho más grueso (Diario) puede tener p1.time y p2.time
+  // redondeando los DOS al mismo candle real — sin este empujón el ancho
+  // calculado da 0 y el relleno, aunque "visible", no pinta nada (el
+  // borde no se notaba porque sus 4 líneas son series del chart con este
+  // mismo resguardo ya aplicado).
+  const candles = window._lastCandles || [];
+  const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
+  if (!d.extRight && t2 === t1) t2 = t1 + barInterval;
   const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
   const y1 = candleSeries.priceToCoordinate(hi), y2 = candleSeries.priceToCoordinate(lo);
   if (x1===null||x2===null||y1===null||y2===null) { d.fillEl.style.display='none'; return; }
