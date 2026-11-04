@@ -3889,7 +3889,7 @@ const CHART_SETTINGS_DEFAULTS = {
 // es TRANSPARENCIA 0-100 (0=opaco), no alpha — color_cisd_bear=rgb(242,54,
 // 69,0) es rojo totalmente OPACO, no invisible.
 const SNIPER_DEFAULTS = {
-  enabled:false,
+  enabled:false, behindCandles:false,
   mostrarAlcista:true, mostrarBajista:true,
   colorSweepLow:'rgba(255,255,255,0.79)',  // blanco, 21% transparencia
   colorSweepHigh:'rgba(255,255,255,0.90)', // blanco, 10% transparencia
@@ -4011,6 +4011,7 @@ const STATE = {
     // fijas (blanco los PD, lila los PW, celeste MNO) sin ningún toggle,
     // así que en modo claro (fondo blanco) el blanco quedaba invisible.
     labelColor:'#ffffff',
+    behindCandles:false,
   }, _wtSaved, { kz: _wtKz }),
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
@@ -5853,6 +5854,12 @@ class ZentinelBehindDrawingsPrimitive {
             if (STATE.statMap && STATE.statMap.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._statMapSvg);
             }
+            if (STATE.watchtower && STATE.watchtower.behindCandles) {
+              paintSvgLayerBehindCandles(ctx, window._watchtowerSvg);
+            }
+            if (STATE.sniper && STATE.sniper.behindCandles) {
+              paintSvgLayerBehindCandles(ctx, window._sniperSvg);
+            }
           });
         },
       }),
@@ -7655,7 +7662,8 @@ function openIndicatorSettings(name) {
         <input type="time" data-kz-end="${s.key}" value="${wtTimeToStr(cfg.end)}" style="width:92px">
       </div>`;
     }).join('');
-    body.innerHTML = togglesHtml
+    body.innerHTML = `<label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="wt-behind-candles" ${STATE.watchtower.behindCandles?'checked':''}></label>`
+      + togglesHtml
       + `<div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Box transparency (all)</span>
         <input type="number" id="wt-box-opacity" min="0" max="100" step="1" value="${STATE.watchtower.boxOpacity}" style="width:56px">
@@ -7681,6 +7689,7 @@ function openIndicatorSettings(name) {
     const sweepLow = snParseRgba(sn.colorSweepLow), sweepHigh = snParseRgba(sn.colorSweepHigh);
     const cisdBull = snParseRgba(sn.colorCisdBull), cisdBear = snParseRgba(sn.colorCisdBear);
     body.innerHTML = `
+      <label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="sn-behind-candles" ${sn.behindCandles?'checked':''}></label>
       <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">HTF Sweep</div>
       <label class="wt-set-row"><span>Detect bullish reversal (low sweep)</span><input type="checkbox" id="sn-mostrar-alcista" ${sn.mostrarAlcista?'checked':''}></label>
       <label class="wt-set-row"><span>Detect bearish reversal (high sweep)</span><input type="checkbox" id="sn-mostrar-bajista" ${sn.mostrarBajista?'checked':''}></label>
@@ -8071,11 +8080,14 @@ function applyIndSettingsForm() {
     if (boxOpacityEl) STATE.watchtower.boxOpacity = Math.max(0, Math.min(100, Number(boxOpacityEl.value) || 0));
     if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
     if (labelColorEl) STATE.watchtower.labelColor = labelColorEl.value;
+    const wtBehindEl=document.getElementById('wt-behind-candles');
+    if (wtBehindEl) STATE.watchtower.behindCandles = wtBehindEl.checked;
     saveWatchtowerState();
     renderWatchtower();
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
   } else if (_indSettingsTarget === 'Sniper') {
     const g = id => document.getElementById(id);
+    STATE.sniper.behindCandles = g('sn-behind-candles').checked;
     STATE.sniper.mostrarAlcista = g('sn-mostrar-alcista').checked;
     STATE.sniper.mostrarBajista = g('sn-mostrar-bajista').checked;
     STATE.sniper.colorSweepLow  = snRgba(g('sn-color-sweep-low').value, Number(g('sn-color-sweep-low-tr').value)||0);
@@ -8769,6 +8781,13 @@ function renderWatchtower(){
   while(svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Watchtower');
   document.getElementById('watchtower-bias-badge').style.display='none';
+  // Con behindCandles activo, el primitive (ZentinelBehindDrawingsPrimitive,
+  // ver paintSvgLayerBehindCandles) repinta estos mismos elementos a mano
+  // DETRÁS de las velas — la capa SVG real se oculta para no verla
+  // duplicada por encima (el badge de bias de arriba es HTML aparte, no
+  // vive en esta capa, así que sigue siempre visible sin importar esto).
+  svg.style.visibility = STATE.watchtower.behindCandles ? 'hidden' : '';
+  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
   if(!STATE.watchtower.enabled || isIndicatorHidden('Watchtower')) return;
   const candles=window._lastCandles||[];
   if(candles.length<2) return;
@@ -9471,6 +9490,9 @@ function renderSniper(){
   const svg = window._sniperSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sniper');
+  // Ídem renderStatMap/renderWatchtower — ver paintSvgLayerBehindCandles.
+  svg.style.visibility = STATE.sniper.behindCandles ? 'hidden' : '';
+  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
   if (!STATE.sniper.enabled || isIndicatorHidden('Sniper')) return;
   const candles = window._lastCandles||[];
   if (candles.length<5) return;
