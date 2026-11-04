@@ -227,12 +227,17 @@
     bottom: 22px;
     display: none;
     flex-direction: column;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
+    /* El "cristal" semitransparente y el color de letra asumían un chart
+       siempre oscuro (blanco al 8%/15% de fondo/borde, letras gris claro
+       fijas) — applyChartSettings() los recalcula según cs.textColor
+       (mismo criterio que #chart-indicator-chips) para que no desaparezcan
+       con un chart en modo claro. Fallbacks = el look de siempre. */
+    background: var(--wt-bias-bg, rgba(255,255,255,0.08));
+    border: 1px solid var(--wt-bias-border, rgba(255,255,255,0.15));
     border-radius: 3px;
     font-family: var(--font-mono);
     font-size: 9px;
-    color: #cccccc;
+    color: var(--wt-bias-color, #cccccc);
     z-index: 16;
     pointer-events: none;
     white-space: nowrap;
@@ -241,7 +246,7 @@
   #watchtower-bias-badge .wt-row {
     padding: 2px 7px;
     text-align: center;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid var(--wt-bias-border, rgba(255,255,255,0.1));
   }
   #watchtower-bias-badge .wt-row:last-child { border-bottom: none; font-weight: 600; }
 
@@ -8759,7 +8764,7 @@ function renderWtBias(byDate, dateKeys, lastTime){
   const diff=(todayClose-avgPrev)/avgPrev;
   const thr=0.003;
   const bias=diff>thr?'Bullish':diff<-thr?'Bearish':'Neutral';
-  const color=bias==='Bullish'?'#26a69a':bias==='Bearish'?'#ef5350':'#cccccc';
+  const color=bias==='Bullish'?'#26a69a':bias==='Bearish'?'#ef5350':STATE.chartSettings.textColor;
   const d=new Date(lastTime*1000);
   const dateStr=`${String(d.getUTCDate()).padStart(2,'0')}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${d.getUTCFullYear()}`;
   el.innerHTML = `<div class="wt-row">${dateStr}</div><div class="wt-row">${STATE.symbol}, ${STATE.timeframe}</div><div class="wt-row" style="color:${color}">${bias}</div>`;
@@ -10885,6 +10890,16 @@ function applyChartSettings(){
     const haloColor = textColorIsDark(cs.textColor) ? '255,255,255' : '0,0,0';
     indChips.style.setProperty('--ind-chip-shadow', `0 1px 3px rgba(${haloColor},.9), 0 0 6px rgba(${haloColor},.6)`);
     indChips.style.setProperty('--ind-chip-icon-shadow', `drop-shadow(0 1px 2px rgba(${haloColor},.9))`);
+  }
+  // Tabla de bias de Watchtower (abajo a la derecha del chart) — mismo
+  // criterio: "cristal" claro+letra oscura con chart claro, cristal oscuro+
+  // letra clara con chart oscuro (como venía siempre).
+  const wtBiasBadge = document.getElementById('watchtower-bias-badge');
+  if (wtBiasBadge) {
+    const dark = textColorIsDark(cs.textColor);
+    wtBiasBadge.style.setProperty('--wt-bias-color', cs.textColor);
+    wtBiasBadge.style.setProperty('--wt-bias-bg', dark ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)');
+    wtBiasBadge.style.setProperty('--wt-bias-border', dark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)');
   }
   // Reloj de la barra de abajo — mismo color de texto que precio/horario del
   // chart. #sb-clock tiene su propio color en el CSS (más específico que
