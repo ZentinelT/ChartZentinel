@@ -4980,8 +4980,15 @@ function syncVLine(d) {
 function syncRectFill(d) {
   if (!(d.fillEl instanceof Element)) return;
   const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
-  const t1 = Math.min(d.p1.time, d.p2.time);
-  const t2 = d.extRight ? chart.timeScale().getVisibleRange()?.to ?? d.p2.time : Math.max(d.p1.time, d.p2.time);
+  // safeLineTime: mismo motivo que en syncVLine — un dibujo sincronizado
+  // desde un panel de OTRO timeframe trae un horario crudo que puede no
+  // caer en ninguna vela real de ESTE panel, y sin redondearlo
+  // timeToCoordinate() devuelve null — el borde (series del chart, con
+  // safeLineTime ya aplicado en buildDrawingOnChart) se seguía viendo bien,
+  // pero el relleno (reposicionado acá, a mano, en cada frame) quedaba
+  // invisible.
+  const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
+  const t2 = d.extRight ? chart.timeScale().getVisibleRange()?.to ?? d.p2.time : safeLineTime(Math.max(d.p1.time, d.p2.time));
   const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
   const y1 = candleSeries.priceToCoordinate(hi), y2 = candleSeries.priceToCoordinate(lo);
   if (x1===null||x2===null||y1===null||y2===null) { d.fillEl.style.display='none'; return; }
