@@ -442,6 +442,10 @@
     cursor: pointer; transition: opacity .15s;
   }
   .goto-date-go:hover { opacity: .85; }
+  .goto-date-go.goto-next-session {
+    background: none; border: 1px solid var(--border-light); color: var(--text-secondary);
+  }
+  .goto-date-go.goto-next-session:hover { opacity: 1; color: var(--gold); border-color: var(--gold-dim); }
   .sync-section { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
   .sync-section-label {
     font-family: var(--font-ui); font-size: 10px; font-weight: 600; letter-spacing: 1.4px;
@@ -1487,6 +1491,9 @@
       <div class="goto-date-row"><label>Date</label><input type="date" id="goto-date-input"></div>
       <div class="goto-date-row"><label>Time</label><input type="time" id="goto-time-input" value="00:00"></div>
       <button class="goto-date-go" id="goto-date-go">Go to date/time</button>
+      <!-- Solo tiene sentido en Replay (avanza el corte, no solo la vista) —
+           initGoToDatePopup lo muestra/oculta según haya un replay activo. -->
+      <button class="goto-date-go goto-next-session" id="goto-next-session" style="display:none">Next session ▸</button>
     </div>
   </div>
 
@@ -2742,6 +2749,7 @@ function renderLayoutGrid(n){
         <div class="goto-date-row"><label>Date</label><input type="date" id="gc-goto-date-input"></div>
         <div class="goto-date-row"><label>Time</label><input type="time" id="gc-goto-time-input" value="00:00"></div>
         <button class="goto-date-go" id="gc-goto-date-go">Go to date/time</button>
+        <button class="goto-date-go goto-next-session" id="gc-goto-next-session" style="display:none">Next session ▸</button>
       </div>
     </div>
     <div class="topbar-spacer"></div>
@@ -3033,6 +3041,10 @@ function renderLayoutGrid(n){
   window.shellGoToDateTime = function(dateStr, timeStr){
     const f = iframeEls[activePane-1];
     if (f) { try { f.contentWindow.goToDateTime(dateStr, timeStr); } catch(e){} }
+  };
+  window.shellGoToNextSession = function(){
+    const f = iframeEls[activePane-1];
+    if (f) { try { f.contentWindow.goToNextSession(); } catch(e){} }
   };
   // Delete/Escape/Ctrl+Z/Ctrl+Y de dibujos viven en cada panel (ahí está
   // selectedDrawingId y el historial de undo) — pero clickear CUALQUIER
@@ -3424,6 +3436,9 @@ function renderLayoutGrid(n){
   initGoToDatePopup('gc-', shellGoToDateTime, () => {
     const f = iframeEls[activePane-1];
     try { return f.contentWindow._lastCandles[f.contentWindow._lastCandles.length-1].time; } catch(e){ return null; }
+  }, shellGoToNextSession, () => {
+    const f = iframeEls[activePane-1];
+    try { return !!f.contentWindow._replay; } catch(e){ return false; }
   });
 
   // Replay — como Settings, siempre apunta a un panel puntual (el activo
@@ -11600,11 +11615,26 @@ function scrollToRealTimeReliably(maxAttempts){
 //  usa TODO lo demás — ver el comentario grande de fmtCrosshairTime), NO
 //  como hora local del navegador.
 // ══════════════════════════════════════════════════════════
+// Vela más cercana a un timestamp dado dentro de un array de candles (scan
+// simple — no pasa de unos miles, igual que safeLineTime). Compartido por
+// goToDateTime (modo normal) y goToReplayTarget/goToNextSession (modo
+// replay) para no repetir el mismo loop en los tres.
+function nearestCandleIndex(candles, target){
+  let idx = 0, bestDiff = Infinity;
+  for (let i = 0; i < candles.length; i++) {
+    const diff = Math.abs(candles[i].time - target);
+    if (diff < bestDiff) { bestDiff = diff; idx = i; }
+  }
+  return idx;
+}
 async function goToDateTime(dateStr, timeStr){
   if (!dateStr) return;
   const [y,m,day] = dateStr.split('-').map(Number);
   const [hh,mm] = (timeStr||'00:00').split(':').map(Number);
   const target = Date.UTC(y, m-1, day, hh, mm, 0) / 1000;
+  // En Replay, "ir a fecha" tiene que mover el CORTE (revelar/ocultar
+  // velas), no solo panear la vista — ver goToReplayTarget.
+  if (window._replay) { await goToReplayTarget(target, dateStr, timeStr); return; }
   let candles = window._lastCandles;
   if (!candles || !candles.length) return;
 
@@ -11649,15 +11679,10 @@ async function goToDateTime(dateStr, timeStr){
     }
   }
 
-  // Vela más cercana a target (scan simple — candles no pasa de unos
-  // miles, igual que safeLineTime). Centra la vista en SU índice,
+  // Centra la vista en el índice de la vela más cercana a target,
   // conservando el ancho lógico que ya tenía la ventana antes del salto
   // — así no cambia el nivel de zoom, solo pana.
-  let idx = 0, bestDiff = Infinity;
-  for (let i = 0; i < candles.length; i++) {
-    const diff = Math.abs(candles[i].time - target);
-    if (diff < bestDiff) { bestDiff = diff; idx = i; }
-  }
+  const idx = nearestCandleIndex(candles, target);
   // Mismo problema (y misma solución) que scrollToRealTimeReliably más
   // abajo: posicionar la vista en el MISMO tick síncrono que acaba de
   // reemplazar window._lastCandles no siempre "prende" — probado a mano,
@@ -11674,12 +11699,80 @@ async function goToDateTime(dateStr, timeStr){
     }, 60);
   })(0);
 }
-function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn){
+// ══════════════════════════════════════════════════════════
+//  GO TO DATE/TIME — modo REPLAY. window._replay.full es el historial que
+//  ya se tenía cargado al cortar (ver el comentario grande de REPLAY más
+//  abajo) — a diferencia del modo normal, acá "ir a una fecha" tiene que
+//  mover el CORTE (r.idx, cuántas velas de r.full están reveladas), no
+//  solo panear la vista sobre lo que ya hay. Si la fecha pedida cae fuera
+//  de lo que "full" tiene cargado (lo más común: el usuario quiere
+//  adelantar más de lo que había al cortar), se pide un lote nuevo con el
+//  mismo truco "before" que ya usa goToDateTime para ir más atrás — acá
+//  antes apunta a DESPUÉS de target, así el lote queda centrado ahí.
+// ══════════════════════════════════════════════════════════
+async function goToReplayTarget(target, dateStr, timeStr){
+  const r = window._replay; if (!r || !r.full.length) return;
+  if (target > r.full[r.full.length-1].time || target < r.full[0].time) {
+    showLoader(`Going to ${dateStr||''} ${timeStr||''}…`); showOverlay(true);
+    try {
+      const margin = 1000 * tfToSeconds(STATE.timeframe);
+      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, target + margin);
+      if (!json.error && Array.isArray(json.bars) && json.bars.length) r.full = json.bars;
+    } catch(e) {
+    } finally {
+      showOverlay(false);
+    }
+  }
+  r.idx = Math.max(0, Math.min(nearestCandleIndex(r.full, target), r.full.length - 1));
+  _applyReplayFrame();
+  // Mismo motivo que en startReplay(): sin esto, la librería deja la vista
+  // en el principio del historial en vez de en la vela recién revelada.
+  try { chart.timeScale().scrollToPosition(0, false); } catch(e){}
+}
+// "Próxima sesión": avanza el corte hasta la primera vela de la sesión
+// (día-broker, mismo corte 17:00 NY que ya usan Watchtower/PD levels — ver
+// wtDayKey) siguiente a la actual, sin tener que arrastrar el slider vela
+// por vela. Si ese día todavía no está en lo cargado, pide más historial
+// (mismo mecanismo que goToReplayTarget) y reintenta la búsqueda.
+async function goToNextSession(){
+  const r = window._replay; if (!r || !r.full.length) return;
+  function findNext(){
+    const curKey = wtDayKey(r.full[r.idx].time);
+    for (let i = r.idx + 1; i < r.full.length; i++) {
+      if (wtDayKey(r.full[i].time) !== curKey) return i;
+    }
+    return -1;
+  }
+  let idx = findNext();
+  if (idx < 0) {
+    showLoader('Going to next session…'); showOverlay(true);
+    try {
+      const lastLoaded = r.full[r.full.length-1].time;
+      const margin = 1000 * tfToSeconds(STATE.timeframe);
+      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, lastLoaded + margin);
+      if (!json.error && Array.isArray(json.bars) && json.bars.length) {
+        const curTime = r.full[r.idx].time;
+        r.full = json.bars;
+        r.idx = nearestCandleIndex(r.full, curTime);
+        idx = findNext();
+      }
+    } catch(e) {
+    } finally {
+      showOverlay(false);
+    }
+  }
+  if (idx < 0) return; // no hay más datos reales cargables (fin del historial del broker)
+  r.idx = idx;
+  _applyReplayFrame();
+  try { chart.timeScale().scrollToPosition(0, false); } catch(e){}
+}
+function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn, nextSessionFn, isReplayActiveFn){
   const trigger = document.getElementById(prefix+'goto-date-trigger');
   const popup = document.getElementById(prefix+'goto-date-popup');
   const dateInput = document.getElementById(prefix+'goto-date-input');
   const timeInput = document.getElementById(prefix+'goto-time-input');
   const goBtn = document.getElementById(prefix+'goto-date-go');
+  const nextSessionBtn = document.getElementById(prefix+'goto-next-session');
   if (!trigger || !popup) return;
   function submit(){
     if (!dateInput.value) { dateInput.focus(); return; }
@@ -11704,11 +11797,23 @@ function initGoToDatePopup(prefix, submitFn, getLastCandleTimeFn){
         }
       } catch(e){}
     }
+    // "Próxima sesión" solo tiene sentido con un replay activo (es lo que
+    // avanza el CORTE — ver goToNextSession) — se decide recién al abrir,
+    // no una vez al cargar la página, porque el replay puede arrancar o
+    // terminar en cualquier momento mientras el popup sigue cerrado.
+    if (willOpen && nextSessionBtn) {
+      nextSessionBtn.style.display = (isReplayActiveFn ? isReplayActiveFn() : !!window._replay) ? '' : 'none';
+    }
     popup.classList.toggle('open', willOpen);
     trigger.classList.toggle('active', willOpen);
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
   goBtn.addEventListener('click', submit);
+  if (nextSessionBtn) nextSessionBtn.addEventListener('click', () => {
+    (nextSessionFn || goToNextSession)();
+    popup.classList.remove('open');
+    trigger.classList.remove('active');
+  });
   timeInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
   dateInput.addEventListener('keydown', e => { if (e.key==='Enter') submit(); });
   document.addEventListener('click', (e) => {
