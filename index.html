@@ -3160,6 +3160,17 @@ function renderLayoutGrid(n){
   window.zentinelChartClicked = function(){
     if (!shellSidebar.classList.contains('collapsed')) shellToggleSidebarPanel();
     closeOrdersPanel();
+    // El popup de "Number of charts" (acá en el shell, con el selector de
+    // Sync/color de borde) tiene su propio cierre por clic-afuera, pero
+    // ESE listener vive en el document del shell — un clic DENTRO de un
+    // panel (un iframe, documento aparte) nunca llega hasta ahí. Mismo
+    // motivo/mismo arreglo que el watchlist/Operar de arriba: reusar este
+    // aviso que cada panel ya manda al hacer mousedown en su chart.
+    const layoutPopup = document.getElementById('layout-picker-popup');
+    if (layoutPopup && layoutPopup.classList.contains('open')) {
+      layoutPopup.classList.remove('open');
+      document.getElementById('layout-picker-trigger')?.classList.remove('active');
+    }
   };
   // Al cambiar de panel activo, la barra de herramientas y el watchlist
   // tienen que reflejar lo que YA tenía ese panel (pudo haber quedado en
