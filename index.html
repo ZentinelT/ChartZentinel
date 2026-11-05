@@ -1490,7 +1490,7 @@
   <div class="tf-sep"></div>
 
   <div id="symbol-search-wrap">
-    <input id="symbol-input" class="topbar-input" type="text" value="NAS100.fs" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
+    <input id="symbol-input" class="topbar-input" type="text" value="BTCUSDT" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
     <div id="symbol-input-suggestions" class="add-sym-suggestions"></div>
   </div>
 
@@ -3010,8 +3010,8 @@ function renderLayoutGrid(n){
 
   // Watchlist global (STATE acá en el shell no tiene pane, así que su
   // storage ya es compartido sin sufijo — mismo mecanismo que td_theme).
-  if (!Array.isArray(STATE.watchlist) || !STATE.watchlist.length) {
-    STATE.watchlist = ['NAS100.fs','US500','US30','XAUUSD','EURUSD'];
+  if (!Array.isArray(STATE.watchlist)) {
+    STATE.watchlist = [];
   }
   // STATE y volumeVisible de cada panel son `const`/`let` de nivel
   // superior — a diferencia de las funciones (que sí cuelgan de su propio
@@ -4091,10 +4091,10 @@ const STAT_MAP_DEFAULTS = {
   showLabels:true, labelSide:'right', labelColor:'rgba(255,255,255,0.5)', midLblColor:'rgba(255,165,0,1)',
 };
 const STATE = {
-  dataSource: lsGet(lsKey('td_datasource')) || 'mt5', // 'mt5' | 'binance'
-  symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
+  dataSource: lsGet(lsKey('td_datasource')) || 'binance', // 'mt5' | 'binance'
+  symbol:     lsGet(lsKey('td_symbol')) || 'BTCUSDT',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
-  watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '["NAS100.fs","US500","US30","XAUUSD","EURUSD"]'),
+  watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '[]'),
   indicators: JSON.parse(lsGet(lsKey('td_indicators')) || '[]'),
   activeTool: 'cursor',
   // 'off' | 'weak' (solo ajusta si el mouse ya está cerca de un punto de la
