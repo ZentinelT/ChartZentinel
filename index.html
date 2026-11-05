@@ -10234,22 +10234,35 @@ function smNearestCandle(candles, targetTime){
 // (mismo criterio que prevDayHigh/prevDayLow del Pine).
 function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval){
   const setups = [];
-  let cur = null, prevCompleted = null, pending = false;
-  const targetSec = anchorHour*3600 + anchorMin*60;
+  let cur = null, prevCompleted = null;
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = smDayKey(c.time);
     if (!cur || cur.key !== k){
       if (cur) prevCompleted = cur;
       cur = { key:k, high:c.high, low:c.low };
-      pending = true;
+      if (prevCompleted){
+        // Vela real más cercana al horario pedido de ESTE día — NO la
+        // primera que smHourHit encuentra escaneando hacia adelante. Un
+        // TF que nunca tiene una vela justo en anchorHour (H4: NY 01/05/
+        // 09/13/17/21, nunca a una hora exacta como anchorHour=9 — ver el
+        // comentario grande de más arriba) podía terminar agarrando una
+        // vela varias horas DESPUÉS del horario real (la siguiente que
+        // cayera dentro de la tolerancia), así que el nivel Open (y todo
+        // lo que se arma a partir de él) quedaba desplazado respecto a lo
+        // que mostraba un TF más chico para el MISMO horario — reportado
+        // por el usuario comparando H1 contra H4. Mismo criterio que ya
+        // usa el caso especial >=18h de smBuildPeriodSetups, acá
+        // generalizado a cualquier anchorHour.
+        const target = k/1000 + anchorHour*3600 + anchorMin*60;
+        const startCandle = smNearestCandle(candles, target);
+        if (Math.abs(startCandle.time - target) <= Math.max(barInterval, 4*3600)){
+          setups.push({ openPrice:startCandle.open, startTime:startCandle.time, high:prevCompleted.high, low:prevCompleted.low });
+        }
+      }
     } else {
       if (c.high>cur.high) cur.high=c.high;
       if (c.low<cur.low) cur.low=c.low;
-    }
-    if (pending && smHourHit(c, targetSec, barInterval)){
-      pending = false;
-      if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
     }
   }
   while (setups.length>lookback) setups.shift();
