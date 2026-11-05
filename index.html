@@ -966,6 +966,9 @@
   .order-pos-badge-val.neg { color: #ef5350; }
   .order-pos-badge .order-pos-badge-x { opacity: .7; }
   .order-pos-badge:hover .order-pos-badge-x { opacity: 1; text-decoration: underline; }
+  /* Ver el mousedown/mouseup de initOrderLineDrag — evita el click
+     fantasma sobre la pastilla justo al soltar un arrastre de SL/TP. */
+  #chart-container.order-drag-active .order-pos-badge { pointer-events: none; }
 
   /* ─── CHART AREA ──────────────────────────────────────── */
   #chart-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -6694,6 +6697,17 @@ function initDrawingLayer() {
     if (lineHit) {
       e.preventDefault(); e.stopPropagation();
       window._orderLineDragSession = lineHit;
+      // La pastilla sigue al mouse en vivo mientras se arrastra (ver el
+      // mousemove de acá abajo) — para cuando se suelta, el cursor termina
+      // sentado justo ARRIBA de ella (y de su ×), así que el mouseup
+      // dispara un 'click' ahí mismo apenas después de confirmar el
+      // arrastre: ese click llamaba a clearOrderLevel() y borraba el nivel
+      // que recién se acababa de mover (reportado por el usuario: "muevo
+      // el nivel para abajo y desaparece"). Apagar los clicks de las
+      // pastillas mientras dura el arrastre evita que ese click fantasma
+      // les llegue — se reactivan solas apenas termina (ver mouseup más
+      // abajo), y de paso quedan afuera del camino del drag mientras tanto.
+      container.classList.add('order-drag-active');
       return;
     }
 
@@ -6842,6 +6856,11 @@ function initDrawingLayer() {
       e.preventDefault(); e.stopPropagation();
       commitOrderLineDrag(window._orderLineDragSession);
       window._orderLineDragSession = null;
+      // Recién DESPUÉS del click fantasma (ver mousedown de más arriba:
+      // mouseup dispara 'click' DESPUÉS, no antes) — un timeout de 0
+      // alcanza para dejarlo pasar de largo (nada que clickear, las
+      // pastillas siguen con pointer-events:none) antes de reactivarlas.
+      setTimeout(() => container.classList.remove('order-drag-active'), 0);
       return;
     }
     if (window._dragSession) { e.preventDefault(); e.stopPropagation(); }
