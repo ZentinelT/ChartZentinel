@@ -11744,7 +11744,18 @@ async function fetchOhlcvBinance(symbol, interval, bars, before){
   const binInt = BINANCE_TF_MAP[interval];
   if (!binInt) throw new Error('Timeframe no soportado en Binance: '+interval);
   let url = `${BINANCE_URL}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${binInt}&limit=${Math.min(Math.max(1,bars||500),1000)}`;
-  if (before) url += `&endTime=${Math.floor(before*1000)}`;
+  // `before` SIEMPRE llega en el epoch "NY disfrazada de UTC" que usa el
+  // resto de la app (ver utcMsToNyFakeEpochSeconds más abajo y el
+  // comentario grande junto a NY_OFFSET_SECONDS) — Binance no sabe nada de
+  // esa convención, su endTime es UTC real. Sin deshacer el corrimiento
+  // acá, cualquier pedido con `before` (scroll de historial, "go to date",
+  // y sobre todo wtFetchBoundaryPrice, que pide la vela EXACTA de 1min de
+  // la apertura de sesión para el Opening Range Gap de Watchtower)
+  // terminaba pidiendo velas de un instante corrido varias horas — en el
+  // ORG eso se notaba grueso: el "low"/"high" del gap salía de una vela
+  // equivocada (coincidía con el low de la sesión de Londres, reportado
+  // por el usuario comparando MT5 vs Binance para el mismo BTC).
+  if (before) url += `&endTime=${Math.floor((before - NY_OFFSET_SECONDS)*1000)}`;
   const res = await fetch(url);
   const rows = await res.json();
   if (!Array.isArray(rows)) throw new Error((rows && rows.msg) || 'Error de Binance');
@@ -11796,7 +11807,10 @@ async function fetchOhlcvBybit(symbol, interval, bars, before){
   const bbInt = BYBIT_TF_MAP[interval];
   if (!bbInt) throw new Error('Timeframe no soportado en Bybit: '+interval);
   let url = `${BYBIT_URL}/v5/market/kline?category=spot&symbol=${encodeURIComponent(symbol)}&interval=${bbInt}&limit=${Math.min(Math.max(1,bars||500),1000)}`;
-  if (before) url += `&end=${Math.floor(before*1000)}`;
+  // Mismo motivo que fetchOhlcvBinance: `before` viene en epoch "NY
+  // disfrazada de UTC", hay que deshacer el corrimiento antes de usarlo
+  // como `end` (que Bybit sí espera en UTC real).
+  if (before) url += `&end=${Math.floor((before - NY_OFFSET_SECONDS)*1000)}`;
   const res = await fetch(url);
   const json = await res.json();
   if (json.retCode !== 0 || !json.result || !Array.isArray(json.result.list)) throw new Error((json && json.retMsg) || 'Error de Bybit');
