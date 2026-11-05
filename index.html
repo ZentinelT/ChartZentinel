@@ -2045,6 +2045,10 @@
         <option value="arrows">Arrows only</option>
         <option value="off">Off</option>
       </select>
+      <label class="cs-toggle-row" style="margin-top:12px;">
+        <span class="cs-field-label">Show P&amp;L progress (points &amp; price) on open positions</span>
+        <span class="cs-switch"><input type="checkbox" id="cs-order-pnl-on"><span class="track"><span class="thumb"></span></span></span>
+      </label>
     </div>
 
     <div class="cs-section">
@@ -3947,6 +3951,12 @@ const CHART_SETTINGS_DEFAULTS = {
   axisColor:'#222230', // borde del eje de precio (derecha) y de tiempo (abajo) — las líneas que "encuadran" esos niveles
   showOhlcv:true,
   tradeMarkersMode:'full', // 'full' (flechas + precio/P-L en texto) | 'arrows' (solo flechas, sin texto)
+  // Progreso de la operación (distancia a SL/TP y P/L en vivo de la
+  // entrada) en puntos y precio, sobre las líneas/badge de operaciones
+  // abiertas — pedido explícito del usuario, configurable para poder
+  // apagarlo si prefiere las líneas limpias (ver renderOrderPriceLines/
+  // renderOrderPositionBadges).
+  showOrderPnl:true,
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
 // CISD. Los nombres de los inputs son los mismos que en el Pine original
@@ -10957,6 +10967,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-crosshair-sync-on').checked=cs.syncCrosshair;
   document.getElementById('cs-axis-color').value=cs.axisColor||CHART_SETTINGS_DEFAULTS.axisColor;
   document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
+  document.getElementById('cs-order-pnl-on').checked=cs.showOrderPnl!==false;
 }
 function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); refreshLogoPreview(); openModal('modal-chart-settings'); }
 
@@ -11103,6 +11114,7 @@ function commitChartSettingsForm(){
     syncCrosshair: document.getElementById('cs-crosshair-sync-on').checked,
     axisColor: document.getElementById('cs-axis-color').value,
     tradeMarkersMode: document.getElementById('cs-trade-markers-mode').value,
+    showOrderPnl: document.getElementById('cs-order-pnl-on').checked,
   };
   saveChartSettingsState();
   applyChartSettings();
@@ -13236,6 +13248,25 @@ function saveOpenTrades(list){ lsSet('td_open_trades', JSON.stringify(list)); }
 function getClosedTrades(){ try { return JSON.parse(lsGet('td_closed_trades') || '[]'); } catch(e){ return []; } }
 function saveClosedTrades(list){ lsSet('td_closed_trades', JSON.stringify(list)); }
 function getTradesPointValue(){ const v = parseFloat(lsGet('td_point_value')); return (isFinite(v) && v > 0) ? v : 1; }
+// Progreso en puntos/P&L de una operación/orden — config: cs-order-pnl-on
+// en Chart Settings (STATE.chartSettings.showOrderPnl). "Puntos" acá es lo
+// mismo que ya usan los carteles de Watchtower (diferencia de precio
+// cruda, "pts"), y el $ sale de multiplicarla por el valor del punto
+// configurado (getTradesPointValue, mismo que usa el badge de P/L de la
+// barra de arriba). Usadas por renderOrderPriceLines (distancia fija
+// SL/TP desde la entrada) y renderOrderPositionBadges (progreso en vivo
+// contra el precio actual) — pedido explícito del usuario, 2026-11-05.
+function fmtOrderPts(n){ return (n>=0?'+':'') + n.toFixed(1) + 'pts'; }
+function fmtOrderMoney(n){ return (n>=0?'+':'') + n.toFixed(2); }
+// t: {side, entry_price, volume}. levelPrice: el precio contra el que se
+// mide (un SL/TP fijo, o el precio actual para el progreso en vivo).
+function orderPnlSuffix(t, levelPrice){
+  if (STATE.chartSettings.showOrderPnl === false || levelPrice == null) return '';
+  const sign = t.side === 'long' ? 1 : -1;
+  const pts = (levelPrice - t.entry_price) * sign;
+  const pnl = pts * t.volume * getTradesPointValue();
+  return `  ${fmtOrderPts(pts)}  ${fmtOrderMoney(pnl)}`;
+}
 function setTradesPointValue(v){ const n = parseFloat(v); lsSet('td_point_value', String((isFinite(n) && n > 0) ? n : 1)); }
 
 // Órdenes pendientes (Limit/Stop) en papel — mismo storage GLOBAL sin
@@ -13764,10 +13795,11 @@ function renderOrderPriceLines(){
     // Sin title/axisLabel acá a propósito — ese cartel lo pone la badge
     // propia (ver renderOrderPositionBadges), que no se mueve sola cuando
     // el precio en vivo se acerca al de entrada (ver comentario en el CSS
-    // de .order-pos-badge).
+    // de .order-pos-badge). El progreso en vivo de la entrada (puntos/P&L
+    // contra el precio ACTUAL, no un nivel fijo) se muestra ahí, no acá.
     addLine(t.entry_price, { color, lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '' }, { kind:'trade', id:t.id, field:'entry', editable:false });
-    if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'trade', id:t.id, field:'sl', editable:true });
-    if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'trade', id:t.id, field:'tp', editable:true });
+    if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL'+orderPnlSuffix(t, t.stop_loss) }, { kind:'trade', id:t.id, field:'sl', editable:true });
+    if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP'+orderPnlSuffix(t, t.take_profit) }, { kind:'trade', id:t.id, field:'tp', editable:true });
   });
 
   getPendingOrders().filter(o => o.symbol === sym).forEach(o => {
@@ -13775,9 +13807,10 @@ function renderOrderPriceLines(){
     const label = (o.side === 'long' ? 'Buy ' : 'Sell ') + (o.type === 'limit' ? 'Limit' : 'Stop') + ' ' + o.volume + 'L';
     // LargeDashed (3) en vez de Dashed (2, que ya usan SL/TP de arriba) —
     // para distinguir de un vistazo "todavía no entró" de "ya está abierta".
+    const asTrade = { side:o.side, entry_price:o.price, volume:o.volume };
     addLine(o.price, { color, lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: label }, { kind:'pending', id:o.id, field:'price', editable:true });
-    if (o.sl != null) addLine(o.sl, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }, { kind:'pending', id:o.id, field:'sl', editable:true });
-    if (o.tp != null) addLine(o.tp, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP' }, { kind:'pending', id:o.id, field:'tp', editable:true });
+    if (o.sl != null) addLine(o.sl, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL'+orderPnlSuffix(asTrade, o.sl) }, { kind:'pending', id:o.id, field:'sl', editable:true });
+    if (o.tp != null) addLine(o.tp, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP'+orderPnlSuffix(asTrade, o.tp) }, { kind:'pending', id:o.id, field:'tp', editable:true });
   });
   renderOrderPositionBadges();
 }
@@ -13798,12 +13831,27 @@ function renderOrderPositionBadges(){
   _orderPositionBadges = [];
   if (!candleSeries || !chart || window._orderLineDragSession) return;
   const sym = normalizeSymbolForJournal(STATE.symbol);
+  // Progreso EN VIVO (puntos/P&L contra el precio actual, no un nivel fijo
+  // como SL/TP) — t.real usa el P/L que ya manda el bróker (más preciso
+  // que recalcularlo acá, mismo criterio que getTradesBadgeInfo), con los
+  // puntos igual calculados contra la última vela de ESTE chart.
+  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
   getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
     const el = document.createElement('div');
     el.className = 'order-pos-badge';
     el.style.background = t.side === 'long' ? '#26a69a' : '#ef5350';
     el.title = 'Cerrar operación';
-    el.innerHTML = `<span>${t.side === 'long' ? 'Buy' : 'Sell'} ${t.volume}</span><span class="order-pos-badge-x">✕</span>`;
+    let progress = '';
+    if (lastBar) {
+      if (t.real && t._liveProfit != null) {
+        const sign = t.side === 'long' ? 1 : -1;
+        const pts = (lastBar.close - t.entry_price) * sign;
+        progress = STATE.chartSettings.showOrderPnl === false ? '' : `  ${fmtOrderPts(pts)}  ${fmtOrderMoney(t._liveProfit)}`;
+      } else {
+        progress = orderPnlSuffix(t, lastBar.close);
+      }
+    }
+    el.innerHTML = `<span>${t.side === 'long' ? 'Buy' : 'Sell'} ${t.volume}${progress}</span><span class="order-pos-badge-x">✕</span>`;
     el.onclick = (e) => { e.stopPropagation(); closeTradeById(t.id); };
     container.appendChild(el);
     _orderPositionBadges.push({ el, tradeId: t.id });
