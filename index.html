@@ -10407,6 +10407,23 @@ function smBuildMonthlySetupsCached(candles, lookback, mode, anchorHour, anchorM
 
 function renderStatMap(){
   if (!window._statMapSvg) return;
+  // renderSeries()/loadChart llaman a esto JUSTO después de
+  // candleSeries.setData() con datos nuevos (símbolo/TF cambiado) — la
+  // librería no siempre terminó de recalcular su rango de tiempo interno
+  // para ESE dato nuevo en el mismo tick síncrono, así que
+  // timeToCoordinate() de la última vela puede devolver null por un
+  // instante. Si acá ya borrábamos el SVG antes de darnos cuenta, el
+  // resultado era 0 elementos (nada que dibujar, todas las coordenadas
+  // null) — un parpadeo a vacío reportado por el usuario ("primero
+  // muestra los niveles y se desaparecen") hasta el próximo render real
+  // (_resyncChartLayout, disparado un par de frames después). Chequear
+  // ANTES de tocar el SVG evita el parpadeo: si todavía no está listo,
+  // no hacemos nada — el próximo render (ya con el timeScale al día) deja
+  // todo bien, sin pasar por un frame en blanco.
+  if (window._lastCandles && window._lastCandles.length) {
+    const lastT = window._lastCandles[window._lastCandles.length-1].time;
+    if (chart.timeScale().timeToCoordinate(lastT) === null) return;
+  }
   const svg = window._statMapSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Stat Map');
