@@ -949,7 +949,14 @@
        pérdida (ver .order-pos-badge-val), no según el tipo de línea. */
     background: rgba(14,14,20,.92);
     border: 1px solid var(--order-badge-side, var(--border));
-    color: var(--text-primary);
+    /* Fijo, NO var(--text-primary) — ese var cambia con el tema (queda
+       oscuro en modo claro) para texto sobre el fondo del PANEL, que SÍ
+       sigue el tema; este fondo es oscuro fijo en los dos temas, así que
+       el texto tiene que serlo también o se vuelve ilegible en modo claro
+       (reportado por el usuario: "TP/SL/Buy quedan blancos... en modo
+       claro no se ven" — en realidad el bug era al revés, quedaban
+       oscuros sobre oscuro). */
+    color: #e8e8f0;
     cursor: pointer;
     z-index: 22;
     white-space: nowrap;
@@ -6732,6 +6739,20 @@ function initDrawingLayer() {
       // real en storage recién se guarda al soltar, ver commitOrderLineDrag.
       window._orderLineDragSession.price = price;
       window._orderLineDragSession.line.applyOptions({ price });
+      // La pastilla (ver renderOrderPositionBadges/renderOrderLineBadges)
+      // lee SU posición del storage, que todavía no cambió — sin esto se
+      // quedaba quieta mientras la línea sí seguía al mouse, y recién
+      // "saltaba" a su lugar al soltar (reportado por el usuario). Solo
+      // reposición (top), barata — el valor en puntos/$ de adentro se
+      // termina de actualizar al soltar, como el resto del drag.
+      const sess = window._orderLineDragSession;
+      const y = candleSeries.priceToCoordinate(price);
+      if (y !== null) {
+        const badge = sess.field === 'entry'
+          ? _orderPositionBadges.find(b => b.tradeId === sess.id)
+          : _orderLineBadges.find(b => b.kind === sess.kind && b.id === sess.id && b.field === sess.field);
+        if (badge) badge.el.style.top = y + 'px';
+      }
       return;
     }
 
