@@ -2045,10 +2045,12 @@
         <option value="arrows">Arrows only</option>
         <option value="off">Off</option>
       </select>
-      <label class="cs-toggle-row" style="margin-top:12px;">
-        <span class="cs-field-label">Show P&amp;L progress (points &amp; price) on open positions</span>
-        <span class="cs-switch"><input type="checkbox" id="cs-order-pnl-on"><span class="track"><span class="thumb"></span></span></span>
-      </label>
+      <div class="cs-field-label" style="margin-top:12px;">P&amp;L progress on open positions</div>
+      <select id="cs-order-pnl-mode" class="dtb-select" style="width:100%;">
+        <option value="points">Points</option>
+        <option value="price">Price</option>
+        <option value="off">Off</option>
+      </select>
     </div>
 
     <div class="cs-section">
@@ -3952,11 +3954,10 @@ const CHART_SETTINGS_DEFAULTS = {
   showOhlcv:true,
   tradeMarkersMode:'full', // 'full' (flechas + precio/P-L en texto) | 'arrows' (solo flechas, sin texto)
   // Progreso de la operación (distancia a SL/TP y P/L en vivo de la
-  // entrada) en puntos y precio, sobre las líneas/badge de operaciones
-  // abiertas — pedido explícito del usuario, configurable para poder
-  // apagarlo si prefiere las líneas limpias (ver renderOrderPriceLines/
-  // renderOrderPositionBadges).
-  showOrderPnl:true,
+  // entrada) sobre las líneas/badge de operaciones abiertas — pedido
+  // explícito del usuario, configurable: 'off' | 'points' | 'price'
+  // (ver renderOrderPriceLines/renderOrderPositionBadges).
+  orderPnlMode:'points',
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
 // CISD. Los nombres de los inputs son los mismos que en el Pine original
@@ -10967,7 +10968,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-crosshair-sync-on').checked=cs.syncCrosshair;
   document.getElementById('cs-axis-color').value=cs.axisColor||CHART_SETTINGS_DEFAULTS.axisColor;
   document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
-  document.getElementById('cs-order-pnl-on').checked=cs.showOrderPnl!==false;
+  document.getElementById('cs-order-pnl-mode').value=cs.orderPnlMode||'points';
 }
 function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); refreshLogoPreview(); openModal('modal-chart-settings'); }
 
@@ -11114,7 +11115,7 @@ function commitChartSettingsForm(){
     syncCrosshair: document.getElementById('cs-crosshair-sync-on').checked,
     axisColor: document.getElementById('cs-axis-color').value,
     tradeMarkersMode: document.getElementById('cs-trade-markers-mode').value,
-    showOrderPnl: document.getElementById('cs-order-pnl-on').checked,
+    orderPnlMode: document.getElementById('cs-order-pnl-mode').value,
   };
   saveChartSettingsState();
   applyChartSettings();
@@ -13248,24 +13249,27 @@ function saveOpenTrades(list){ lsSet('td_open_trades', JSON.stringify(list)); }
 function getClosedTrades(){ try { return JSON.parse(lsGet('td_closed_trades') || '[]'); } catch(e){ return []; } }
 function saveClosedTrades(list){ lsSet('td_closed_trades', JSON.stringify(list)); }
 function getTradesPointValue(){ const v = parseFloat(lsGet('td_point_value')); return (isFinite(v) && v > 0) ? v : 1; }
-// Progreso en puntos/P&L de una operación/orden — config: cs-order-pnl-on
-// en Chart Settings (STATE.chartSettings.showOrderPnl). "Puntos" acá es lo
-// mismo que ya usan los carteles de Watchtower (diferencia de precio
-// cruda, "pts"), y el $ sale de multiplicarla por el valor del punto
-// configurado (getTradesPointValue, mismo que usa el badge de P/L de la
-// barra de arriba). Usadas por renderOrderPriceLines (distancia fija
-// SL/TP desde la entrada) y renderOrderPositionBadges (progreso en vivo
-// contra el precio actual) — pedido explícito del usuario, 2026-11-05.
+// Progreso en puntos/P&L de una operación/orden — config: cs-order-pnl-mode
+// en Chart Settings (STATE.chartSettings.orderPnlMode: 'off'|'points'|
+// 'price', pedido explícito del usuario — uno de los dos, a elección, no
+// los dos juntos). "Puntos" acá es lo mismo que ya usan los carteles de
+// Watchtower (diferencia de precio cruda, "pts"); "price" es el P&L en
+// dinero, de multiplicar esos puntos por el valor del punto configurado
+// (getTradesPointValue, mismo que usa el badge de P/L de la barra de
+// arriba). Usadas por renderOrderPriceLines (distancia fija SL/TP desde
+// la entrada) y renderOrderPositionBadges (progreso en vivo contra el
+// precio actual).
 function fmtOrderPts(n){ return (n>=0?'+':'') + n.toFixed(1) + 'pts'; }
 function fmtOrderMoney(n){ return (n>=0?'+':'') + n.toFixed(2); }
 // t: {side, entry_price, volume}. levelPrice: el precio contra el que se
 // mide (un SL/TP fijo, o el precio actual para el progreso en vivo).
 function orderPnlSuffix(t, levelPrice){
-  if (STATE.chartSettings.showOrderPnl === false || levelPrice == null) return '';
+  const mode = STATE.chartSettings.orderPnlMode || 'points';
+  if (mode === 'off' || levelPrice == null) return '';
   const sign = t.side === 'long' ? 1 : -1;
   const pts = (levelPrice - t.entry_price) * sign;
-  const pnl = pts * t.volume * getTradesPointValue();
-  return `  ${fmtOrderPts(pts)}  ${fmtOrderMoney(pnl)}`;
+  if (mode === 'price') return `  ${fmtOrderMoney(pts * t.volume * getTradesPointValue())}`;
+  return `  ${fmtOrderPts(pts)}`;
 }
 function setTradesPointValue(v){ const n = parseFloat(v); lsSet('td_point_value', String((isFinite(n) && n > 0) ? n : 1)); }
 
@@ -13842,11 +13846,12 @@ function renderOrderPositionBadges(){
     el.style.background = t.side === 'long' ? '#26a69a' : '#ef5350';
     el.title = 'Cerrar operación';
     let progress = '';
+    const pnlMode = STATE.chartSettings.orderPnlMode || 'points';
     if (lastBar) {
       if (t.real && t._liveProfit != null) {
         const sign = t.side === 'long' ? 1 : -1;
         const pts = (lastBar.close - t.entry_price) * sign;
-        progress = STATE.chartSettings.showOrderPnl === false ? '' : `  ${fmtOrderPts(pts)}  ${fmtOrderMoney(t._liveProfit)}`;
+        progress = pnlMode === 'off' ? '' : pnlMode === 'price' ? `  ${fmtOrderMoney(t._liveProfit)}` : `  ${fmtOrderPts(pts)}`;
       } else {
         progress = orderPnlSuffix(t, lastBar.close);
       }
