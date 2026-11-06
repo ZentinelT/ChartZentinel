@@ -2021,17 +2021,9 @@
     <h2>Chart Settings</h2>
     <div class="cs-layout">
       <div class="cs-nav">
-        <button class="cs-nav-btn" data-cs-tab="branding" onclick="csShowTab('branding')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><circle cx="5.5" cy="7" r="1.3"/><path d="M14.3 10.5 10.8 7l-6 6"/></svg>
-          Branding
-        </button>
-        <button class="cs-nav-btn active" data-cs-tab="theme" onclick="csShowTab('theme')">
+        <button class="cs-nav-btn active" data-cs-tab="design" onclick="csShowTab('design')">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M2 6.5h12"/></svg>
-          Theme
-        </button>
-        <button class="cs-nav-btn" data-cs-tab="workspace" onclick="csShowTab('workspace')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
-          Workspace
+          Design
         </button>
         <button class="cs-nav-btn" data-cs-tab="canvas" onclick="csShowTab('canvas')">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="3.5" height="9"/><rect x="6.5" y="6.5" width="3.5" height="6.5"/><rect x="11" y="1.5" width="3" height="11.5"/></svg>
@@ -2048,29 +2040,43 @@
       </div>
 
       <div class="cs-content">
-        <div class="cs-tab" data-cs-tab-content="theme">
-          <!-- Solo apariencia visual (colores de vela, fondo, texto, ejes,
-               crosshair) — NO toca indicadores, símbolo/TF ni dibujos. Ver
-               "Workspace" para eso. -->
-          <select id="cs-preset-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
-          <div class="cs-row" style="margin-bottom:0;">
-            <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
-            <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
-            <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
+        <div class="cs-tab" data-cs-tab-content="design">
+          <!-- Branding/Theme/Workspace agrupados acá por pedido del usuario
+               (los siente todos como "la parte visual") — PERO siguen siendo
+               3 sistemas totalmente independientes por dentro, cada uno con
+               su propio guardar/aplicar/borrar: Theme es SOLO apariencia
+               visual (colores de vela, fondo, texto, ejes, crosshair) y
+               Workspace es todo lo demás (símbolo, TF, indicadores, dibujos,
+               paneles) — separados a propósito en una vuelta anterior para
+               que aplicar uno nunca pise al otro. Juntarlos acá es solo
+               layout, no les mezcla el comportamiento. -->
+          <div class="cs-group">
+            <div class="cs-group-title">Branding</div>
+            <div class="cs-row" style="align-items:center;gap:10px;margin-bottom:0;">
+              <img id="cs-logo-preview" src="logo-unicorn.png" style="height:28px;width:auto;border-radius:3px;background:#111;padding:2px;flex:none;">
+              <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Subir mi logo</button>
+              <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Quitar</button>
+            </div>
+            <input type="file" id="cs-logo-file" accept="image/*" style="display:none;" onchange="onLogoFileChosen(event)">
+            <div class="cs-field-label" style="margin-top:8px;opacity:.65;white-space:normal;">Reemplaza el logo en toda la plataforma (incluye modo multigráficos). Recomendado: PNG con fondo transparente.</div>
           </div>
-        </div>
-
-        <div class="cs-tab" data-cs-tab-content="workspace" hidden>
-          <!-- Todo lo demás: símbolo, TF, fuente de datos, watchlist,
-               indicadores activos + su config (Watchtower/Sniper/Sweeps/
-               Fractal Model/Stat Map), dibujos, y si el watchlist/panel de
-               Operar están abiertos — pedido explícito del usuario para que
-               "diseño del gráfico" y "diseño completo" no se pisen entre sí. -->
-          <select id="cs-workspace-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
-          <div class="cs-row" style="margin-bottom:0;">
-            <button class="btn-ghost" style="flex:1;" onclick="applySelectedWorkspace()">Apply</button>
-            <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsWorkspace()">Save current as…</button>
-            <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedWorkspace()">Delete</button>
+          <div class="cs-group">
+            <div class="cs-group-title">Theme</div>
+            <select id="cs-preset-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
+            <div class="cs-row" style="margin-bottom:0;">
+              <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
+              <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
+              <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
+            </div>
+          </div>
+          <div class="cs-group">
+            <div class="cs-group-title">Workspace</div>
+            <select id="cs-workspace-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
+            <div class="cs-row" style="margin-bottom:0;">
+              <button class="btn-ghost" style="flex:1;" onclick="applySelectedWorkspace()">Apply</button>
+              <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsWorkspace()">Save current as…</button>
+              <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedWorkspace()">Delete</button>
+            </div>
           </div>
         </div>
 
@@ -2183,19 +2189,6 @@
               <option value="price">Price</option>
               <option value="off">Off</option>
             </select>
-          </div>
-        </div>
-
-        <div class="cs-tab" data-cs-tab-content="branding" hidden>
-          <div class="cs-group">
-            <div class="cs-group-title">Logo</div>
-            <div class="cs-row" style="align-items:center;gap:10px;margin-bottom:0;">
-              <img id="cs-logo-preview" src="logo-unicorn.png" style="height:28px;width:auto;border-radius:3px;background:#111;padding:2px;flex:none;">
-              <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Subir mi logo</button>
-              <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Quitar</button>
-            </div>
-            <input type="file" id="cs-logo-file" accept="image/*" style="display:none;" onchange="onLogoFileChosen(event)">
-            <div class="cs-field-label" style="margin-top:8px;opacity:.65;white-space:normal;">Reemplaza el logo en toda la plataforma (incluye modo multigráficos). Recomendado: PNG con fondo transparente.</div>
           </div>
         </div>
       </div>
@@ -11312,7 +11305,7 @@ function openChartSettingsModal(){
   } else {
     fillChartSettingsForm(STATE.chartSettings);
   }
-  renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); csShowTab('theme'); openModal('modal-chart-settings');
+  renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); csShowTab('design'); openModal('modal-chart-settings');
 }
 
 // Logo propio del cliente — a diferencia del resto de Chart Settings (que es
