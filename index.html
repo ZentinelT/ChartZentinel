@@ -1877,6 +1877,11 @@
     </svg>
     <span class="dtb-btn-text">Levels</span>
   </button>
+  <select class="dtb-select" id="dtb-fib-label-mode" title="Fibonacci label" onchange="onDtbFibLabelMode(this.value)" style="display:none">
+    <option value="percent">%</option>
+    <option value="price">Price</option>
+    <option value="both">% + Price</option>
+  </select>
   <button class="dtb-btn" id="dtb-vp-settings" title="Volume Profile Settings" onclick="openVpSettingsModal()" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2.1M8 12.4v2.1M1.5 8h2.1M12.4 8h2.1M3.5 3.5l1.5 1.5M11 11l1.5 1.5M3.5 12.5l1.5-1.5M11 5l1.5-1.5"/></svg>
     <span class="dtb-btn-text">Settings</span>
@@ -4287,7 +4292,7 @@ function refreshToolDefaultsFor(type){
   // pasar por otro tipo que no lo pisa (rect, trendline...) y éste nunca
   // lo limpia.
   Object.assign(toolDefaults, {
-    color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined,
+    color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined, fibLabelMode:undefined,
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
     upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
     pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined, barOpacity:undefined,
@@ -4323,6 +4328,7 @@ function captureDrawingStyle(d){
     return Object.assign(base, {
       levels: JSON.parse(JSON.stringify(d.levels || cloneFibLevels())),
       showPriceLabel: d.showPriceLabel !== false,
+      fibLabelMode: d.fibLabelMode || 'percent',
     });
   }
   if (d.type === 'rect') {
@@ -4441,7 +4447,7 @@ function serializeDrawings(){
       ...d, series:undefined, svgEls:undefined, label:undefined, vLineEl:undefined,
       fillEl:undefined, profitFillEl:undefined, lossFillEl:undefined,
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
-      vpBarEls:undefined, vpBins:undefined,
+      vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -4456,7 +4462,7 @@ window.applyExternalDrawings = function(list){
     [...drawings].forEach(d => removeDrawingById(d.id));
     deselectDrawing();
     (list || []).forEach(data => {
-      const d = { ...data, series:[], svgEls:[], label:null };
+      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined };
       drawings.push(d);
       if (d.type === 'text') {
         const label = document.createElement('div');
@@ -4578,6 +4584,8 @@ function selectDrawing(id) {
   document.getElementById('dtb-width').value = d.width;
   document.getElementById('dtb-style').value = d.style;
   document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
+  document.getElementById('dtb-fib-label-mode').style.display = d.type==='fib' ? '' : 'none';
+  if (d.type === 'fib') document.getElementById('dtb-fib-label-mode').value = d.fibLabelMode || 'percent';
   document.getElementById('dtb-vp-settings').style.display = d.type==='vp' ? '' : 'none';
   const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'fib');
   document.getElementById('dtb-price-label').style.display = hasPriceLabel ? '' : 'none';
@@ -4761,11 +4769,10 @@ function onDtbPosColorChange(field, val, inputEl) {
 // deja en el eje derecho (lastValueVisible de la librería) — antes siempre
 // estaba prendida, sin forma de sacarla. No hace falta reconstruir el
 // dibujo (no cambia cuántas series tiene), alcanza con pisarle la opción a
-// cada serie ya existente. En Fib además hay que apagar el "title" (el
-// 61.8%, 50%, etc. que queda flotando pegado al final de cada línea DENTRO
-// del chart) — es una opción de la serie totalmente aparte de
-// lastValueVisible (esa solo tapa el cartelito del eje), así que apagar
-// nada más el precio dejaba los porcentajes igual de visibles.
+// cada serie ya existente. En Fib el texto del nivel (61.8%, precio, o
+// ambos) ya no es lastValueVisible/title de la librería — es la etiqueta
+// propia en la capa SVG (ver syncFibLabels), así que ahí alcanza con
+// volver a sincronizarla.
 function onDtbTogglePriceLabel() {
   const d = getSelected();
   if (!d || (d.type !== 'hline' && d.type !== 'trendline' && d.type !== 'fib')) return;
@@ -4774,14 +4781,23 @@ function onDtbTogglePriceLabel() {
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
   const on = d.showPriceLabel !== false;
   if (d.type === 'fib') {
-    const onLevels = (d.levels || []).filter(lv => lv.on);
-    d.series.forEach((s, i) => {
-      const lv = onLevels[i];
-      try { s.applyOptions({ lastValueVisible: on, title: (on && lv) ? `${(lv.value*100).toFixed(1)}%` : '' }); } catch(e){}
-    });
+    syncFibLabels(d);
   } else {
     d.series.forEach(s => { try { s.applyOptions({ lastValueVisible: on }); } catch(e){} });
   }
+  markDrawingsDirty();
+  rememberToolStyle(d);
+}
+// Selector "%", "Price" o "% + Price" para el texto de cada nivel del Fibo
+// — pedido explícito del usuario (antes solo mostraba el porcentaje, sin
+// opción de precio). No hace falta reconstruir el dibujo, syncFibLabels ya
+// recalcula el texto de cada etiqueta existente.
+function onDtbFibLabelMode(mode) {
+  const d = getSelected();
+  if (!d || d.type !== 'fib') return;
+  captureUndoSnapshot();
+  d.fibLabelMode = mode;
+  syncFibLabels(d);
   markDrawingsDirty();
   rememberToolStyle(d);
 }
@@ -5127,7 +5143,13 @@ function syncFibLabels(d) {
     const x = (show && t2 != null) ? chart.timeScale().timeToCoordinate(t2) : null;
     const y = (show && t2 != null) ? candleSeries.priceToCoordinate(val) : null;
     if (x === null || y === null) { el.style.display = 'none'; return; }
-    const text = `${(lv.value*100).toFixed(1)}%`;
+    // Selector "%" / "Price" / "% + Price" — ver onDtbFibLabelMode. Default
+    // 'percent' (undefined = dibujos guardados antes de que existiera este
+    // campo), mismo criterio que showPriceLabel/showBorder/etc.
+    const mode = d.fibLabelMode || 'percent';
+    const pct = `${(lv.value*100).toFixed(1)}%`;
+    const price = fmt(val);
+    const text = mode === 'price' ? price : mode === 'both' ? `${pct}  ${price}` : pct;
     // Mismo resguardo que wtLabel: si el ancla cae adentro del plot pero el
     // texto se saldría por detrás de los números del eje de precio, se
     // corre a la izquierda en vez de quedar tapado.
