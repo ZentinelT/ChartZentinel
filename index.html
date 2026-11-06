@@ -2641,15 +2641,17 @@ function renderLayoutGrid(n){
   // Mismo truco que SHARED_ICON de arriba (sacar el HTML del documento de
   // a punto de borrarse ANTES de borrarlo) — para el modal de Chart
   // Settings completo + los 2 modales chicos de los que depende (Save as…
-  // de Theme/Workspace, y el recortador de logo de Branding). Pedido
-  // explícito del usuario: Settings en modo grilla NO debe tapar/achicar
-  // los demás paneles — antes se estiraba el iframe del panel activo a
-  // pantalla completa para que su modal (adentro de ESE iframe) quedara
-  // centrado; ahora en cambio el modal vive DIRECTO acá afuera, en el
-  // shell, operando sobre el panel activo vía paneEval (ver
+  // de Theme/Workspace, y el recortador de logo de Branding), y también
+  // Trades (mismo pedido del usuario aplicado ahí: antes se dibujaba
+  // DENTRO del iframe del panel activo, tapándolo nomás a él). Pedido
+  // explícito del usuario: estos modales en modo grilla NO deben tapar/
+  // achicar los demás paneles — antes se estiraba el iframe del panel
+  // activo a pantalla completa para que su modal (adentro de ESE iframe)
+  // quedara centrado; ahora en cambio el modal vive DIRECTO acá afuera, en
+  // el shell, operando sobre el panel activo vía paneEval (ver
   // isGridShell()/_gridActiveFrame más abajo) — la grilla entera queda
   // tal cual está, nunca se toca.
-  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop']
+  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades']
     .map(id => { const el = document.getElementById(id); return el ? el.outerHTML : ''; }).join('');
 
   document.body.innerHTML = '';
@@ -3598,12 +3600,12 @@ function renderLayoutGrid(n){
   });
 
   // Operaciones (paper trading) — el journal es GLOBAL (localStorage sin
-  // sufijo de panel, comparte origen con todos los panes), pero el modal
-  // en sí vive en el script de cada panel — como Settings/Indicators, se
-  // delega al panel activo para abrirlo.
-  gbar.querySelector('#gc-trades').addEventListener('click', ()=>{
-    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openTrades' }, '*');
-  });
+  // sufijo de panel, comparte origen con todos los panes). Mismo criterio
+  // que Settings (ver openChartSettingsModal/isGridShell): el modal vive
+  // DIRECTO acá en el shell, nunca tapa/achica los paneles, y opera sobre
+  // el panel activo vía paneEval para lo poco que de verdad necesita un
+  // chart real (ver closeTradeById/editTradeById/toggleLiveTrading).
+  gbar.querySelector('#gc-trades').addEventListener('click', openTradesModal);
   // Panel de Operar: a diferencia de Trades/Settings/Indicators arriba,
   // NO se delega por postMessage al panel activo — este documento (el
   // shell) tiene su PROPIA copia del panel (ver más abajo, "PANEL DE
@@ -3994,6 +3996,28 @@ function renderLayoutGrid(n){
     _shellOrdersPollTimer = setInterval(() => {
       window._shellSyncOrdersContext();
       renderOrdersPanelIfOpen();
+    }, 1000);
+  };
+  // Mismo patrón para el modal de Trades (ver openTradesModal/closeModal):
+  // mientras queda abierto acá en el shell, el P&L en vivo y el switch de
+  // "Real trading" tienen que seguir al panel activo.
+  let _shellTradesPollTimer = null;
+  function _shellSyncTradesContext(){
+    window._shellSyncOrdersContext();
+    const live = _gridActivePaneLiveTrading();
+    const toggleEl = document.getElementById('live-trading-toggle');
+    if (toggleEl) toggleEl.checked = live;
+    const statusEl = document.getElementById('live-trading-status');
+    if (statusEl) { statusEl.textContent = live ? 'ON' : 'OFF'; statusEl.classList.toggle('on', live); }
+  }
+  window._shellOnTradesToggle = function(open){
+    clearInterval(_shellTradesPollTimer);
+    _shellTradesPollTimer = null;
+    if (!open) return;
+    _shellSyncTradesContext();
+    _shellTradesPollTimer = setInterval(() => {
+      _shellSyncTradesContext();
+      renderTradesModalIfOpen();
     }, 1000);
   };
 }
@@ -11171,7 +11195,14 @@ function _exitFollowReplay(){
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){ if (window._modalDragResets && window._modalDragResets[id]) window._modalDragResets[id](); document.getElementById(id).classList.add('open'); }
-function closeModal(id){document.getElementById(id).classList.remove('open');}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  // Trades, en la grilla, necesita un poll mientras queda abierto (precio/
+  // LIVE_TRADING del panel activo, ver _shellOnTradesToggle en
+  // renderLayoutGrid) — cortarlo acá, no solo al abrir, así no sigue
+  // corriendo de fondo con el modal ya cerrado.
+  if (id === 'modal-trades' && window._shellOnTradesToggle) window._shellOnTradesToggle(false);
+}
 
 // Reemplaza prompt() nativo para pedir un nombre (presets/templates) —
 // mismo modal para los 3 lugares que antes usaban prompt(): el Preset de
@@ -13482,12 +13513,8 @@ window.addEventListener('message', (e) => {
     renderIndList();
   } else if (msg.type === 'zentinel:refresh') {
     refreshChart();
-  } else if (msg.type === 'zentinel:openSettings') {
-    openChartSettingsModal();
   } else if (msg.type === 'zentinel:openIndicators') {
     openIndicatorModal();
-  } else if (msg.type === 'zentinel:openTrades') {
-    openTradesModal();
   } else if (msg.type === 'zentinel:toggleOrders') {
     toggleOrdersPanel();
   } else if (msg.type === 'zentinel:startReplayPick') {
@@ -13876,6 +13903,21 @@ async function sendOrder(fields){
 }
 
 function toggleLiveTrading(on){
+  // En la grilla, el switch de la modal de Trades (que ahora vive en el
+  // shell, ver isGridShell()) tiene que prender/apagar el trading real del
+  // panel ACTIVO — es ESE documento el que de verdad manda las órdenes
+  // (quick buy/sell sobre su propio chart) —, no una variable local del
+  // shell que nadie usa para operar. El propio switch del modal, acá en el
+  // shell, se actualiza a mano porque no corre el resto de esta función.
+  if (isGridShell() && window._gridActiveFrame && window._gridPaneEval) {
+    const f = window._gridActiveFrame();
+    if (f) window._gridPaneEval(f, `toggleLiveTrading(${!!on});`);
+    const statusEl = document.getElementById('live-trading-status');
+    if (statusEl) { statusEl.textContent = on ? 'ON' : 'OFF'; statusEl.classList.toggle('on', !!on); }
+    const toggleEl = document.getElementById('live-trading-toggle');
+    if (toggleEl) toggleEl.checked = !!on;
+    return;
+  }
   LIVE_TRADING = !!on;
   const statusEl = document.getElementById('live-trading-status');
   if (statusEl) { statusEl.textContent = LIVE_TRADING ? 'ON' : 'OFF'; statusEl.classList.toggle('on', LIVE_TRADING); }
@@ -14742,6 +14784,20 @@ function manualCloseTrade(){
 // Vive en el modal de Trades (botón ✕ en cada fila abierta), accesible
 // sin tener la herramienta de posición activa.
 async function closeTradeById(id){
+  // En la grilla, esta operación toca `drawings`/el chart del panel que
+  // tenga la herramienta de posición de ESTE trade — datos que solo existe
+  // en un panel (iframe) de verdad, no en el shell (sin chart propio). Se
+  // delega entera al panel ACTIVO, igual que Settings (ver isGridShell()):
+  // así el undo-snapshot, el desenganche del dibujo y el redibujo de
+  // flechas pasan en el documento correcto.
+  if (isGridShell() && window._gridActiveFrame && window._gridPaneEval) {
+    const f = window._gridActiveFrame();
+    if (!f) return;
+    window._gridPaneEval(f, `closeTradeById(${JSON.stringify(id)});`);
+    renderTradesModal(); // optimista — para trades reales, el poll de abajo lo termina de confirmar
+    if (window._shellRefreshActivePane) window._shellRefreshActivePane();
+    return;
+  }
   const open = getOpenTrades();
   const idx = open.findIndex(t => t.id === id);
   if (idx < 0) return;
@@ -14790,63 +14846,89 @@ async function closeTradeById(id){
 // posición en el chart — si esa herramienta se borraba con la operación
 // todavía corriendo, no quedaba ninguna forma de modificarla (solo
 // cerrarla entera, sin poder ajustar el riesgo).
+// Hace el trabajo real de editTradeById de abajo (parsear los campos +
+// mandar la orden real o pisar el papel + sincronizar el dibujo en el
+// chart) — separado en su propia función para que la grilla pueda
+// pedírselo al panel ACTIVO vía paneEval (ver isGridShell() en
+// editTradeById) pasándole solo los dos strings crudos del formulario,
+// sin tener que reconstruir toda esta lógica en el shell.
+function _applyTradeEdit(id, slInput, tpInput){
+  const open = getOpenTrades();
+  const t = open.find(x => x.id === id);
+  if (!t) return;
+  // fmt() precarga el campo con coma como separador de miles (ej.
+  // "29,050.50", convención en-US) — si el usuario apenas edita un dígito
+  // y confirma, esa coma le llega de vuelta a Number(), que no la entiende
+  // y devuelve NaN ("Invalid price" con un número perfectamente válido).
+  // Sacarla antes de parsear.
+  const parsePrice = (s) => Number(s.replace(/,/g, ''));
+  const newSl = slInput.trim() === '' ? null : parsePrice(slInput);
+  const newTp = tpInput.trim() === '' ? null : parsePrice(tpInput);
+  if ((slInput.trim() !== '' && !isFinite(newSl)) || (tpInput.trim() !== '' && !isFinite(newTp))) {
+    alert('Invalid price.');
+    return;
+  }
+  if (t.real) {
+    sendOrder({ action:'modify', ticket: t.ticket, sl: newSl, tp: newTp }).then((result) => {
+      const p = result.position;
+      const freshOpen = getOpenTrades();
+      const fresh = freshOpen.find(x => x.id === id);
+      if (!fresh) return;
+      fresh.stop_loss = p.sl > 0 ? p.sl : null; // 0 en MT5 = sin SL/TP fijado
+      fresh.take_profit = p.tp > 0 ? p.tp : null;
+      saveOpenTrades(freshOpen);
+      const d = drawings.find(x => x.tradeId === id);
+      if (d) {
+        if (fresh.stop_loss != null) d.p2.price = fresh.stop_loss;
+        if (fresh.take_profit != null) d.targetPrice = fresh.take_profit;
+        if (!updateDrawingGeometry(d)) redrawDrawing(d);
+        markDrawingsDirty();
+      }
+      renderTradesModalIfOpen();
+      renderOrdersPanelIfOpen();
+    }).catch((e) => alert('No se pudo modificar la operación real: ' + e.message));
+    return;
+  }
+  t.stop_loss = newSl;
+  t.take_profit = newTp;
+  saveOpenTrades(open);
+  // Si había un dibujo apuntando a esta operación, llevarlo al mismo
+  // nivel — para que no quede mostrando un SL/TP viejo en el chart.
+  const d = drawings.find(x => x.tradeId === id);
+  if (d) {
+    if (newSl != null) d.p2.price = newSl;
+    if (newTp != null) d.targetPrice = newTp;
+    if (!updateDrawingGeometry(d)) redrawDrawing(d);
+    markDrawingsDirty();
+  }
+  renderTradesModalIfOpen();
+  renderOrdersPanelIfOpen();
+}
 function editTradeById(id){
   const open = getOpenTrades();
   const t = open.find(x => x.id === id);
   if (!t) return;
-  promptFields('Edit stop loss / take profit', [
+  const fields = [
     { id:'sl', label:'Stop loss (empty = none)', type:'text', value: t.stop_loss!=null ? fmt(t.stop_loss) : '' },
     { id:'tp', label:'Take profit (empty = none)', type:'text', value: t.take_profit!=null ? fmt(t.take_profit) : '' },
-  ], (vals) => {
-    // fmt() precarga el campo con coma como separador de miles (ej.
-    // "29,050.50", convención en-US) — si el usuario apenas edita un dígito
-    // y confirma, esa coma le llega de vuelta a Number(), que no la entiende
-    // y devuelve NaN ("Invalid price" con un número perfectamente válido).
-    // Sacarla antes de parsear.
-    const parsePrice = (s) => Number(s.replace(/,/g, ''));
-    const slInput = vals.sl, tpInput = vals.tp;
-    const newSl = slInput.trim() === '' ? null : parsePrice(slInput);
-    const newTp = tpInput.trim() === '' ? null : parsePrice(tpInput);
-    if ((slInput.trim() !== '' && !isFinite(newSl)) || (tpInput.trim() !== '' && !isFinite(newTp))) {
-      alert('Invalid price.');
-      return;
-    }
-    if (t.real) {
-      sendOrder({ action:'modify', ticket: t.ticket, sl: newSl, tp: newTp }).then((result) => {
-        const p = result.position;
-        const freshOpen = getOpenTrades();
-        const fresh = freshOpen.find(x => x.id === id);
-        if (!fresh) return;
-        fresh.stop_loss = p.sl > 0 ? p.sl : null; // 0 en MT5 = sin SL/TP fijado
-        fresh.take_profit = p.tp > 0 ? p.tp : null;
-        saveOpenTrades(freshOpen);
-        const d = drawings.find(x => x.tradeId === id);
-        if (d) {
-          if (fresh.stop_loss != null) d.p2.price = fresh.stop_loss;
-          if (fresh.take_profit != null) d.targetPrice = fresh.take_profit;
-          if (!updateDrawingGeometry(d)) redrawDrawing(d);
-          markDrawingsDirty();
-        }
-        renderTradesModalIfOpen();
-        renderOrdersPanelIfOpen();
-      }).catch((e) => alert('No se pudo modificar la operación real: ' + e.message));
-      return;
-    }
-    t.stop_loss = newSl;
-    t.take_profit = newTp;
-    saveOpenTrades(open);
-    // Si había un dibujo apuntando a esta operación, llevarlo al mismo
-    // nivel — para que no quede mostrando un SL/TP viejo en el chart.
-    const d = drawings.find(x => x.tradeId === id);
-    if (d) {
-      if (newSl != null) d.p2.price = newSl;
-      if (newTp != null) d.targetPrice = newTp;
-      if (!updateDrawingGeometry(d)) redrawDrawing(d);
-      markDrawingsDirty();
-    }
-    renderTradesModalIfOpen();
-    renderOrdersPanelIfOpen();
-  });
+  ];
+  // El prompt en sí (promptFields/#modal-prompt-fields) ya tiene su propia
+  // copia en el shell de la grilla (ver renderLayoutGrid), así que corre
+  // perfecto ACÁ, centrado, sin forwardear nada — lo único que de verdad
+  // necesita el chart/drawings de un panel real es aplicar el cambio
+  // (_applyTradeEdit), por eso ESO sí se delega al panel ACTIVO, igual que
+  // closeTradeById de arriba.
+  if (isGridShell() && window._gridActiveFrame && window._gridPaneEval) {
+    promptFields('Edit stop loss / take profit', fields, (vals) => {
+      const f = window._gridActiveFrame();
+      if (!f) return;
+      window._gridPaneEval(f, `_applyTradeEdit(${JSON.stringify(id)}, ${JSON.stringify(vals.sl)}, ${JSON.stringify(vals.tp)});`);
+      renderTradesModal(); // optimista — para trades reales, el poll de abajo lo termina de confirmar
+      if (window._shellRefreshActivePane) window._shellRefreshActivePane();
+    });
+    return;
+  }
+  promptFields('Edit stop loss / take profit', fields, (vals) => _applyTradeEdit(id, vals.sl, vals.tp));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -15162,15 +15244,33 @@ function renderTradesModalIfOpen(){
   const el = document.getElementById('modal-trades');
   if (el && el.classList.contains('open')) renderTradesModal();
 }
+// Lee LIVE_TRADING del panel ACTIVO (variable suelta por documento, ver su
+// comentario grande más arriba) — en la grilla, el modal vive en el shell,
+// que nunca tiene la suya propia prendida de verdad.
+function _gridActivePaneLiveTrading(){
+  if (!window._gridActiveFrame || !window._gridPaneEval) return false;
+  const f = window._gridActiveFrame();
+  if (!f) return false;
+  try { return !!window._gridPaneEval(f, 'LIVE_TRADING'); } catch(e){ return false; }
+}
 function openTradesModal(){
   const pv = document.getElementById('trades-point-value');
   if (pv) pv.value = getTradesPointValue();
+  // En la grilla, el precio/símbolo para el P&L en vivo (window._lastCandles/
+  // STATE.symbol) solo los tiene el panel activo — mismo helper que ya usa
+  // el panel de Operar del shell (ver _shellSyncOrdersContext).
+  if (isGridShell() && window._shellSyncOrdersContext) window._shellSyncOrdersContext();
+  const live = isGridShell() ? _gridActivePaneLiveTrading() : LIVE_TRADING;
   const toggleEl = document.getElementById('live-trading-toggle');
-  if (toggleEl) toggleEl.checked = LIVE_TRADING;
+  if (toggleEl) toggleEl.checked = live;
   const statusEl = document.getElementById('live-trading-status');
-  if (statusEl) { statusEl.textContent = LIVE_TRADING ? 'ON' : 'OFF'; statusEl.classList.toggle('on', LIVE_TRADING); }
+  if (statusEl) { statusEl.textContent = live ? 'ON' : 'OFF'; statusEl.classList.toggle('on', live); }
   renderTradesModal();
   openModal('modal-trades');
+  // Arranca el poll que mantiene esto sincronizado con el panel activo
+  // mientras el modal sigue abierto (ver _shellOnTradesToggle en
+  // renderLayoutGrid) — no hace nada fuera de la grilla.
+  if (window._shellOnTradesToggle) window._shellOnTradesToggle(true);
 }
 function renderTradesModal(){
   const open = getOpenTrades();
