@@ -13867,6 +13867,16 @@ function renderOrderPriceLines(){
   if (window._orderLineDragSession) return;
   _orderPriceLines.forEach(e => { try { candleSeries.removePriceLine(e.line); } catch(err){} });
   _orderPriceLines = [];
+  // 'off' apaga TODO lo de P&L en el chart, no solo el número — pedido
+  // explícito del usuario ("pastillas y líneas y valores"): sin líneas de
+  // entrada/SL/TP ni pastillas, nada más que los markers de entrada/salida
+  // (candleSeries.setMarkers, aparte de acá) y el panel de Operar de
+  // siempre siguen mostrando las operaciones.
+  if ((STATE.chartSettings.orderPnlMode || 'points') === 'off') {
+    renderOrderPositionBadges();
+    renderOrderLineBadges();
+    return;
+  }
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const addLine = (price, opts, meta) => {
     const line = candleSeries.createPriceLine({ price, ...opts });
@@ -13914,6 +13924,7 @@ function renderOrderPositionBadges(){
   _orderPositionBadges.forEach(b => b.el.remove());
   _orderPositionBadges = [];
   if (!candleSeries || !chart || window._orderLineDragSession) return;
+  if ((STATE.chartSettings.orderPnlMode || 'points') === 'off') return;
   const sym = normalizeSymbolForJournal(STATE.symbol);
   // Progreso EN VIVO (puntos/P&L contra el precio actual, no un nivel fijo
   // como SL/TP) — t.real usa el P/L que ya manda el bróker (más preciso
@@ -13980,6 +13991,7 @@ function renderOrderLineBadges(){
   _orderLineBadges.forEach(b => b.el.remove());
   _orderLineBadges = [];
   if (!candleSeries || !chart || window._orderLineDragSession) return;
+  if ((STATE.chartSettings.orderPnlMode || 'points') === 'off') return;
   const sym = normalizeSymbolForJournal(STATE.symbol);
   const addBadge = (kind, id, field, level, trade, isSl) => {
     const el = document.createElement('div');
