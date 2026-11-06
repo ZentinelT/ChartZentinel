@@ -11531,14 +11531,14 @@ function applyChartSettings(){
     wtBiasBadge.style.setProperty('--wt-bias-bg', dark ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)');
     wtBiasBadge.style.setProperty('--wt-bias-border', dark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)');
   }
-  // Reloj de la barra de abajo — mismo color de texto que precio/horario del
-  // chart. #sb-clock tiene su propio color en el CSS (más específico que
-  // heredar del padre), así que hay que pisarlo directo; #sb-tz-label no
-  // tiene color propio, hereda del trigger.
-  const sbTzTrigger = document.getElementById('sb-tz-trigger');
-  const sbClock = document.getElementById('sb-clock');
-  if (sbTzTrigger) sbTzTrigger.style.color = cs.textColor;
-  if (sbClock) sbClock.style.color = cs.textColor;
+  // El reloj de la barra de abajo antes seguía cs.textColor (mismo color
+  // que precio/horario DENTRO del chart) — pero ese color se elige para
+  // contrastar con el fondo del CHART (cs.bgColor, fijo, no sigue el tema
+  // de la app), mientras que #statusbar vive sobre --bg-panel, que sí
+  // cambia con el tema. Con el default (#8888a8) quedaba parejo/apagado
+  // tanto en oscuro como en claro — reportado por el usuario. Se vuelve al
+  // color de CSS (var(--text-secondary)/var(--text-dim)), que sí se ajusta
+  // por tema y da buen contraste en los dos.
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
   chart.applyOptions({
     layout: { background: buildChartBackground(cs), textColor: cs.textColor },
