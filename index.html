@@ -5030,6 +5030,8 @@ function updateDrawingGeometry(d) {
         const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
         d.series[i].setData([{time:t1,value:val},{time:t2,value:val}]);
       });
+      d.fibLineT2 = t2;
+      syncFibLabels(d);
       ok = true;
     }
 
@@ -5065,6 +5067,7 @@ function removeDrawingById(id) {
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
+  if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
   if (d.profitFillEl instanceof Element) d.profitFillEl.remove();
   if (d.lossFillEl instanceof Element) d.lossFillEl.remove();
   if (d.entryTextEl instanceof Element) d.entryTextEl.remove();
@@ -5091,6 +5094,51 @@ function syncVLine(d) {
   d.vLineEl.style.display = '';
   d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
   d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', h);
+}
+
+// Etiqueta de cada nivel del Fibo ("61.8%") — texto SVG plano, SIN fondo
+// de color, pegado al final de la línea (igual que PDH/PDL de Watchtower,
+// ver wtLabel) — pedido explícito del usuario en vez del cartelito nativo
+// de lightweight-charts (lastValueVisible/title), que pinta un fondo del
+// color de la línea. Se llama cada frame (pan/zoom/drag), igual que
+// syncRectFill/syncVLine — estos textos no son series del chart, no
+// siguen el pan/zoom solos.
+function syncFibLabels(d) {
+  if (!window._drawingLayerSvg) return;
+  const levels = (d.levels || []).filter(lv => lv.on);
+  // Se recrean solo si cambió la cantidad de niveles prendidos — mismo
+  // criterio que d.vpBarEls, así cambiar color/horario no las duplica.
+  if (!Array.isArray(d.fibLabelEls) || d.fibLabelEls.length !== levels.length) {
+    (d.fibLabelEls || []).forEach(el => el.remove());
+    d.fibLabelEls = levels.map(() => {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      el.setAttribute('font-size', '10');
+      el.setAttribute('font-family', "'DM Mono',monospace");
+      window._drawingLayerSvg.appendChild(el);
+      return el;
+    });
+  }
+  const show = d.showPriceLabel !== false;
+  const t2 = d.fibLineT2;
+  const plotRight = wtPlotRight();
+  levels.forEach((lv, i) => {
+    const el = d.fibLabelEls[i];
+    const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
+    const x = (show && t2 != null) ? chart.timeScale().timeToCoordinate(t2) : null;
+    const y = (show && t2 != null) ? candleSeries.priceToCoordinate(val) : null;
+    if (x === null || y === null) { el.style.display = 'none'; return; }
+    const text = `${(lv.value*100).toFixed(1)}%`;
+    // Mismo resguardo que wtLabel: si el ancla cae adentro del plot pero el
+    // texto se saldría por detrás de los números del eje de precio, se
+    // corre a la izquierda en vez de quedar tapado.
+    const w = Math.max(28, text.length*6);
+    const boxX = (x <= plotRight && x + w > plotRight) ? Math.max(0, plotRight - w) : x;
+    el.style.display = '';
+    el.setAttribute('x', boxX + 4);
+    el.setAttribute('y', y - 3);
+    el.setAttribute('fill', lv.color);
+    el.textContent = text;
+  });
 }
 
 function syncRectFill(d) {
@@ -5522,12 +5570,15 @@ function buildDrawingOnChart(d) {
     // el origen) — sin pisarlo con hi/lo como antes. Ver applyHandleDrag.
     d.levels.filter(lv => lv.on).forEach(lv => {
       const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
-      const s = mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: d.showPriceLabel !== false });
-      // El título (el "61.8%" flotando al final de la línea) es aparte de
-      // lastValueVisible (esa solo tapa el cartelito del eje) — mismo
-      // toggle, ver onDtbTogglePriceLabel.
-      s.applyOptions({ title: d.showPriceLabel !== false ? `${(lv.value*100).toFixed(1)}%` : '' });
+      // Sin lastValueVisible/title nativos (esos pintan un cartelito con
+      // FONDO DE COLOR, en el eje y al final de la línea) — el texto del
+      // nivel ahora es una etiqueta propia en la capa SVG, mismo estilo
+      // sin fondo que usa Watchtower en PDH/PDL (ver wtLabel/syncFibLabels
+      // más abajo), pedido explícito del usuario.
+      mkLine([{time:t1,value:val},{time:t2,value:val}], { color: lv.color+'cc', style: ls, lastValue: false });
     });
+    d.fibLineT2 = t2;
+    syncFibLabels(d);
 
   } else if (d.type === 'vline') {
     // No es una serie del chart (una línea vertical no se puede expresar como
@@ -6502,6 +6553,8 @@ function initChart() {
         syncRectFill(d);
       } else if (d.type==='vp') {
         syncVolumeProfileBars(d);
+      } else if (d.type==='fib') {
+        syncFibLabels(d);
       } else if (d.type==='long' || d.type==='short') {
         syncPositionTool(d);
       }
@@ -10975,7 +11028,7 @@ function _exitFollowReplay(){
 // ══════════════════════════════════════════════════════════
 //  MODALS
 // ══════════════════════════════════════════════════════════
-function openModal(id){document.getElementById(id).classList.add('open');}
+function openModal(id){ if (window._modalDragResets && window._modalDragResets[id]) window._modalDragResets[id](); document.getElementById(id).classList.add('open'); }
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
 // Reemplaza prompt() nativo para pedir un nombre (presets/templates) —
@@ -13414,16 +13467,25 @@ if (_dtbBar && _dtbHandle) {
   });
 }
 
-// ─── Panel de Settings de un indicador: arrastrable (mismo patrón que el
-// draw-toolbar de arriba: position:fixed + left/top en px, clampeado al
-// viewport) — sin persistir posición entre aperturas a propósito (cada
-// openIndicatorSettings la resetea al centro, ver _indSettingsResetPosition
-// más arriba), porque acá se abre y cierra para indicadores distintos todo
-// el tiempo y no tiene el mismo sentido de "panel fijo" que el toolbar.
-(function initIndSettingsDrag(){
-  const panel = document.getElementById('ind-settings-panel');
-  const handle = document.getElementById('ind-settings-title');
-  if (!panel || !handle) return;
+// ─── TODOS los cuadros de configuración (cualquier .modal dentro de un
+// .modal-overlay — Chart Settings, Indicators, Volume Profile, Fibonacci
+// Levels, Trades, Settings de un indicador, etc): arrastrables agarrando
+// su título (<h2>), mismo patrón que el draw-toolbar de arriba
+// (position:fixed + left/top en px, clampeado al viewport) — pedido
+// explícito del usuario, generalizado a CUALQUIER cuadro de config que
+// haya (antes solo el de Settings de un indicador tenía esto, cada uno
+// con su propia copia de la misma lógica). Sin persistir posición entre
+// aperturas a propósito (se resetea al centro cada vez que se abre, ver
+// el hook en openModal) — son paneles de contenido muy distinto entre una
+// apertura y la siguiente (ind-settings en particular cambia de indicador
+// cada vez), así que no tiene el mismo sentido de "posición fija" que el
+// draw-toolbar (ese sí persiste, ver arriba).
+window._modalDragResets = {};
+function makeModalDraggable(panel, handle){
+  if (!panel || !handle) return function(){};
+  handle.style.cursor = 'move';
+  handle.style.userSelect = 'none';
+  if (!handle.title) handle.title = 'Arrastrar para mover';
   function clamp(left, top){
     const w = panel.offsetWidth, h = panel.offsetHeight;
     const maxL = window.innerWidth - w - 4, maxT = window.innerHeight - h - 4;
@@ -13439,13 +13501,13 @@ if (_dtbBar && _dtbHandle) {
     panel.style.margin = '0';
   }
   // Vuelve al centrado por flex de .modal-overlay (sacando el position:fixed
-  // de un arrastre anterior) — se llama al abrir el panel para un indicador.
-  window._indSettingsResetPosition = function(){
+  // de un arrastre anterior) — se llama al abrir el modal (ver openModal).
+  function reset(){
     panel.style.position = '';
     panel.style.left = '';
     panel.style.top = '';
     panel.style.margin = '';
-  };
+  }
   let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
   handle.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -13453,7 +13515,7 @@ if (_dtbBar && _dtbHandle) {
     dragging = true;
     startX = e.clientX; startY = e.clientY;
     startLeft = r.left; startTop = r.top;
-    handle.classList.add('dragging');
+    handle.style.cursor = 'grabbing';
   });
   document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
@@ -13463,9 +13525,19 @@ if (_dtbBar && _dtbHandle) {
   document.addEventListener('mouseup', () => {
     if (!dragging) return;
     dragging = false;
-    handle.classList.remove('dragging');
+    handle.style.cursor = 'move';
   });
-})();
+  return reset;
+}
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  const panel = overlay.querySelector('.modal');
+  const handle = panel && panel.querySelector('h2');
+  _modalDragResets[overlay.id] = makeModalDraggable(panel, handle);
+});
+// openIndicatorSettings todavía llama a esto directo (además de pasar por
+// openModal) para resetear la posición ANTES de rearmar el contenido para
+// el indicador nuevo — ver su propio comentario.
+window._indSettingsResetPosition = _modalDragResets['modal-ind-settings'] || function(){};
 
 // ══════════════════════════════════════════════════════════
 //  OPERACIONES (paper trading) — tomar/registrar trades simulados
