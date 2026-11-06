@@ -3403,7 +3403,7 @@ function renderLayoutGrid(n){
   };
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
-      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="${s==='active'?'Panel activo':'Todos los paneles'} — a quién afecta el símbolo, TF rápido y 'Aplicar preset' de esta barra">
+      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="${s==='active'?'Panel activo':'Todos los paneles'} — a quién afecta el símbolo y el TF rápido de esta barra">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">${SCOPE_ICONS[s]}</svg>
       </button>`
     ).join('');
