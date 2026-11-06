@@ -1964,13 +1964,34 @@
     <div class="cs-section">
       <div class="cs-section-title">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M2 6.5h12"/></svg>
-        Preset
+        Theme
       </div>
+      <!-- Solo apariencia visual (colores de vela, fondo, texto, ejes,
+           crosshair) — NO toca indicadores, símbolo/TF ni dibujos. Ver
+           "Workspace" más abajo para eso. -->
       <select id="cs-preset-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
       <div class="cs-row" style="margin-bottom:0;">
         <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
         <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
         <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
+      </div>
+    </div>
+
+    <div class="cs-section">
+      <div class="cs-section-title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
+        Workspace
+      </div>
+      <!-- Todo lo demás: símbolo, TF, fuente de datos, watchlist,
+           indicadores activos + su config (Watchtower/Sniper/Sweeps/
+           Fractal Model/Stat Map), dibujos, y si el watchlist/panel de
+           Operar están abiertos — pedido explícito del usuario para que
+           "diseño del gráfico" y "diseño completo" no se pisen entre sí. -->
+      <select id="cs-workspace-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
+      <div class="cs-row" style="margin-bottom:0;">
+        <button class="btn-ghost" style="flex:1;" onclick="applySelectedWorkspace()">Apply</button>
+        <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsWorkspace()">Save current as…</button>
+        <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedWorkspace()">Delete</button>
       </div>
     </div>
 
@@ -4136,6 +4157,12 @@ const STATE = {
   // Los presets NO llevan el sufijo de pane (lsKey): un preset guardado en
   // cualquier ventana del grid multi-chart queda disponible en todas.
   presets: JSON.parse(lsGet('td_presets') || '{}'),
+  // Workspaces: la OTRA mitad del split Theme/Workspace (ver captureWorkspace
+  // más abajo) — símbolo/TF/watchlist/indicadores/dibujos/paneles, nunca
+  // chartSettings. Mismo criterio que presets: sin sufijo de pane, para que
+  // un workspace guardado en cualquier panel de la grilla quede disponible
+  // en todos.
+  workspaces: JSON.parse(lsGet('td_workspaces') || '{}'),
 };
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
@@ -4221,6 +4248,7 @@ function setIndSettingsObject(name, obj){
 }
 function getIndicatorStyle(name, def){ return Object.assign({ color: def.color, lineWidth: 1 }, STATE.indicatorStyles[name] || {}); }
 function savePresetsState(){ lsSet('td_presets', JSON.stringify(STATE.presets)); }
+function saveWorkspacesState(){ lsSet('td_workspaces', JSON.stringify(STATE.workspaces)); }
 
 let chart, candleSeries, volumeSeries, futureAxisSeries, futureAnchorSeries;
 const overlays = {};
@@ -11030,7 +11058,7 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
   document.getElementById('cs-order-pnl-mode').value=cs.orderPnlMode||'points';
 }
-function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); refreshLogoPreview(); openModal('modal-chart-settings'); }
+function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); openModal('modal-chart-settings'); }
 
 // Logo propio del cliente — a diferencia del resto de Chart Settings (que es
 // por preset/panel, vive en STATE.chartSettings), el logo es una sola marca
@@ -11277,21 +11305,39 @@ function applyChartSettings(){
 }
 
 // ══════════════════════════════════════════════════════════
-//  PRESETS — foto completa de colores + indicadores + su config
-//  (incluye Watchtower), guardable con nombre y reaplicable después.
-//  Son compartidos entre todos los paneles del modo multi-chart
-//  (no llevan el sufijo de pane de lsKey).
+//  THEME vs WORKSPACE — pedido explícito del usuario: "una cosa debe ser
+//  el diseño del gráfico general, y otra el diseño completo" (indicadores,
+//  TF, paneles, etc, tal como TV separa Theme de Layout). Antes "Preset"
+//  guardaba TODO junto (colores + indicadores + Watchtower/Sniper/etc +
+//  dibujos) — aplicar un preset viejo para cambiar solo el fondo también
+//  te pisaba los indicadores activos. Ahora:
+//   - Theme (el preset de siempre, MISMO storage 'td_presets' para no
+//     perder lo ya guardado): SOLO chartSettings — nunca toca indicadores,
+//     símbolo/TF ni dibujos.
+//   - Workspace (nuevo, 'td_workspaces'): todo lo demás — símbolo, TF,
+//     fuente de datos, watchlist, indicadores activos + su config,
+//     dibujos, toolDefaults, y si el watchlist/panel de Operar están
+//     abiertos. Nunca toca chartSettings.
+//  Ambos compartidos entre paneles del modo multi-chart (sin sufijo de
+//  pane en el storage), igual que ya era.
 // ══════════════════════════════════════════════════════════
-function captureCurrentDesign(){
+function captureThemeDesign(){
+  return { chartSettings: JSON.parse(JSON.stringify(STATE.chartSettings)) };
+}
+function captureWorkspace(){
   return {
-    chartSettings: STATE.chartSettings,
-    indicators: STATE.indicators,
-    indicatorStyles: STATE.indicatorStyles,
-    watchtower: STATE.watchtower,
-    sniper: STATE.sniper,
-    sweeps: STATE.sweeps,
-    fractalModel: STATE.fractalModel,
-    statMap: STATE.statMap,
+    dataSource: STATE.dataSource,
+    symbol: STATE.symbol,
+    timeframe: STATE.timeframe,
+    watchlist: [...STATE.watchlist],
+    indicators: [...STATE.indicators],
+    indicatorStyles: JSON.parse(JSON.stringify(STATE.indicatorStyles)),
+    watchtower: JSON.parse(JSON.stringify(STATE.watchtower)),
+    sniper: JSON.parse(JSON.stringify(STATE.sniper)),
+    sweeps: JSON.parse(JSON.stringify(STATE.sweeps)),
+    fractalModel: JSON.parse(JSON.stringify(STATE.fractalModel)),
+    statMap: JSON.parse(JSON.stringify(STATE.statMap)),
+    toolDefaults: { ...toolDefaults },
     // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
     // tal cual quedan en pantalla, con sus horarios/precios crudos — igual
     // que la sincronización entre paneles (ver zentinelDrawingsSync),
@@ -11299,7 +11345,8 @@ function captureCurrentDesign(){
     // se guardó (en otro TF cada panel los va a snapear a su propia grilla
     // igual que ya hace con cualquier dibujo sincronizado).
     drawings: serializeDrawings(),
-    toolDefaults: { ...toolDefaults },
+    sidebarCollapsed: !!document.getElementById('sidebar')?.classList.contains('collapsed'),
+    ordersOpen: !!document.getElementById('orders-panel')?.classList.contains('open'),
   };
 }
 
@@ -11309,7 +11356,7 @@ function renderPresetSelect(){
   const current = sel.value;
   try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
   const names = Object.keys(STATE.presets).sort();
-  sel.innerHTML = '<option value="">— choose preset —</option>'
+  sel.innerHTML = '<option value="">— choose theme —</option>'
     + names.map(n => `<option value="${n}">${n}</option>`).join('');
   if (names.includes(current)) sel.value = current;
 }
@@ -11317,9 +11364,9 @@ function renderPresetSelect(){
 function saveCurrentAsPreset(){
   commitChartSettingsForm();
   const existing = Object.keys(STATE.presets).sort();
-  promptSaveAsName('Save preset as…', existing, (name) => {
+  promptSaveAsName('Save theme as…', existing, (name) => {
     try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
-    STATE.presets[name] = JSON.parse(JSON.stringify(captureCurrentDesign()));
+    STATE.presets[name] = captureThemeDesign();
     savePresetsState();
     renderPresetSelect();
     document.getElementById('cs-preset-select').value = name;
@@ -11332,24 +11379,74 @@ function applySelectedPreset(){
   applyPreset(name);
 }
 
-// captureAppState/restoreAppState: todo lo que un preset puede pisar
-// (chart settings, indicadores activos, Watchtower/Sniper/Sweeps/Fractal
-// Model/Stat Map, toolDefaults) SIN los dibujos — esos ya tienen su propio
-// snapshot en el historial de undo (ver captureUndoSnapshot). Mismo shape
-// que captureCurrentDesign() (así restoreAppState también sirve para
-// aplicar un preset, ver applyPreset) pero clonado hondo, para que guardar
-// esto en el historial de undo no deje una referencia viva a STATE que
-// un cambio posterior termine mutando por accidente.
+function renderWorkspaceSelect(){
+  const sel = document.getElementById('cs-workspace-select');
+  if (!sel) return;
+  const current = sel.value;
+  try { STATE.workspaces = JSON.parse(lsGet('td_workspaces') || '{}'); } catch(e){}
+  const names = Object.keys(STATE.workspaces).sort();
+  sel.innerHTML = '<option value="">— choose workspace —</option>'
+    + names.map(n => `<option value="${n}">${n}</option>`).join('');
+  if (names.includes(current)) sel.value = current;
+}
+
+function saveCurrentAsWorkspace(){
+  const existing = Object.keys(STATE.workspaces).sort();
+  promptSaveAsName('Save workspace as…', existing, (name) => {
+    try { STATE.workspaces = JSON.parse(lsGet('td_workspaces') || '{}'); } catch(e){}
+    STATE.workspaces[name] = captureWorkspace();
+    saveWorkspacesState();
+    renderWorkspaceSelect();
+    document.getElementById('cs-workspace-select').value = name;
+  });
+}
+
+function applySelectedWorkspace(){
+  const name = document.getElementById('cs-workspace-select').value;
+  if (!name) return;
+  applyWorkspace(name);
+}
+
+function deleteSelectedWorkspace(){
+  const sel = document.getElementById('cs-workspace-select');
+  const name = sel.value;
+  if (!name) return;
+  if (!confirm(`Delete workspace "${name}"?`)) return;
+  delete STATE.workspaces[name];
+  saveWorkspacesState();
+  renderWorkspaceSelect();
+}
+
+// captureAppState/restoreAppState: usados por el Undo (ver
+// captureUndoSnapshot({full:true})) — una foto COMPLETA (Theme +
+// indicadores/Watchtower/Sniper/Sweeps/Fractal Model/Stat Map/
+// toolDefaults) SIN los dibujos, que ya tienen su propio snapshot en el
+// historial de undo. A propósito INDEPENDIENTE de captureThemeDesign/
+// captureWorkspace (que son más angostos): el undo tiene que poder
+// deshacer cualquier combinación de cambios, haya venido de aplicar un
+// Theme, un Workspace, o un cambio suelto de color/indicador — angostar
+// esto rompería ese undo genérico. Clonado hondo para que guardar esto en
+// el historial no deje una referencia viva a STATE que un cambio
+// posterior termine mutando por accidente.
 function captureAppState(){
-  const d = captureCurrentDesign();
   return JSON.parse(JSON.stringify({
-    chartSettings: d.chartSettings, indicators: d.indicators, indicatorStyles: d.indicatorStyles,
-    watchtower: d.watchtower, sniper: d.sniper, sweeps: d.sweeps,
-    fractalModel: d.fractalModel, statMap: d.statMap, toolDefaults: d.toolDefaults,
+    chartSettings: STATE.chartSettings, indicators: STATE.indicators, indicatorStyles: STATE.indicatorStyles,
+    watchtower: STATE.watchtower, sniper: STATE.sniper, sweeps: STATE.sweeps,
+    fractalModel: STATE.fractalModel, statMap: STATE.statMap, toolDefaults: toolDefaults,
   }));
 }
-function restoreAppState(s){
-  STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(JSON.stringify(s.chartSettings || {})));
+// Mitad "Theme" de restoreAppState — también la usa applyPreset solo,
+// así aplicar un Theme nunca toca indicadores aunque el objeto guardado
+// (uno viejo, de antes de este split) todavía tuviera esos campos.
+function restoreTheme(chartSettings){
+  STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(JSON.stringify(chartSettings || {})));
+  saveChartSettingsState();
+  applyChartSettings();
+  fillChartSettingsForm(STATE.chartSettings);
+}
+// Mitad "indicadores + su config" de restoreAppState — también la usa
+// applyWorkspace solo, así aplicar un Workspace nunca toca chartSettings.
+function restoreIndicatorsAndTools(s){
   STATE.indicatorStyles = JSON.parse(JSON.stringify(s.indicatorStyles || {}));
   STATE.watchtower = JSON.parse(JSON.stringify(s.watchtower || STATE.watchtower));
   STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(s.sniper || {})));
@@ -11364,7 +11461,6 @@ function restoreAppState(s){
   STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
   if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
-  saveChartSettingsState();
   saveIndicatorStylesState();
   saveWatchtowerState();
   saveSniperState();
@@ -11374,7 +11470,6 @@ function restoreAppState(s){
   Object.keys(overlays).forEach(n => { try { chart.removeSeries(overlays[n]); } catch(e){} delete overlays[n]; });
   STATE.indicators.forEach(n => addIndicatorSeries(n));
 
-  applyChartSettings();
   renderTfBar();
   setActiveTF(STATE.timeframe);
   renderIndList();
@@ -11383,44 +11478,110 @@ function restoreAppState(s){
   renderSweeps();
   renderFractalModel();
   renderStatMap();
-  fillChartSettingsForm(STATE.chartSettings);
+}
+// Compone las dos mitades de arriba — mismo resultado neto que antes del
+// split, así el Undo (único que usa esta función) no cambia de
+// comportamiento.
+function restoreAppState(s){
+  restoreTheme(s.chartSettings);
+  restoreIndicatorsAndTools(s);
 }
 
 function applyPreset(name){
   // Relee del storage en vez de confiar en STATE.presets: ese objeto se
-  // cargó una sola vez al arrancar este panel, así que si el preset se
+  // cargó una sola vez al arrancar este panel, así que si el theme se
   // guardó después (desde este mismo panel más tarde, o desde otro panel
   // en el modo multi-chart) no estaría todavía en memoria.
   try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
   const p = STATE.presets[name];
   if (!p) return;
 
-  // Aplicar un preset pisa indicadores/Watchtower/Sniper/colores (no solo
-  // dibujos) — tiene que poder deshacerse COMPLETO con Ctrl+Z. Antes solo
-  // se snapshoteaba cuando el preset traía dibujos; si no, el resto del
-  // cambio quedaba sin forma de deshacer (reportado: un preset aplicado
-  // "sin querer" sobre un panel no se pudo deshacer con undo).
+  // Aplicar un theme pisa chartSettings — tiene que poder deshacerse con
+  // Ctrl+Z (mismo criterio que ya existía acá antes del split).
   captureUndoSnapshot({ full: true });
 
-  restoreAppState(p);
-
-  // Dibujos: solo si el preset los trae — uno guardado antes de esto no
-  // tiene drawings, y aplicarlo no debería borrar los que el usuario ya
-  // tiene puestos en el panel.
-  if (Array.isArray(p.drawings)) {
-    applyExternalDrawings(JSON.parse(JSON.stringify(p.drawings)));
-    markDrawingsDirty();
-  }
+  // SOLO chartSettings — un theme guardado ANTES de este split todavía
+  // puede traer indicadores/watchtower/drawings colgando del objeto viejo;
+  // ignorarlos a propósito es lo que garantiza que aplicar un Theme nunca
+  // vuelva a pisar el Workspace actual.
+  restoreTheme(p.chartSettings);
 }
 
 function deleteSelectedPreset(){
   const sel = document.getElementById('cs-preset-select');
   const name = sel.value;
   if (!name) return;
-  if (!confirm(`Delete preset "${name}"?`)) return;
+  if (!confirm(`Delete theme "${name}"?`)) return;
   delete STATE.presets[name];
   savePresetsState();
   renderPresetSelect();
+}
+
+// Prende/apaga el watchlist y el panel de Operar según lo guardado en un
+// Workspace — mismos efectos que toggleSidebar()/toggleOrdersPanel()/
+// closeOrdersPanel() pero fijando un estado puntual en vez de invertir el
+// actual (acá no sabemos cuál es el actual de antemano).
+function restoreWorkspacePanels(w){
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) {
+    const collapsed = !!w.sidebarCollapsed;
+    sidebar.classList.toggle('collapsed', collapsed);
+    document.getElementById('btn-sidebar-toggle')?.classList.toggle('collapsed', collapsed);
+    lsSet(lsKey('td_sidebar_collapsed'), collapsed ? '1' : '0');
+  }
+  const orders = document.getElementById('orders-panel');
+  if (orders) {
+    const open = !!w.ordersOpen;
+    orders.classList.toggle('open', open);
+    lsSet(lsKey('td_orders_collapsed'), open ? '0' : '1');
+    if (open) renderOrdersPanel();
+    if (window._shellOnOrdersToggle) window._shellOnOrdersToggle(open);
+  }
+}
+
+async function applyWorkspace(name){
+  // Mismo motivo que applyPreset: releer del storage por si se guardó
+  // desde otro panel de la grilla.
+  try { STATE.workspaces = JSON.parse(lsGet('td_workspaces') || '{}'); } catch(e){}
+  const w = STATE.workspaces[name];
+  if (!w) return;
+
+  // Igual que aplicar un Theme: tiene que poder deshacerse con Ctrl+Z.
+  captureUndoSnapshot({ full: true });
+
+  // Indicadores + su config primero (sin tocar chartSettings — ver
+  // restoreIndicatorsAndTools). Símbolo/TF/fuente de datos después, porque
+  // loadChart ya re-renderiza todo lo de arriba con los candles nuevos.
+  restoreIndicatorsAndTools(w);
+
+  if (w.dataSource && w.dataSource !== STATE.dataSource) {
+    STATE.dataSource = w.dataSource;
+    const dsSel = document.getElementById('data-source-select');
+    if (dsSel) dsSel.value = STATE.dataSource;
+    _brokerSymbolsCache = null;
+    updateApiBadge(document.getElementById('api-badge'), STATE.dataSource);
+  }
+  STATE.watchlist = Array.isArray(w.watchlist) ? [...w.watchlist] : [];
+  saveState();
+  renderWatchlist();
+  restoreWorkspacePanels(w);
+
+  // loadChart() no toca STATE.symbol/STATE.timeframe por su cuenta (lo
+  // hace siempre quien lo llama, ver selectSymbol/TF bar/etc) — hay que
+  // fijarlos acá ANTES de llamarlo.
+  STATE.symbol = w.symbol || STATE.symbol;
+  STATE.timeframe = w.timeframe || STATE.timeframe;
+  await loadChart(STATE.symbol, STATE.timeframe);
+  document.getElementById('symbol-input').value = STATE.symbol;
+  setActiveTF(STATE.timeframe);
+
+  // Dibujos: solo si el workspace los trae — uno guardado antes de esto
+  // no tiene drawings, y aplicarlo no debería borrar los que el usuario ya
+  // tiene puestos en el panel.
+  if (Array.isArray(w.drawings)) {
+    applyExternalDrawings(JSON.parse(JSON.stringify(w.drawings)));
+    markDrawingsDirty();
+  }
 }
 
 // ══════════════════════════════════════════════════════════
