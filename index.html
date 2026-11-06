@@ -5130,6 +5130,7 @@ function syncFibLabels(d) {
       const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       el.setAttribute('font-size', '10');
       el.setAttribute('font-family', "'DM Mono',monospace");
+      el.setAttribute('dominant-baseline', 'middle');
       window._drawingLayerSvg.appendChild(el);
       return el;
     });
@@ -5160,7 +5161,11 @@ function syncFibLabels(d) {
     const boxX = (x <= plotRight && x + w > plotRight) ? Math.max(0, plotRight - w) : x;
     el.style.display = '';
     el.setAttribute('x', boxX + 4);
-    el.setAttribute('y', y - 3);
+    // y exacto (el nivel real) + dominant-baseline="middle" puesto en la
+    // creación del elemento — mismo criterio que wtLabel, ver su comentario
+    // (antes y-3 con baseline por defecto dejaba el texto arriba de la
+    // línea en vez de centrado).
+    el.setAttribute('y', y);
     el.setAttribute('fill', lv.color);
     el.textContent = text;
   });
@@ -8785,18 +8790,23 @@ function wtLabel(svg,t,y,text,color,indName){
   // Caja invisible detrás del texto: amplía el área de click más allá del
   // trazo fino de las letras.
   const hit=document.createElementNS(WT_SVG_NS,'rect');
-  hit.setAttribute('x',boxX); hit.setAttribute('y',yy-13);
+  hit.setAttribute('x',boxX); hit.setAttribute('y',yy-9);
   hit.setAttribute('width',w); hit.setAttribute('height','18');
   hit.setAttribute('fill','transparent');
   tagIndicatorEl(hit,indName);
   svg.appendChild(hit);
   const el=document.createElementNS(WT_SVG_NS,'text');
-  el.setAttribute('x',boxX+4); el.setAttribute('y',yy-3);
+  // y = yy exacto (el nivel de la línea) + dominant-baseline="middle" en vez
+  // de y-3 con baseline por defecto (alphabetic) — eso dejaba el bloque de
+  // texto varios px arriba del nivel real en vez de centrado sobre la línea,
+  // reportado por el usuario ("se ven un punto por arriba a la derecha").
+  el.setAttribute('x',boxX+4); el.setAttribute('y',yy);
+  el.setAttribute('dominant-baseline','middle');
   el.setAttribute('fill',color); el.setAttribute('font-size','10'); el.setAttribute('font-family',"'DM Mono',monospace");
   el.textContent=text;
   tagIndicatorEl(el,indName);
   svg.appendChild(el);
-  registerIndicatorHit(indName, {kind:'rect', x1:boxX, y1:yy-13, x2:boxX+w, y2:yy+5, tol:0});
+  registerIndicatorHit(indName, {kind:'rect', x1:boxX, y1:yy-9, x2:boxX+w, y2:yy+9, tol:0});
 }
 
 function wtGroupByDay(candles){
