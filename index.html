@@ -2631,9 +2631,30 @@ function renderLayoutGrid(n){
     layoutPicker: (document.getElementById('layout-picker-trigger')||{}).innerHTML || '',
     datasourceOptions: (document.getElementById('data-source-select')||{}).innerHTML || '',
   };
+  // Mismo truco que SHARED_ICON de arriba (sacar el HTML del documento de
+  // a punto de borrarse ANTES de borrarlo) — para el modal de Chart
+  // Settings completo + los 2 modales chicos de los que depende (Save as…
+  // de Theme/Workspace, y el recortador de logo de Branding). Pedido
+  // explícito del usuario: Settings en modo grilla NO debe tapar/achicar
+  // los demás paneles — antes se estiraba el iframe del panel activo a
+  // pantalla completa para que su modal (adentro de ESE iframe) quedara
+  // centrado; ahora en cambio el modal vive DIRECTO acá afuera, en el
+  // shell, operando sobre el panel activo vía paneEval (ver
+  // isGridShell()/_gridActiveFrame más abajo) — la grilla entera queda
+  // tal cual está, nunca se toca.
+  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop']
+    .map(id => { const el = document.getElementById(id); return el ? el.outerHTML : ''; }).join('');
 
   document.body.innerHTML = '';
   document.body.style.cssText = 'margin:0;height:100vh;display:flex;flex-direction:column;background:var(--bg-primary);';
+  // Reinsertados acá (en vez de donde estaban) — overlays position:fixed,
+  // no les importa su posición en el DOM — y recableados a mano
+  // (_wireModalOverlay) porque el wiring original (click afuera cierra +
+  // drag del título) corrió UNA vez al cargar la página, sobre los
+  // elementos viejos que este innerHTML='' recién borró.
+  document.body.insertAdjacentHTML('beforeend', _sharedModalsHtml);
+  document.querySelectorAll('.modal-overlay').forEach(el => { if (window._wireModalOverlay) window._wireModalOverlay(el); });
+  initLogoCropDrag(); // re-wire sobre la copia de #logo-crop-frame recién insertada
 
   // Panel "activo": el que tiene el anillo de color (ver applyGridAccentColor
   // más abajo). Como cada panel es un iframe aparte, un click adentro no
@@ -2816,8 +2837,6 @@ function renderLayoutGrid(n){
       iframeEls.forEach(el => el.contentWindow.postMessage({ type:'zentinel:replaySync', symbol:replaySymbol, exited:true }, '*'));
       replayMasterPane = null; replaySymbol = null; replayTF = null; replayPlaying = false;
       renderReplayBar();
-    } else if (msg.type === 'zentinel:settingsClosed') {
-      restoreActivePaneFromSettings();
     }
   });
 
@@ -3139,6 +3158,13 @@ function renderLayoutGrid(n){
   function paneEval(f, expr){
     try { return f.contentWindow.eval(expr); } catch(e){ return undefined; }
   }
+  // Expuestos para que las funciones de Chart Settings (definidas afuera
+  // de este closure, compartidas con el modo 1 gráfico — ver
+  // isGridShell() junto a openChartSettingsModal) puedan leer/escribir el
+  // panel activo sin duplicar su propia lógica de "cuál es el panel
+  // activo" ni la de paneEval.
+  window._gridActiveFrame = () => iframeEls[activePane-1];
+  window._gridPaneEval = paneEval;
   function renderShellWatchlist(){
     const el = shellSidebar.querySelector('#watchlist');
     if (!el) return;
@@ -3547,64 +3573,17 @@ function renderLayoutGrid(n){
   // mirar uno a la vez), así que siempre apunta al panel activo sin
   // importar lo que diga el selector de alcance.
   //
-  // El modal vive ADENTRO del iframe del panel activo — su
-  // position:fixed;inset:0 se centra relativo a ESE iframe, no a la
-  // ventana real. En la grilla (2/4 paneles) cada iframe es solo un
-  // cuarto de la pantalla, así que el modal terminaba centrado en ese
-  // cuarto, no en el medio de la pantalla real — reportado explícitamente
-  // por el usuario. Mientras el modal está abierto, se estira el iframe
-  // del panel activo a pantalla completa POR ENCIMA de la grilla (position:
-  // fixed acá afuera, en el shell) — su propio modal queda centrado de
-  // verdad, y el chart de abajo sigue siendo el mismo panel/pane, nada se
-  // recarga. zentinel:settingsClosed (mandado desde closeModal() de cada
-  // panel) deshace esto cuando el modal se cierra, sea como sea que se
-  // haya cerrado (Guardar, click afuera).
-  function openActivePaneSettings(){
-    const f = iframeEls[activePane-1];
-    if (!f) return;
-    f.dataset.fullscreenForModal = '1';
-    f.style.position = 'fixed';
-    f.style.inset = '0';
-    f.style.width = '100vw';
-    f.style.height = '100vh';
-    f.style.zIndex = '600';
-    f.style.borderRadius = '0';
-    f.contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
-  }
-  function restoreActivePaneFromSettings(){
-    iframeEls.forEach(f => {
-      if (!f.dataset.fullscreenForModal) return;
-      delete f.dataset.fullscreenForModal;
-      f.style.position = '';
-      f.style.inset = '';
-      // width/height vuelven a '100%' EXPLÍCITO, no a '' — ese 100%/100%
-      // nunca vino de una hoja de estilos, se puso una sola vez al crear
-      // el iframe (ver iframe.style.cssText más abajo en el bucle que arma
-      // la grilla). Vaciar la propiedad con '' no "restaura lo de antes",
-      // la borra directo — sin ningún width/height, el iframe caía al
-      // tamaño default del navegador (300×150), bug reportado: el panel
-      // volvía del modal MUCHO más chico que los demás, mal recortado por
-      // la grilla (que lo sigue ubicando bien vía grid-column/row, eso no
-      // se toca — el problema era puramente el tamaño del iframe en sí).
-      f.style.width = '100%';
-      f.style.height = '100%';
-      f.style.zIndex = '';
-      f.style.borderRadius = '6px'; // mismo motivo que width/height arriba: valor original, no ''
-      // El iframe achicándose de vuelta a su celda de la grilla no siempre
-      // le llega a tiempo al ResizeObserver interno de lightweight-charts
-      // (cross-document: el iframe entero cambiando de tamaño es un caso
-      // más propenso a perderse que un resize normal de un elemento
-      // adentro del mismo documento) — reportado: el chart de ese panel
-      // quedaba con el tamaño de pantalla completa que tuvo mientras
-      // Settings estaba abierto, dibujado en una esquina diminuta del
-      // iframe ya achicado. Forzar el resize a mano un frame después (ya
-      // con el iframe terminado de reacomodar su layout) lo deja bien.
-      requestAnimationFrame(() => {
-        paneEval(f, `if (typeof chart !== 'undefined' && chart) { const c = document.getElementById('chart-container'); chart.resize(c.clientWidth, c.clientHeight, true); }`);
-      });
-    });
-  }
-  gbar.querySelector('#gc-settings').addEventListener('click', openActivePaneSettings);
+  // El modal vive ACÁ AFUERA, en el shell (ver _sharedModalsHtml al
+  // principio de esta función) — NO adentro del iframe del panel activo.
+  // Versión anterior: se estiraba el iframe activo a pantalla completa
+  // para que SU PROPIO modal quedara centrado — funcionaba, pero tapaba
+  // los demás paneles mientras tanto (se veían "cerrados"), pedido
+  // explícito del usuario: la grilla tiene que quedar EXACTAMENTE como
+  // está, sea cual sea la cantidad de paneles en uso. openChartSettingsModal
+  // (compartida con el modo 1 gráfico) ya sabe detectar que está corriendo
+  // acá (ver isGridShell()) y leer/escribir el panel activo vía paneEval
+  // en vez de un chart propio — ningún iframe se toca.
+  gbar.querySelector('#gc-settings').addEventListener('click', openChartSettingsModal);
 
   // Badge de estado: antes decía "MULTI" fijo (sin información real) y
   // después pegaba SIEMPRE al bridge de MT5 sin importar la fuente — con
@@ -3614,7 +3593,7 @@ function renderLayoutGrid(n){
   // ver syncShellControls, que la vuelve a llamar cada vez que cambia el
   // panel activo o su fuente). Clickear abre Settings del panel activo.
   const gcBadge = gbar.querySelector('#api-badge');
-  gcBadge.addEventListener('click', openActivePaneSettings);
+  gcBadge.addEventListener('click', openChartSettingsModal);
   updateApiBadge(gcBadge, STATE.dataSource);
 
   // Indicators — como Settings, siempre sobre el panel activo.
@@ -11217,17 +11196,7 @@ function _exitFollowReplay(){
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){ if (window._modalDragResets && window._modalDragResets[id]) window._modalDragResets[id](); document.getElementById(id).classList.add('open'); }
-function closeModal(id){
-  document.getElementById(id).classList.remove('open');
-  // Avisa al shell (modo grilla) para que deshaga el "panel activo a
-  // pantalla completa" que hizo al abrir Settings — ver
-  // openActivePaneSettings/restoreActivePaneFromSettings en renderLayoutGrid.
-  // Cubre TODAS las formas de cerrar (Guardar, click afuera), porque todas
-  // pasan por acá (ver el listener genérico de .modal-overlay más abajo).
-  if (id === 'modal-chart-settings' && EMBED_MODE && PANE_ID) {
-    try { window.parent.postMessage({ type:'zentinel:settingsClosed', pane:PANE_ID }, '*'); } catch(e){}
-  }
-}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
 
 // Reemplaza prompt() nativo para pedir un nombre (presets/templates) —
 // mismo modal para los 3 lugares que antes usaban prompt(): el Preset de
@@ -11324,7 +11293,27 @@ function csShowTab(name){
     el.classList.toggle('active', el.dataset.csTab === name);
   });
 }
-function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); csShowTab('theme'); openModal('modal-chart-settings'); }
+// true en el shell del modo grilla (varios paneles) — nunca en un panel
+// individual (sea 1 gráfico o adentro de un iframe embebido). Usado por
+// todo lo de Chart Settings (Theme/Workspace incluidos) para operar sobre
+// el panel ACTIVO vía paneEval en vez de sobre un chart/STATE local que
+// en el shell no existen — ver window._gridActiveFrame/_gridPaneEval,
+// expuestos desde adentro de renderLayoutGrid. Pedido explícito del
+// usuario: Settings en modo grilla no debe tocar el tamaño de NINGÚN
+// panel, la grilla tiene que quedar exactamente como está — por eso el
+// modal ahora vive accá afuera, en el shell, no adentro del iframe activo.
+function isGridShell(){ return LAYOUT_N > 1 && !EMBED_MODE; }
+function openChartSettingsModal(){
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    let cs = {};
+    if (f) { try { cs = JSON.parse(window._gridPaneEval(f, 'JSON.stringify(STATE.chartSettings)') || '{}'); } catch(e){} }
+    fillChartSettingsForm(Object.assign({}, CHART_SETTINGS_DEFAULTS, cs));
+  } else {
+    fillChartSettingsForm(STATE.chartSettings);
+  }
+  renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); csShowTab('theme'); openModal('modal-chart-settings');
+}
 
 // Logo propio del cliente — a diferencia del resto de Chart Settings (que es
 // por preset/panel, vive en STATE.chartSettings), el logo es una sola marca
@@ -11407,7 +11396,12 @@ function onLogoCropZoom(val){
   _clampLogoCropOffsets();
   _renderLogoCrop();
 }
-(function initLogoCropDrag(){
+// Función con nombre (no IIFE) — el shell del modo grilla reinserta su
+// propia copia de #logo-crop-frame después de reconstruir el <body> (ver
+// renderLayoutGrid/_sharedModalsHtml) y necesita volver a llamar esto a
+// mano sobre ESA copia; un IIFE solo corre una vez, sobre el elemento
+// original que ya no existe ahí.
+function initLogoCropDrag(){
   const frame = document.getElementById('logo-crop-frame');
   if (!frame) return;
   let dragging=false, lastX=0, lastY=0;
@@ -11427,7 +11421,8 @@ function onLogoCropZoom(val){
   frame.addEventListener('pointerup', endDrag);
   frame.addEventListener('pointerleave', endDrag);
   frame.addEventListener('pointercancel', endDrag);
-})();
+}
+initLogoCropDrag();
 function applyLogoCrop(){
   const c = _logoCrop; if (!c) return;
   const outSize = 400; // resolución de salida, más nítida que los 260px del marco en pantalla
@@ -11448,8 +11443,11 @@ function refreshLogoPreview(){
   prev.src = custom || 'logo-unicorn.png';
 }
 
-function commitChartSettingsForm(){
-  STATE.chartSettings = {
+// Puros valores del form -> objeto — SIN tocar STATE/chart, para poder
+// reusarlo tal cual desde el shell del modo grilla (que no tiene chart
+// propio, ver isGridShell()) y desde "Save current as..." de Theme.
+function buildChartSettingsFromForm(){
+  return {
     bgColor: document.getElementById('cs-bg').value,
     bgColor2: document.getElementById('cs-bg2').value,
     bgGradient: document.getElementById('cs-bg-gradient').checked,
@@ -11474,6 +11472,16 @@ function commitChartSettingsForm(){
     marginBottom: Math.max(0, Math.min(40, Number(document.getElementById('cs-margin-bottom').value) || 0)) / 100,
     marginRightBars: Math.max(0, Math.min(200, Number(document.getElementById('cs-margin-right').value) || 0)),
   };
+}
+function commitChartSettingsForm(){
+  const cs = buildChartSettingsFromForm();
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    if (!f) return;
+    window._gridPaneEval(f, `STATE.chartSettings = ${JSON.stringify(cs)}; saveChartSettingsState(); applyChartSettings(); renderTfBar(); setActiveTF(STATE.timeframe);`);
+    return;
+  }
+  STATE.chartSettings = cs;
   saveChartSettingsState();
   applyChartSettings();
   renderTfBar();
@@ -11486,6 +11494,13 @@ function saveChartSettings(){
 }
 
 function resetChartSettings(){
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    if (!f) return;
+    window._gridPaneEval(f, `STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS); saveChartSettingsState(); applyChartSettings(); renderTfBar(); setActiveTF(STATE.timeframe);`);
+    fillChartSettingsForm(Object.assign({}, CHART_SETTINGS_DEFAULTS));
+    return;
+  }
   STATE.chartSettings = Object.assign({}, CHART_SETTINGS_DEFAULTS);
   fillChartSettingsForm(STATE.chartSettings);
   saveChartSettingsState();
@@ -11640,11 +11655,15 @@ function renderPresetSelect(){
 }
 
 function saveCurrentAsPreset(){
-  commitChartSettingsForm();
+  commitChartSettingsForm(); // aplica el form al panel activo (o local, fuera del shell)
+  // mismos valores recién aplicados — leerlos del form directo evita
+  // depender de STATE.chartSettings, que en el shell del modo grilla no
+  // está sincronizado con ningún chart real.
+  const formCs = buildChartSettingsFromForm();
   const existing = Object.keys(STATE.presets).sort();
   promptSaveAsName('Save theme as…', existing, (name) => {
     try { STATE.presets = JSON.parse(lsGet('td_presets') || '{}'); } catch(e){}
-    STATE.presets[name] = captureThemeDesign();
+    STATE.presets[name] = { chartSettings: formCs };
     savePresetsState();
     renderPresetSelect();
     document.getElementById('cs-preset-select').value = name;
@@ -11672,7 +11691,18 @@ function saveCurrentAsWorkspace(){
   const existing = Object.keys(STATE.workspaces).sort();
   promptSaveAsName('Save workspace as…', existing, (name) => {
     try { STATE.workspaces = JSON.parse(lsGet('td_workspaces') || '{}'); } catch(e){}
-    STATE.workspaces[name] = captureWorkspace();
+    // captureWorkspace() lee símbolo/TF/indicadores/dibujos/paneles del
+    // chart/STATE de ESTE documento — en el shell del modo grilla eso no
+    // existe, hay que pedírselo al panel activo vía paneEval.
+    let w;
+    if (isGridShell() && window._gridActiveFrame) {
+      const f = window._gridActiveFrame();
+      try { w = f ? JSON.parse(window._gridPaneEval(f, 'JSON.stringify(captureWorkspace())') || 'null') : null; } catch(e){ w = null; }
+    } else {
+      w = captureWorkspace();
+    }
+    if (!w) return;
+    STATE.workspaces[name] = w;
     saveWorkspacesState();
     renderWorkspaceSelect();
     document.getElementById('cs-workspace-select').value = name;
@@ -11774,6 +11804,18 @@ function applyPreset(name){
   const p = STATE.presets[name];
   if (!p) return;
 
+  // En el shell del modo grilla, captureUndoSnapshot/restoreTheme tienen
+  // que correr ADENTRO del panel activo (su propio _undoStack/chart, no
+  // los de acá afuera, que no existen) — mismo motivo que todo lo demás
+  // de Chart Settings, ver isGridShell().
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    if (!f) return;
+    window._gridPaneEval(f, `captureUndoSnapshot({full:true}); restoreTheme(${JSON.stringify(p.chartSettings||{})});`);
+    fillChartSettingsForm(Object.assign({}, CHART_SETTINGS_DEFAULTS, p.chartSettings||{}));
+    return;
+  }
+
   // Aplicar un theme pisa chartSettings — tiene que poder deshacerse con
   // Ctrl+Z (mismo criterio que ya existía acá antes del split).
   captureUndoSnapshot({ full: true });
@@ -11818,6 +11860,17 @@ function restoreWorkspacePanels(w){
 }
 
 async function applyWorkspace(name){
+  // En el shell del modo grilla esta función entera (symbol/TF/indicadores/
+  // loadChart/dibujos...) tiene que correr ADENTRO del panel activo, no
+  // acá afuera — se reinvoca a sí misma vía paneEval; esa segunda llamada
+  // ya corre con isGridShell()===false (es el panel, no el shell) y sigue
+  // normal por el resto de la función.
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    if (!f) return;
+    window._gridPaneEval(f, `applyWorkspace(${JSON.stringify(name)});`);
+    return;
+  }
   // Mismo motivo que applyPreset: releer del storage por si se guardó
   // desde otro panel de la grilla.
   try { STATE.workspaces = JSON.parse(lsGet('td_workspaces') || '{}'); } catch(e){}
@@ -13754,11 +13807,19 @@ function makeModalDraggable(panel, handle){
   });
   return reset;
 }
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
+// Wiring completo de UN overlay (cerrar con click afuera + arrastrable
+// agarrando el título) — separado en una función reusable porque el modo
+// grilla reinserta copias de estos modales (modal-chart-settings/
+// modal-save-as/modal-logo-crop) en su propio documento después de
+// reconstruir el <body> (ver renderLayoutGrid) y necesita recablearlas a
+// mano; acá abajo se usa para el wiring inicial de este documento.
+window._wireModalOverlay = function(overlay){
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); });
   const panel = overlay.querySelector('.modal');
   const handle = panel && panel.querySelector('h2');
   _modalDragResets[overlay.id] = makeModalDraggable(panel, handle);
-});
+};
+document.querySelectorAll('.modal-overlay').forEach(window._wireModalOverlay);
 // openIndicatorSettings todavía llama a esto directo (además de pasar por
 // openModal) para resetear la posición ANTES de rearmar el contenido para
 // el indicador nuevo — ver su propio comentario.
