@@ -1879,8 +1879,8 @@
   </button>
   <select class="dtb-select" id="dtb-fib-label-mode" title="Fibonacci label" onchange="onDtbFibLabelMode(this.value)" style="display:none">
     <option value="percent">%</option>
-    <option value="price">Price</option>
-    <option value="both">% + Price</option>
+    <option value="value">Value</option>
+    <option value="both">% + Value</option>
   </select>
   <button class="dtb-btn" id="dtb-vp-settings" title="Volume Profile Settings" onclick="openVpSettingsModal()" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2.1M8 12.4v2.1M1.5 8h2.1M12.4 8h2.1M3.5 3.5l1.5 1.5M11 11l1.5 1.5M3.5 12.5l1.5-1.5M11 5l1.5-1.5"/></svg>
@@ -5143,13 +5143,16 @@ function syncFibLabels(d) {
     const x = (show && t2 != null) ? chart.timeScale().timeToCoordinate(t2) : null;
     const y = (show && t2 != null) ? candleSeries.priceToCoordinate(val) : null;
     if (x === null || y === null) { el.style.display = 'none'; return; }
-    // Selector "%" / "Price" / "% + Price" — ver onDtbFibLabelMode. Default
+    // Selector "%" / "Value" / "% + Value" — ver onDtbFibLabelMode. Default
     // 'percent' (undefined = dibujos guardados antes de que existiera este
-    // campo), mismo criterio que showPriceLabel/showBorder/etc.
+    // campo), mismo criterio que showPriceLabel/showBorder/etc. "Value" es
+    // el ratio crudo del nivel (0, 0.5, 1, -0.272...) — lo que pidió el
+    // usuario, NO el precio (fmt(val) sería el precio, ver price mode
+    // viejo que se sacó de acá).
     const mode = d.fibLabelMode || 'percent';
     const pct = `${(lv.value*100).toFixed(1)}%`;
-    const price = fmt(val);
-    const text = mode === 'price' ? price : mode === 'both' ? `${pct}  ${price}` : pct;
+    const value = (Math.round(lv.value*1000)/1000).toString();
+    const text = mode === 'value' ? value : mode === 'both' ? `${pct}  ${value}` : pct;
     // Mismo resguardo que wtLabel: si el ancla cae adentro del plot pero el
     // texto se saldría por detrás de los números del eje de precio, se
     // corre a la izquierda en vez de quedar tapado.
