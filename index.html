@@ -16,6 +16,12 @@
     --bg-active:    #1e1e2a;
     --border:       #222230;
     --border-light: #2a2a3a;
+    /* Separador vertical de la topbar/tf-bar (.tf-sep, .logo-sep): con
+       --border-light casi no se notaba en oscuro (#2a2a3a sobre un fondo
+       de panel #13131a, muy poco contraste) — reportado por el usuario.
+       Variable propia, más clara que --border-light a propósito, SOLO
+       para esas líneas divisorias. */
+    --sep-color:    #3f3f52;
     --gold:         #c9a84c;
     --gold-bright:  #f0c060;
     --gold-dim:     #7a6030;
@@ -66,6 +72,7 @@
     --bg-active:    #e4e7ee;
     --border:       #dde1e8;
     --border-light: #c9ced8;
+    --sep-color:    #c9ced8;
     --gold:         #a07508;
     --gold-bright:  #c4920f;
     --gold-dim:     #cbab6c;
@@ -125,7 +132,7 @@
     gap: 0;
     text-shadow: 0 0 24px rgba(201,168,76,0.35), 0 1px 0 rgba(201,168,76,0.15);
   }
-  .logo-sep { width: 1px; height: 24px; background: var(--border-light); margin: 0 4px; }
+  .logo-sep { width: 1px; height: 24px; background: var(--sep-color); margin: 0 4px; }
 
   #symbol-search-wrap { position: relative; display: flex; align-items: center; }
   /* Clase compartida: la usan tanto #symbol-input (modo 1 gráfico) como el
@@ -645,7 +652,7 @@
   }
   .tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .tf-btn.active { background: var(--gold-glow); color: var(--gold); }
-  .tf-sep { width: 1px; height: 16px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+  .tf-sep { width: 1px; height: 16px; background: var(--sep-color); margin: 0 6px; flex-shrink: 0; }
 
   /* ─── Favoritos de TF (popup tipo TV, lista completa + estrella) ─ */
   #tf-fav-wrap { position: relative; flex-shrink: 0; }
@@ -1019,18 +1026,25 @@
      cada panel se sacaron a la barra global. También se muestra en
      modo 1 gráfico (aunque el símbolo ya esté en el buscador de la
      barra de arriba) para tener símbolo+TF a mano sin levantar la vista. */
+  /* Colores de texto FIJOS acá adentro (no var(--text-*)) a propósito:
+     el fondo de esta franja (rgba(10,10,12,.55)) es siempre oscuro sin
+     importar el tema de la app, para que se lea sobre un chart con
+     cualquier color de fondo elegido en Settings. Si el texto seguía al
+     tema (var(--text-primary) etc.), en modo claro se volvía texto
+     oscuro sobre fondo oscuro — símbolo y OHLCV ilegibles, reportado por
+     el usuario. */
   #ohlcv-bar {
     position: absolute; top: 8px; left: 8px;
     display: flex; align-items: baseline; gap: 7px;
-    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-secondary);
+    font-family: var(--font-mono); font-size: 9.5px; color: #8888a8;
     background: rgba(10,10,12,.55);
     padding: 2px 7px; border-radius: 4px;
     pointer-events: none; z-index: 6;
   }
-  #ohlcv-bar span b { color: var(--text-dim); font-weight: 400; margin-right: 3px; }
+  #ohlcv-bar span b { color: #55556a; font-weight: 400; margin-right: 3px; }
   #pane-symbol-badge {
     font-family: var(--font-ui); font-size: 11px; font-weight: 700;
-    color: var(--text-primary); margin-right: 2px;
+    color: #e8e8f0; margin-right: 2px;
   }
 
   /* ─── STATUS BAR ──────────────────────────────────────── */
