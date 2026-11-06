@@ -1178,7 +1178,47 @@
      divisoria, después sus campos en grilla de 2 columnas (swatch
      redondo + nombre al lado, más compacto que una barra de color a
      todo el ancho) o filas con switch estilo pill para los on/off. */
-  #modal-chart-settings .modal { width: 440px; max-width: calc(100vw - 32px); }
+  /* Rediseño con navegación lateral por categorías (como TradingView:
+     iconos a la izquierda, contenido de la categoría activa a la
+     derecha) — pedido explícito del usuario en vez de la lista larga de
+     antes (todas las secciones apiladas una debajo de otra). .modal pasa
+     a ser un flex column con altura fija (h2 arriba, cs-layout al medio
+     scrolleando SOLO del lado del contenido, modal-btns abajo) en vez de
+     un solo bloque que scrollea entero. */
+  #modal-chart-settings .modal {
+    width: 640px; max-width: calc(100vw - 32px); max-height: 82vh;
+    display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  }
+  #modal-chart-settings .modal h2 { margin: 0; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .cs-layout { display: flex; flex: 1; min-height: 0; }
+  .cs-nav { width: 172px; flex-shrink: 0; padding: 10px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .cs-nav-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 2px;
+    padding: 9px 11px; border-radius: 7px; background: none; border: none; cursor: pointer;
+    font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary); text-align: left;
+    transition: background .15s, color .15s;
+  }
+  .cs-nav-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .cs-nav-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .cs-nav-btn.active { background: var(--gold-glow); color: var(--gold); }
+  .cs-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 24px; }
+  .cs-tab[hidden] { display: none; }
+  .cs-group { margin-bottom: 22px; }
+  .cs-group:last-child { margin-bottom: 0; }
+  .cs-group-title {
+    font-family: var(--font-ui); font-size: 10px; font-weight: 600; letter-spacing: 1.4px;
+    color: var(--text-dim); text-transform: uppercase; margin: 0 0 12px;
+  }
+  #modal-chart-settings .modal-btns { margin: 0; padding: 14px 22px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .cs-number {
+    width: 100%; background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 6px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    padding: 7px 10px; outline: none;
+  }
+  .cs-number:focus { border-color: var(--gold-dim); }
+  .cs-margins-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .cs-margins-grid .cs-field-label { white-space: normal; margin-bottom: 6px; display: block; }
+
   .cs-section { margin-bottom: 24px; }
   .cs-section:last-of-type { margin-bottom: 0; }
   .cs-section-title {
@@ -1961,155 +2001,196 @@
   </button>
 </div>
 
-<!-- ══ MODAL: CHART SETTINGS ═══════════════════════════════ -->
+<!-- ══ MODAL: CHART SETTINGS ═══════════════════════════════
+     Navegación lateral por categorías (iconos a la izquierda, contenido
+     de la categoría activa a la derecha) — pedido explícito del usuario,
+     "que se vea más como TV" en vez de la lista larga de antes (todas las
+     secciones apiladas). csShowTab() alterna qué .cs-tab se ve; el resto
+     queda [hidden] — misma idea que el picker de TF/indicadores, nada
+     nuevo en el mecanismo, solo en el layout. -->
 <div class="modal-overlay" id="modal-chart-settings">
-  <div class="modal" style="max-height:85vh;overflow-y:auto;">
+  <div class="modal">
     <h2>Chart Settings</h2>
+    <div class="cs-layout">
+      <div class="cs-nav">
+        <button class="cs-nav-btn active" data-cs-tab="theme" onclick="csShowTab('theme')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M2 6.5h12"/></svg>
+          Theme
+        </button>
+        <button class="cs-nav-btn" data-cs-tab="workspace" onclick="csShowTab('workspace')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
+          Workspace
+        </button>
+        <button class="cs-nav-btn" data-cs-tab="canvas" onclick="csShowTab('canvas')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="3.5" height="9"/><rect x="6.5" y="6.5" width="3.5" height="6.5"/><rect x="11" y="1.5" width="3" height="11.5"/></svg>
+          Canvas
+        </button>
+        <button class="cs-nav-btn" data-cs-tab="scales" onclick="csShowTab('scales')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4"/><circle cx="8" cy="8" r="2"/></svg>
+          Scales &amp; Lines
+        </button>
+        <button class="cs-nav-btn" data-cs-tab="trading" onclick="csShowTab('trading')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8.5l3.5 3.5L14 3"/></svg>
+          Trading
+        </button>
+        <button class="cs-nav-btn" data-cs-tab="branding" onclick="csShowTab('branding')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><circle cx="5.5" cy="7" r="1.3"/><path d="M14.3 10.5 10.8 7l-6 6"/></svg>
+          Branding
+        </button>
+      </div>
 
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5"/><path d="M2 6.5h12"/></svg>
-        Theme
-      </div>
-      <!-- Solo apariencia visual (colores de vela, fondo, texto, ejes,
-           crosshair) — NO toca indicadores, símbolo/TF ni dibujos. Ver
-           "Workspace" más abajo para eso. -->
-      <select id="cs-preset-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
-      <div class="cs-row" style="margin-bottom:0;">
-        <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
-        <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
-        <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
-      </div>
-    </div>
+      <div class="cs-content">
+        <div class="cs-tab" data-cs-tab-content="theme">
+          <!-- Solo apariencia visual (colores de vela, fondo, texto, ejes,
+               crosshair) — NO toca indicadores, símbolo/TF ni dibujos. Ver
+               "Workspace" para eso. -->
+          <select id="cs-preset-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
+          <div class="cs-row" style="margin-bottom:0;">
+            <button class="btn-ghost" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
+            <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsPreset()">Save current as…</button>
+            <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedPreset()">Delete</button>
+          </div>
+        </div>
 
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
-        Workspace
-      </div>
-      <!-- Todo lo demás: símbolo, TF, fuente de datos, watchlist,
-           indicadores activos + su config (Watchtower/Sniper/Sweeps/
-           Fractal Model/Stat Map), dibujos, y si el watchlist/panel de
-           Operar están abiertos — pedido explícito del usuario para que
-           "diseño del gráfico" y "diseño completo" no se pisen entre sí. -->
-      <select id="cs-workspace-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
-      <div class="cs-row" style="margin-bottom:0;">
-        <button class="btn-ghost" style="flex:1;" onclick="applySelectedWorkspace()">Apply</button>
-        <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsWorkspace()">Save current as…</button>
-        <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedWorkspace()">Delete</button>
-      </div>
-    </div>
+        <div class="cs-tab" data-cs-tab-content="workspace" hidden>
+          <!-- Todo lo demás: símbolo, TF, fuente de datos, watchlist,
+               indicadores activos + su config (Watchtower/Sniper/Sweeps/
+               Fractal Model/Stat Map), dibujos, y si el watchlist/panel de
+               Operar están abiertos — pedido explícito del usuario para que
+               "diseño del gráfico" y "diseño completo" no se pisen entre sí. -->
+          <select id="cs-workspace-select" class="dtb-select" style="width:100%;margin-bottom:10px;"></select>
+          <div class="cs-row" style="margin-bottom:0;">
+            <button class="btn-ghost" style="flex:1;" onclick="applySelectedWorkspace()">Apply</button>
+            <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsWorkspace()">Save current as…</button>
+            <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedWorkspace()">Delete</button>
+          </div>
+        </div>
 
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="3.5" height="9"/><rect x="6.5" y="6.5" width="3.5" height="6.5"/><rect x="11" y="1.5" width="3" height="11.5"/></svg>
-        Background &amp; Candles
-      </div>
-      <div class="cs-grid">
-        <div class="cs-field"><input type="color" id="cs-bg" class="cs-swatch"><span class="cs-field-label">Background</span></div>
-        <div class="cs-field"><input type="color" id="cs-text-color" class="cs-swatch"><span class="cs-field-label">Text color</span></div>
-      </div>
-      <label class="cs-toggle-row" style="margin-top:12px;">
-        <span class="cs-field-label">Background gradient</span>
-        <span class="cs-switch"><input type="checkbox" id="cs-bg-gradient" onchange="document.getElementById('cs-bg2-field').style.display=this.checked?'flex':'none';"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-      <div class="cs-field" id="cs-bg2-field" style="display:none;margin-top:12px;">
-        <input type="color" id="cs-bg2" class="cs-swatch"><span class="cs-field-label">Gradient end color</span>
-      </div>
-      <div class="cs-grid" style="margin-top:14px;">
-        <div class="cs-field"><input type="color" id="cs-up" class="cs-swatch"><span class="cs-field-label">Candle up</span></div>
-        <div class="cs-field"><input type="color" id="cs-down" class="cs-swatch"><span class="cs-field-label">Candle down</span></div>
-        <div class="cs-field"><input type="color" id="cs-border-up" class="cs-swatch"><span class="cs-field-label">Border up</span></div>
-        <div class="cs-field"><input type="color" id="cs-border-down" class="cs-swatch"><span class="cs-field-label">Border down</span></div>
-        <div class="cs-field"><input type="color" id="cs-wick-up" class="cs-swatch"><span class="cs-field-label">Wick up</span></div>
-        <div class="cs-field"><input type="color" id="cs-wick-down" class="cs-swatch"><span class="cs-field-label">Wick down</span></div>
-      </div>
-    </div>
+        <div class="cs-tab" data-cs-tab-content="canvas" hidden>
+          <div class="cs-group">
+            <div class="cs-group-title">Estilos básicos del gráfico</div>
+            <div class="cs-grid">
+              <div class="cs-field"><input type="color" id="cs-bg" class="cs-swatch"><span class="cs-field-label">Background</span></div>
+              <div class="cs-field"><input type="color" id="cs-text-color" class="cs-swatch"><span class="cs-field-label">Text color</span></div>
+            </div>
+            <label class="cs-toggle-row" style="margin-top:12px;">
+              <span class="cs-field-label">Background gradient</span>
+              <span class="cs-switch"><input type="checkbox" id="cs-bg-gradient" onchange="document.getElementById('cs-bg2-field').style.display=this.checked?'flex':'none';"><span class="track"><span class="thumb"></span></span></span>
+            </label>
+            <div class="cs-field" id="cs-bg2-field" style="display:none;margin-top:12px;">
+              <input type="color" id="cs-bg2" class="cs-swatch"><span class="cs-field-label">Gradient end color</span>
+            </div>
+            <div class="cs-grid" style="margin-top:14px;">
+              <div class="cs-field"><input type="color" id="cs-up" class="cs-swatch"><span class="cs-field-label">Candle up</span></div>
+              <div class="cs-field"><input type="color" id="cs-down" class="cs-swatch"><span class="cs-field-label">Candle down</span></div>
+              <div class="cs-field"><input type="color" id="cs-border-up" class="cs-swatch"><span class="cs-field-label">Border up</span></div>
+              <div class="cs-field"><input type="color" id="cs-border-down" class="cs-swatch"><span class="cs-field-label">Border down</span></div>
+              <div class="cs-field"><input type="color" id="cs-wick-up" class="cs-swatch"><span class="cs-field-label">Wick up</span></div>
+              <div class="cs-field"><input type="color" id="cs-wick-down" class="cs-swatch"><span class="cs-field-label">Wick down</span></div>
+            </div>
+          </div>
+          <div class="cs-group">
+            <div class="cs-group-title">Axis lines</div>
+            <div class="cs-field"><input type="color" id="cs-axis-color" class="cs-swatch"><span class="cs-field-label">Price/time axis border</span></div>
+          </div>
+          <div class="cs-group">
+            <div class="cs-group-title">Margins</div>
+            <!-- rightPriceScale.scaleMargins (top/bottom, % del alto del
+                 panel reservado arriba/abajo de las velas) y
+                 timeScale.rightOffset (barras de aire a la derecha de la
+                 última vela) — ya existían como opciones fijas del chart,
+                 nunca habían sido configurables desde acá. Mismos 3 campos
+                 que trae TradingView en su panel de "Lienzo". -->
+            <div class="cs-margins-grid">
+              <div>
+                <span class="cs-field-label">Top %</span>
+                <input type="number" id="cs-margin-top" class="cs-number" min="0" max="40" step="1">
+              </div>
+              <div>
+                <span class="cs-field-label">Bottom %</span>
+                <input type="number" id="cs-margin-bottom" class="cs-number" min="0" max="40" step="1">
+              </div>
+              <div>
+                <span class="cs-field-label">Right (bars)</span>
+                <input type="number" id="cs-margin-right" class="cs-number" min="0" max="200" step="1">
+              </div>
+            </div>
+          </div>
+        </div>
 
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13V9M6 13V5M10 13V7M14 13V3"/></svg>
-        Price Display
-      </div>
-      <label class="cs-toggle-row">
-        <span class="cs-field-label">Show OHLCV values</span>
-        <span class="cs-switch"><input type="checkbox" id="cs-show-ohlcv"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-      <label class="cs-toggle-row">
-        <span class="cs-field-label">Show real-time price line</span>
-        <span class="cs-switch"><input type="checkbox" id="cs-priceline-on"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-      <div class="cs-subrow">
-        <input type="color" id="cs-priceline-color" class="cs-swatch">
-        <select id="cs-priceline-style" class="dtb-select">
-          <option value="0">Solid</option>
-          <option value="1">Dotted</option>
-          <option value="2" selected>Dashed</option>
-          <option value="3">Large dashed</option>
-          <option value="4">Sparse dotted</option>
-        </select>
-      </div>
-    </div>
+        <div class="cs-tab" data-cs-tab-content="scales" hidden>
+          <div class="cs-group">
+            <div class="cs-group-title">Price Display</div>
+            <label class="cs-toggle-row">
+              <span class="cs-field-label">Show OHLCV values</span>
+              <span class="cs-switch"><input type="checkbox" id="cs-show-ohlcv"><span class="track"><span class="thumb"></span></span></span>
+            </label>
+            <label class="cs-toggle-row">
+              <span class="cs-field-label">Show real-time price line</span>
+              <span class="cs-switch"><input type="checkbox" id="cs-priceline-on"><span class="track"><span class="thumb"></span></span></span>
+            </label>
+            <div class="cs-subrow">
+              <input type="color" id="cs-priceline-color" class="cs-swatch">
+              <select id="cs-priceline-style" class="dtb-select">
+                <option value="0">Solid</option>
+                <option value="1">Dotted</option>
+                <option value="2" selected>Dashed</option>
+                <option value="3">Large dashed</option>
+                <option value="4">Sparse dotted</option>
+              </select>
+            </div>
+          </div>
+          <div class="cs-group">
+            <div class="cs-group-title">Crosshair</div>
+            <div class="cs-subrow" style="margin-top:0;">
+              <input type="color" id="cs-crosshair-color" class="cs-swatch">
+              <select id="cs-crosshair-style" class="dtb-select">
+                <option value="0">Solid</option>
+                <option value="1">Dotted</option>
+                <option value="2" selected>Dashed</option>
+                <option value="3">Large dashed</option>
+                <option value="4">Sparse dotted</option>
+              </select>
+            </div>
+            <label class="cs-toggle-row" style="margin-top:12px;">
+              <span class="cs-field-label">Sync across panels (multi-chart grid)</span>
+              <span class="cs-switch"><input type="checkbox" id="cs-crosshair-sync-on"><span class="track"><span class="thumb"></span></span></span>
+            </label>
+          </div>
+        </div>
 
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4"/><circle cx="8" cy="8" r="2"/></svg>
-        Crosshair
-      </div>
-      <div class="cs-subrow" style="margin-top:0;">
-        <input type="color" id="cs-crosshair-color" class="cs-swatch">
-        <select id="cs-crosshair-style" class="dtb-select">
-          <option value="0">Solid</option>
-          <option value="1">Dotted</option>
-          <option value="2" selected>Dashed</option>
-          <option value="3">Large dashed</option>
-          <option value="4">Sparse dotted</option>
-        </select>
-      </div>
-      <label class="cs-toggle-row" style="margin-top:12px;">
-        <span class="cs-field-label">Sync across panels (multi-chart grid)</span>
-        <span class="cs-switch"><input type="checkbox" id="cs-crosshair-sync-on"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-    </div>
+        <div class="cs-tab" data-cs-tab-content="trading" hidden>
+          <div class="cs-group">
+            <div class="cs-group-title">Trade Markers</div>
+            <select id="cs-trade-markers-mode" class="dtb-select" style="width:100%;">
+              <option value="full">Arrows + price / P&amp;L</option>
+              <option value="arrows">Arrows only</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+          <div class="cs-group">
+            <div class="cs-group-title">P&amp;L progress on open positions</div>
+            <select id="cs-order-pnl-mode" class="dtb-select" style="width:100%;">
+              <option value="points">Points</option>
+              <option value="price">Price</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+        </div>
 
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="1"/></svg>
-        Axis lines
+        <div class="cs-tab" data-cs-tab-content="branding" hidden>
+          <div class="cs-group">
+            <div class="cs-group-title">Logo</div>
+            <div class="cs-row" style="align-items:center;gap:10px;margin-bottom:0;">
+              <img id="cs-logo-preview" src="logo-unicorn.png" style="height:28px;width:auto;border-radius:3px;background:#111;padding:2px;flex:none;">
+              <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Subir mi logo</button>
+              <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Quitar</button>
+            </div>
+            <input type="file" id="cs-logo-file" accept="image/*" style="display:none;" onchange="onLogoFileChosen(event)">
+            <div class="cs-field-label" style="margin-top:8px;opacity:.65;white-space:normal;">Reemplaza el logo en toda la plataforma (incluye modo multigráficos). Recomendado: PNG con fondo transparente.</div>
+          </div>
+        </div>
       </div>
-      <div class="cs-field"><input type="color" id="cs-axis-color" class="cs-swatch"><span class="cs-field-label">Price/time axis border</span></div>
-    </div>
-
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8.5l3.5 3.5L14 3"/></svg>
-        Trade Markers
-      </div>
-      <select id="cs-trade-markers-mode" class="dtb-select" style="width:100%;">
-        <option value="full">Arrows + price / P&amp;L</option>
-        <option value="arrows">Arrows only</option>
-        <option value="off">Off</option>
-      </select>
-      <div class="cs-field-label" style="margin-top:12px;">P&amp;L progress on open positions</div>
-      <select id="cs-order-pnl-mode" class="dtb-select" style="width:100%;">
-        <option value="points">Points</option>
-        <option value="price">Price</option>
-        <option value="off">Off</option>
-      </select>
-    </div>
-
-    <div class="cs-section">
-      <div class="cs-section-title">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><circle cx="5.5" cy="7" r="1.3"/><path d="M14.3 10.5 10.8 7l-6 6"/></svg>
-        Logo
-      </div>
-      <div class="cs-row" style="align-items:center;gap:10px;margin-bottom:0;">
-        <img id="cs-logo-preview" src="logo-unicorn.png" style="height:28px;width:auto;border-radius:3px;background:#111;padding:2px;flex:none;">
-        <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Subir mi logo</button>
-        <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Quitar</button>
-      </div>
-      <input type="file" id="cs-logo-file" accept="image/*" style="display:none;" onchange="onLogoFileChosen(event)">
-      <div class="cs-field-label" style="margin-top:8px;opacity:.65;">Reemplaza el logo en toda la plataforma (incluye modo multigráficos). Recomendado: PNG con fondo transparente.</div>
     </div>
 
     <div class="modal-btns">
@@ -2727,6 +2808,8 @@ function renderLayoutGrid(n){
       iframeEls.forEach(el => el.contentWindow.postMessage({ type:'zentinel:replaySync', symbol:replaySymbol, exited:true }, '*'));
       replayMasterPane = null; replaySymbol = null; replayTF = null; replayPlaying = false;
       renderReplayBar();
+    } else if (msg.type === 'zentinel:settingsClosed') {
+      restoreActivePaneFromSettings();
     }
   });
 
@@ -3455,9 +3538,44 @@ function renderLayoutGrid(n){
   // Settings abre un modal — no tiene sentido "a todos" (solo se puede
   // mirar uno a la vez), así que siempre apunta al panel activo sin
   // importar lo que diga el selector de alcance.
-  gbar.querySelector('#gc-settings').addEventListener('click', ()=>{
-    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
-  });
+  //
+  // El modal vive ADENTRO del iframe del panel activo — su
+  // position:fixed;inset:0 se centra relativo a ESE iframe, no a la
+  // ventana real. En la grilla (2/4 paneles) cada iframe es solo un
+  // cuarto de la pantalla, así que el modal terminaba centrado en ese
+  // cuarto, no en el medio de la pantalla real — reportado explícitamente
+  // por el usuario. Mientras el modal está abierto, se estira el iframe
+  // del panel activo a pantalla completa POR ENCIMA de la grilla (position:
+  // fixed acá afuera, en el shell) — su propio modal queda centrado de
+  // verdad, y el chart de abajo sigue siendo el mismo panel/pane, nada se
+  // recarga. zentinel:settingsClosed (mandado desde closeModal() de cada
+  // panel) deshace esto cuando el modal se cierra, sea como sea que se
+  // haya cerrado (Guardar, click afuera).
+  function openActivePaneSettings(){
+    const f = iframeEls[activePane-1];
+    if (!f) return;
+    f.dataset.fullscreenForModal = '1';
+    f.style.position = 'fixed';
+    f.style.inset = '0';
+    f.style.width = '100vw';
+    f.style.height = '100vh';
+    f.style.zIndex = '600';
+    f.style.borderRadius = '0';
+    f.contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
+  }
+  function restoreActivePaneFromSettings(){
+    iframeEls.forEach(f => {
+      if (!f.dataset.fullscreenForModal) return;
+      delete f.dataset.fullscreenForModal;
+      f.style.position = '';
+      f.style.inset = '';
+      f.style.width = '';
+      f.style.height = '';
+      f.style.zIndex = '';
+      f.style.borderRadius = '';
+    });
+  }
+  gbar.querySelector('#gc-settings').addEventListener('click', openActivePaneSettings);
 
   // Badge de estado: antes decía "MULTI" fijo (sin información real) y
   // después pegaba SIEMPRE al bridge de MT5 sin importar la fuente — con
@@ -3467,9 +3585,7 @@ function renderLayoutGrid(n){
   // ver syncShellControls, que la vuelve a llamar cada vez que cambia el
   // panel activo o su fuente). Clickear abre Settings del panel activo.
   const gcBadge = gbar.querySelector('#api-badge');
-  gcBadge.addEventListener('click', ()=>{
-    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openSettings' }, '*');
-  });
+  gcBadge.addEventListener('click', openActivePaneSettings);
   updateApiBadge(gcBadge, STATE.dataSource);
 
   // Indicators — como Settings, siempre sobre el panel activo.
@@ -4003,6 +4119,11 @@ const CHART_SETTINGS_DEFAULTS = {
   // explícito del usuario, configurable: 'off' | 'points' | 'price'
   // (ver renderOrderPriceLines/renderOrderPositionBadges).
   orderPnlMode:'points',
+  // Márgenes del panel — mismos 3 campos que trae TradingView en su panel
+  // de "Lienzo" ("Parte superior/inferior %", "Derecha barras"). Antes
+  // existían igual (rightPriceScale.scaleMargins/timeScale.rightOffset en
+  // initChart) pero fijos en el código, sin forma de ajustarlos.
+  marginTop:0.08, marginBottom:0.18, marginRightBars:8,
 };
 // Paso 1 del port de "ICT Zentinel Sniper 2.0 SD FIX" — solo Sweep HTF +
 // CISD. Los nombres de los inputs son los mismos que en el Pine original
@@ -6277,8 +6398,11 @@ function initChart() {
       vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
       horzLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
     },
-    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, scaleMargins:{top:0.08,bottom:0.18} },
-    timeScale: { borderColor:STATE.chartSettings.axisColor, timeVisible:true, secondsVisible:false, rightOffset:8, barSpacing:10 },
+    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, scaleMargins:{
+      top: STATE.chartSettings.marginTop ?? CHART_SETTINGS_DEFAULTS.marginTop,
+      bottom: STATE.chartSettings.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom,
+    } },
+    timeScale: { borderColor:STATE.chartSettings.axisColor, timeVisible:true, secondsVisible:false, rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing:10 },
     localization: { timeFormatter: fmtCrosshairTime },
     watermark: { visible:false },
   });
@@ -11064,7 +11188,17 @@ function _exitFollowReplay(){
 //  MODALS
 // ══════════════════════════════════════════════════════════
 function openModal(id){ if (window._modalDragResets && window._modalDragResets[id]) window._modalDragResets[id](); document.getElementById(id).classList.add('open'); }
-function closeModal(id){document.getElementById(id).classList.remove('open');}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  // Avisa al shell (modo grilla) para que deshaga el "panel activo a
+  // pantalla completa" que hizo al abrir Settings — ver
+  // openActivePaneSettings/restoreActivePaneFromSettings en renderLayoutGrid.
+  // Cubre TODAS las formas de cerrar (Guardar, click afuera), porque todas
+  // pasan por acá (ver el listener genérico de .modal-overlay más abajo).
+  if (id === 'modal-chart-settings' && EMBED_MODE && PANE_ID) {
+    try { window.parent.postMessage({ type:'zentinel:settingsClosed', pane:PANE_ID }, '*'); } catch(e){}
+  }
+}
 
 // Reemplaza prompt() nativo para pedir un nombre (presets/templates) —
 // mismo modal para los 3 lugares que antes usaban prompt(): el Preset de
@@ -11145,8 +11279,23 @@ function fillChartSettingsForm(cs){
   document.getElementById('cs-axis-color').value=cs.axisColor||CHART_SETTINGS_DEFAULTS.axisColor;
   document.getElementById('cs-trade-markers-mode').value=cs.tradeMarkersMode||'full';
   document.getElementById('cs-order-pnl-mode').value=cs.orderPnlMode||'points';
+  // Redondeado a enteros para el form (0.08 -> "8") — commitChartSettingsForm
+  // hace la conversión inversa.
+  document.getElementById('cs-margin-top').value=Math.round((cs.marginTop ?? CHART_SETTINGS_DEFAULTS.marginTop)*100);
+  document.getElementById('cs-margin-bottom').value=Math.round((cs.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom)*100);
+  document.getElementById('cs-margin-right').value=cs.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars;
 }
-function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); openModal('modal-chart-settings'); }
+// Navegación lateral del modal de Chart Settings — alterna qué .cs-tab se
+// ve (el resto queda [hidden]) y marca el botón activo en .cs-nav.
+function csShowTab(name){
+  document.querySelectorAll('#modal-chart-settings .cs-tab').forEach(el => {
+    el.hidden = el.dataset.csTabContent !== name;
+  });
+  document.querySelectorAll('#modal-chart-settings .cs-nav-btn').forEach(el => {
+    el.classList.toggle('active', el.dataset.csTab === name);
+  });
+}
+function openChartSettingsModal(){ fillChartSettingsForm(STATE.chartSettings); renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); csShowTab('theme'); openModal('modal-chart-settings'); }
 
 // Logo propio del cliente — a diferencia del resto de Chart Settings (que es
 // por preset/panel, vive en STATE.chartSettings), el logo es una sola marca
@@ -11292,6 +11441,9 @@ function commitChartSettingsForm(){
     axisColor: document.getElementById('cs-axis-color').value,
     tradeMarkersMode: document.getElementById('cs-trade-markers-mode').value,
     orderPnlMode: document.getElementById('cs-order-pnl-mode').value,
+    marginTop: Math.max(0, Math.min(40, Number(document.getElementById('cs-margin-top').value) || 0)) / 100,
+    marginBottom: Math.max(0, Math.min(40, Number(document.getElementById('cs-margin-bottom').value) || 0)) / 100,
+    marginRightBars: Math.max(0, Math.min(200, Number(document.getElementById('cs-margin-right').value) || 0)),
   };
   saveChartSettingsState();
   applyChartSettings();
@@ -11378,8 +11530,17 @@ function applyChartSettings(){
     // Las líneas que "encuadran" los niveles de precio (borde derecho) y de
     // tiempo (borde inferior) — antes venían fijas en '#222230' (ver la
     // creación del chart más abajo), sin ningún toggle para cambiarlas.
-    rightPriceScale: { borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor },
-    timeScale: { borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor },
+    rightPriceScale: {
+      borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor,
+      scaleMargins: {
+        top: cs.marginTop ?? CHART_SETTINGS_DEFAULTS.marginTop,
+        bottom: cs.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom,
+      },
+    },
+    timeScale: {
+      borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor,
+      rightOffset: cs.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars,
+    },
   });
   candleSeries.applyOptions({
     upColor: cs.upColor, downColor: cs.downColor,
