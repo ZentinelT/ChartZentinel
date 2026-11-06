@@ -1186,7 +1186,15 @@
      scrolleando SOLO del lado del contenido, modal-btns abajo) en vez de
      un solo bloque que scrollea entero. */
   #modal-chart-settings .modal {
-    width: 640px; max-width: calc(100vw - 32px); max-height: 82vh;
+    /* height FIJO (no solo max-height) — con flex-direction:column y sin
+       altura propia, el modal se achicaba/agrandaba para ajustarse al
+       contenido de CADA pestaña (Theme es corta, Canvas es larga), así que
+       cambiar de pestaña se veía como si el modal "se autoescalara" cada
+       vez — reportado por el usuario. Con una altura fija, .cs-content
+       (flex:1 + overflow-y:auto) es quien scrollea de más, el modal en sí
+       queda del mismo tamaño siempre.
+    */
+    width: 640px; max-width: calc(100vw - 32px); height: 560px; max-height: 82vh;
     display: flex; flex-direction: column; padding: 0; overflow: hidden;
   }
   #modal-chart-settings .modal h2 { margin: 0; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -3569,10 +3577,31 @@ function renderLayoutGrid(n){
       delete f.dataset.fullscreenForModal;
       f.style.position = '';
       f.style.inset = '';
-      f.style.width = '';
-      f.style.height = '';
+      // width/height vuelven a '100%' EXPLÍCITO, no a '' — ese 100%/100%
+      // nunca vino de una hoja de estilos, se puso una sola vez al crear
+      // el iframe (ver iframe.style.cssText más abajo en el bucle que arma
+      // la grilla). Vaciar la propiedad con '' no "restaura lo de antes",
+      // la borra directo — sin ningún width/height, el iframe caía al
+      // tamaño default del navegador (300×150), bug reportado: el panel
+      // volvía del modal MUCHO más chico que los demás, mal recortado por
+      // la grilla (que lo sigue ubicando bien vía grid-column/row, eso no
+      // se toca — el problema era puramente el tamaño del iframe en sí).
+      f.style.width = '100%';
+      f.style.height = '100%';
       f.style.zIndex = '';
-      f.style.borderRadius = '';
+      f.style.borderRadius = '6px'; // mismo motivo que width/height arriba: valor original, no ''
+      // El iframe achicándose de vuelta a su celda de la grilla no siempre
+      // le llega a tiempo al ResizeObserver interno de lightweight-charts
+      // (cross-document: el iframe entero cambiando de tamaño es un caso
+      // más propenso a perderse que un resize normal de un elemento
+      // adentro del mismo documento) — reportado: el chart de ese panel
+      // quedaba con el tamaño de pantalla completa que tuvo mientras
+      // Settings estaba abierto, dibujado en una esquina diminuta del
+      // iframe ya achicado. Forzar el resize a mano un frame después (ya
+      // con el iframe terminado de reacomodar su layout) lo deja bien.
+      requestAnimationFrame(() => {
+        paneEval(f, `if (typeof chart !== 'undefined' && chart) { const c = document.getElementById('chart-container'); chart.resize(c.clientWidth, c.clientHeight, true); }`);
+      });
     });
   }
   gbar.querySelector('#gc-settings').addEventListener('click', openActivePaneSettings);
