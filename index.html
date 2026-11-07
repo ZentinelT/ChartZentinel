@@ -6888,6 +6888,16 @@ function initChart() {
         syncExtendedLineSvg(d);
       }
     });
+    // Las manijas (círculos) del dibujo SELECCIONADO no se reposicionan
+    // solas durante un pan/zoom — highlightSelectedSvg() es lo único que
+    // las reconstruye, y antes solo se llamaba desde unos pocos lugares
+    // puntuales (resize, fin de un drag), nunca desde acá. Resultado
+    // reportado: zoomear in/out con un dibujo seleccionado dejaba sus
+    // puntos "congelados" en la posición vieja hasta el próximo click.
+    // highlightSelectedSvg ya debounces con su propio requestAnimationFrame
+    // (ver _highlightSvgRaf), así que llamarla en cada tick de acá —
+    // incluido el loop de arrastre/wheel de más arriba — no duplica trabajo.
+    if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
     positionOrderPositionBadges();
     positionOrderLineBadges();
   }
