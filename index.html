@@ -4594,7 +4594,7 @@ function serializeDrawings(){
       fillEl:undefined, profitFillEl:undefined, lossFillEl:undefined,
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
-      extSvgEl:undefined,
+      extSvgEl:undefined, extSvgEls:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -4821,6 +4821,7 @@ function restyleDrawingAppearance(d) {
   } else if (d.type === 'rect') {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
+    syncRectFill(d);
   } else if (d.type === 'vp') {
     // [0-3] borde (sigue a d.color/width/style, el selector genérico de la
     // barra). POC/VAH/VAL y los 4 colores de las barras tienen sus propios
@@ -5160,15 +5161,19 @@ function updateDrawingGeometry(d) {
     ok = true;
 
   } else if (d.type === 'rect' && d.series.length === 4) {
+    // Las 4 series del borde quedan SIEMPRE en el segmento real (t1-t2raw,
+    // sin extender) — el "Extend Right" de verdad lo dibuja syncRectFill/
+    // syncExtendedRectBorder como overlay SVG en coordenadas de pantalla,
+    // igual que hline/trendline (ver su comentario: tFuture tiene un techo
+    // fijo, el whitespace cargado, y ahí es donde se cortaba).
     const hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
     const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
     let t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
     if (t2raw === t1) t2raw = t1 + barInterval;
-    const t2 = d.extRight ? tFuture : t2raw;
-    d.series[0].setData([{time:t1,value:hi},{time:t2,value:hi}]);
-    d.series[1].setData([{time:t1,value:lo},{time:t2,value:lo}]);
+    d.series[0].setData([{time:t1,value:hi},{time:t2raw,value:hi}]);
+    d.series[1].setData([{time:t1,value:lo},{time:t2raw,value:lo}]);
     d.series[2].setData([{time:t1,value:lo},{time:t1,value:hi}]);
-    d.series[3].setData([{time:t2,value:lo},{time:t2,value:hi}]);
+    d.series[3].setData([{time:t2raw,value:lo},{time:t2raw,value:hi}]);
     syncRectFill(d);
     ok = true;
 
@@ -5235,6 +5240,7 @@ function removeDrawingById(id) {
   d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
   d.svgEls.forEach(el => el.remove());
   if (d.extSvgEl instanceof Element) d.extSvgEl.remove();
+  if (Array.isArray(d.extSvgEls)) d.extSvgEls.forEach(el => el.remove());
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
@@ -5338,7 +5344,7 @@ function syncRectFill(d) {
   // pero el relleno (reposicionado acá, a mano, en cada frame) quedaba
   // invisible.
   const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-  let t2 = d.extRight ? chart.timeScale().getVisibleRange()?.to ?? d.p2.time : safeLineTime(Math.max(d.p1.time, d.p2.time));
+  const t2raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
   // Mismo resguardo que buildDrawingOnChart/updateDrawingGeometry: un
   // dibujo angosto (p.ej. unas pocas velas de 5m) visto en un panel de
   // timeframe mucho más grueso (Diario) puede tener p1.time y p2.time
@@ -5348,13 +5354,54 @@ function syncRectFill(d) {
   // mismo resguardo ya aplicado).
   const candles = window._lastCandles || [];
   const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
-  if (!d.extRight && t2 === t1) t2 = t1 + barInterval;
-  const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+  const t2 = (t2raw === t1) ? t1 + barInterval : t2raw;
+  const x1 = chart.timeScale().timeToCoordinate(t1);
   const y1 = candleSeries.priceToCoordinate(hi), y2 = candleSeries.priceToCoordinate(lo);
+  // Extender a la derecha: directo al borde de PANTALLA (container.clientWidth),
+  // no a un horario convertido a coordenada — chart.timeScale().getVisibleRange()
+  // nunca pasa del whitespace cargado (mismo techo fijo que tenían las 4
+  // series del borde, ver syncExtendedRectBorder), así que "extender" con
+  // eso se cortaba igual apenas se zoomeaba/scrolleaba lo suficiente — el
+  // bug reportado por el usuario. El ancho de pantalla no tiene ese techo.
+  const x2 = d.extRight ? document.getElementById('chart-container').clientWidth : chart.timeScale().timeToCoordinate(t2);
   if (x1===null||x2===null||y1===null||y2===null) { d.fillEl.style.display='none'; return; }
-  d.fillEl.style.display='';
+  d.fillEl.style.display = (d.showFill === false) ? 'none' : '';
   d.fillEl.setAttribute('x', Math.min(x1,x2)); d.fillEl.setAttribute('y', y1);
   d.fillEl.setAttribute('width', Math.abs(x2-x1)); d.fillEl.setAttribute('height', Math.max(0,y2-y1));
+  syncExtendedRectBorder(d, x1, y1, y2);
+}
+
+// El borde derecho de un rect extendido (d.extRight) se "abre" hacia el
+// borde de pantalla — como el resto de las herramientas extendidas, sin
+// cerrar con una línea vertical fija que quedaría atrás apenas se
+// zoomea/scrollea. Top/bottom se dibujan como overlay SVG (coordenadas de
+// pantalla, igual que syncExtendedLineSvg) hasta el borde real del panel;
+// la línea vertical derecha (series[3], la serie del chart) se oculta
+// mientras esté extendido — ya no tiene un lugar fijo donde "cerrar".
+function syncExtendedRectBorder(d, x1, yHi, yLo) {
+  const borderOn = d.showBorder !== false;
+  if (d.series[3]) { try { d.series[3].applyOptions({ visible: borderOn && !d.extRight }); } catch(e){} }
+  if (!d.extRight) { if (d.extSvgEls) d.extSvgEls.forEach(el => el.style.display = 'none'); return; }
+  const svg = window._drawingLayerSvg;
+  if (!svg || x1===null || yHi===null || yLo===null) return;
+  const w = document.getElementById('chart-container').clientWidth;
+  if (!d.extSvgEls) {
+    d.extSvgEls = [0,1].map(() => {
+      const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+      l.style.pointerEvents = 'none';
+      svg.appendChild(l);
+      return l;
+    });
+  }
+  const ls = lwStyle(d.style);
+  const dashArr = ls===1 ? '6,4' : ls===2 ? '2,3' : null;
+  d.extSvgEls.forEach((el, i) => {
+    el.setAttribute('x1', x1); el.setAttribute('y1', i===0 ? yHi : yLo);
+    el.setAttribute('x2', w);  el.setAttribute('y2', i===0 ? yHi : yLo);
+    el.setAttribute('stroke', d.color + 'aa'); el.setAttribute('stroke-width', d.width);
+    if (dashArr) el.setAttribute('stroke-dasharray', dashArr); else el.removeAttribute('stroke-dasharray');
+    el.style.display = borderOn ? '' : 'none';
+  });
 }
 
 // Calcula el histograma de volumen por franja de precio de un 'vp' — se
@@ -5691,12 +5738,14 @@ function buildDrawingOnChart(d) {
     syncExtendedLineSvg(d);
 
   } else if (d.type === 'rect') {
+    // Las 4 series del borde quedan en el segmento real sin extender — el
+    // "Extend Right" lo dibuja syncRectFill/syncExtendedRectBorder como
+    // overlay SVG (ver su comentario).
     const hi = Math.max(d.p1.price, d.p2.price);
     const lo = Math.min(d.p1.price, d.p2.price);
     let t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-    let t2_raw = safeLineTime(Math.max(d.p1.time, d.p2.time));
-    if (t1 === t2_raw) t2_raw = t1 + barInterval;
-    const t2 = d.extRight ? tFuture : t2_raw;
+    let t2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+    if (t1 === t2) t2 = t1 + barInterval;
 
     // Borde y relleno se pueden apagar por separado (ver dtb-rect-border /
     // dtb-rect-fill) — las 4 series del borde se crean igual siempre
