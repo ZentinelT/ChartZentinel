@@ -4680,7 +4680,7 @@ function redoDrawing(){
 // de texto hace al revés: acá partimos de p1.price/time, no al revés).
 function syncTextLabelPos(d){
   if (!(d.label instanceof Element)) return;
-  const x = chart.timeScale().timeToCoordinate(d.p1.time);
+  const x = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
   const y = candleSeries.priceToCoordinate(d.p1.price);
   if (x === null || y === null) { d.label.style.display = 'none'; return; }
   d.label.style.display = '';
@@ -6782,7 +6782,13 @@ function initChart() {
     drawings.forEach(d=>{
       if (window._dragSession && window._dragSession.drawing===d) return;
       if (d.type==='text' && d.label) {
-        const x=chart.timeScale().timeToCoordinate(d.p1.time), y=candleSeries.priceToCoordinate(d.p1.price);
+        // safeLineTime: un texto escrito en un TF (p.ej. M5) trae un
+        // d.p1.time crudo que puede no caer en ninguna vela/whitespace real
+        // de OTRO panel/TF (p.ej. al cambiarlo a 1H) — timeToCoordinate()
+        // devuelve null ahí y el cartel quedaba oculto (display:none) apenas
+        // se cambiaba de timeframe, aunque el dibujo siguiera existiendo.
+        // Mismo resguardo que ya usan hline/trendline/vline.
+        const x=chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time)), y=candleSeries.priceToCoordinate(d.p1.price);
         d.label.style.display = (x===null||y===null) ? 'none' : 'block';
         if (x!==null&&y!==null){ d.label.style.left=(x+6)+'px'; d.label.style.top=(y-10)+'px'; }
       } else if (d.type==='vline') {
