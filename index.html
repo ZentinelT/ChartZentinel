@@ -4399,6 +4399,18 @@ const toolDefaults = {
   extLeft: false,
   extRight: false,
 };
+
+// Cuántas velas "fantasma" (whitespace, ver futureWhitespace) carga el eje
+// de tiempo a futuro, y hasta dónde puede llegar una línea extendida
+// (hline/trendline con extLeft/extRight) sin pasarse de esa marca.
+// Probado a mano con un valor grande (300): un dibujo extendido con un
+// punto real tan lejos hace que lightweight-charts recalcule su eje de
+// tiempo compartido y la vista por default termina mostrando un hueco
+// vacío en vez del chart. 15 es el mismo límite que ya usa
+// futureAnchorSeries para reservar el eje — mantenerlos iguales es lo que
+// evita el otro bug ya documentado (línea extendida más allá del
+// whitespace cargado = el chart se "desacomoda y reacomoda" un instante).
+const DRAW_EXTEND_BARS = 15;
 // Estilo recordado POR TIPO de herramienta (trendline, fib, rect...), no
 // uno solo compartido por todas — así cambiarle el color a un fib no
 // afecta el color con el que nace la próxima trendline. Persistido en
@@ -4419,8 +4431,14 @@ function refreshToolDefaultsFor(type){
   // d.levels guardado para 'fib' podía quedar pegado en toolDefaults al
   // pasar por otro tipo que no lo pisa (rect, trendline...) y éste nunca
   // lo limpia.
+  // Horizontal Line nace extendida de los DOS lados por default — como en
+  // TradingView, una línea horizontal siempre es "infinita" de entrada; el
+  // resto de las herramientas con extLeft/extRight (trendline, fib, rect,
+  // vp) siguen naciendo como un segmento acotado hasta que el usuario pida
+  // extenderlas a mano.
+  const extBase = type === 'hline' ? true : false;
   Object.assign(toolDefaults, {
-    color:'#c9a84c', width:1, style:0, extLeft:false, extRight:false, levels:undefined, fibLabelMode:undefined,
+    color:'#c9a84c', width:1, style:0, extLeft:extBase, extRight:extBase, levels:undefined, fibLabelMode:undefined,
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
     upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
     pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined, barOpacity:undefined,
@@ -4718,7 +4736,7 @@ function selectDrawing(id) {
   const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'fib');
   document.getElementById('dtb-price-label').style.display = hasPriceLabel ? '' : 'none';
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
-  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp');
+  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp' || d.type === 'hline');
   document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect' && d.type!=='vp') ? '' : 'none';
   document.getElementById('dtb-ext-right').style.display = extendApplies ? '' : 'none';
   document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
@@ -5106,20 +5124,20 @@ function updateDrawingGeometry(d) {
   if (!candles.length) return false;
   const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
   const tFirst = candles[0].time, tLast = candles[candles.length-1].time;
-  // 10, no más — el eje de tiempo solo tiene 15 velas "fantasma" cargadas
-  // de margen a futuro (ver futureWhitespace/clampPositionToolT2, mismo
-  // límite ya documentado ahí). Pasarse de esa marca (50 se pasaba de
-  // sobra) hacía que lightweight-charts tuviera que extender su eje de
-  // tiempo compartido apenas se agregaba el punto extendido, y el chart se
-  // veía "desacomodarse y reacomodarse" un instante después — reportado al
-  // usar Extender derecha/izquierda en hline/trendline/rect/fib.
-  const FUTURE_BARS = 10;
+  // Ver DRAW_EXTEND_BARS: tiene que coincidir con la cantidad de velas
+  // "fantasma" (whitespace) que carga futureAxisSeries, si no el eje de
+  // tiempo compartido "se desacomoda y reacomoda" un instante al
+  // agregar un punto que se pasa de lo cargado.
+  const FUTURE_BARS = DRAW_EXTEND_BARS;
   const tFuture = tLast + barInterval * FUTURE_BARS;
   const tPast   = Math.max(0, tFirst - barInterval * FUTURE_BARS);
   let ok = false;
 
   if (d.type === 'hline' && d.series.length === 1) {
-    d.series[0].setData([{time:safeLineTime(d.p1.time), value:d.p1.price},{time:tFuture, value:d.p1.price}]);
+    let t1 = safeLineTime(d.p1.time), t2 = t1 + barInterval;
+    if (d.extLeft)  t1 = tPast;
+    if (d.extRight) t2 = tFuture;
+    d.series[0].setData([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}]);
     ok = true;
 
   } else if (d.type === 'trendline' && d.series.length === 1) {
@@ -5547,14 +5565,11 @@ function buildDrawingOnChart(d) {
   const ls = lwStyle(d.style);
 
   const barInterval = candles.length > 1 ? (candles[candles.length-1].time - candles[candles.length-2].time) : 3600;
-  // 10, no más — el eje de tiempo solo tiene 15 velas "fantasma" cargadas
-  // de margen a futuro (ver futureWhitespace/clampPositionToolT2, mismo
-  // límite ya documentado ahí). Pasarse de esa marca (50 se pasaba de
-  // sobra) hacía que lightweight-charts tuviera que extender su eje de
-  // tiempo compartido apenas se agregaba el punto extendido, y el chart se
-  // veía "desacomodarse y reacomodarse" un instante después — reportado al
-  // usar Extender derecha/izquierda en hline/trendline/rect/fib.
-  const FUTURE_BARS = 10;
+  // Ver DRAW_EXTEND_BARS: tiene que coincidir con la cantidad de velas
+  // "fantasma" (whitespace) que carga futureAxisSeries, si no el eje de
+  // tiempo compartido "se desacomoda y reacomoda" un instante al agregar
+  // un punto que se pasa de lo cargado.
+  const FUTURE_BARS = DRAW_EXTEND_BARS;
 
   const tFirst  = candles[0].time;
   const tLast   = candles[candles.length-1].time;
@@ -5584,16 +5599,22 @@ function buildDrawingOnChart(d) {
   }
 
   if (d.type === 'hline') {
-    // Rayo horizontal como en TV: nace en el punto donde se dibujó y crece
-    // infinito solo hacia la derecha — no hacia atrás, no las dos puntas.
-    // safeLineTime: ver el comentario grande junto a su definición — d.p1.time
-    // puede no ser un horario de vela real de ESTE panel (p.ej. dibujado en
-    // M5, visto en D), y crear una serie del chart con ese horario crudo
+    // Extiende hacia cada lado según d.extLeft/d.extRight (igual que
+    // trendline/rect) — por default ambos quedan prendidos al crearla (ver
+    // refreshToolDefaultsFor), así que una Horizontal Line nueva ya nace
+    // "infinita" en los dos sentidos, como en TradingView; destildando
+    // alguno de los dos queda como un rayo de un solo lado. safeLineTime:
+    // ver el comentario grande junto a su definición — d.p1.time puede no
+    // ser un horario de vela real de ESTE panel (p.ej. dibujado en M5,
+    // visto en D), y crear una serie del chart con ese horario crudo
     // insertaba un punto nuevo en el eje de tiempo compartido, corriendo
     // TODO el gráfico un lugar — cada vez que esta serie se recreaba (p.ej.
     // al cambiar el color) se insertaba de nuevo, así que se notaba como un
     // corrimiento acumulativo en cada cambio.
-    mkLine([{time:safeLineTime(d.p1.time), value:d.p1.price},{time:tFuture, value:d.p1.price}], { lastValue: d.showPriceLabel !== false });
+    let t1 = safeLineTime(d.p1.time), t2 = t1 + barInterval;
+    if (d.extLeft)  t1 = tPast;
+    if (d.extRight) t2 = tFuture;
+    mkLine([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}], { lastValue: d.showPriceLabel !== false });
 
   } else if (d.type === 'trendline') {
     const rawT1  = d.p1.time;
@@ -12506,9 +12527,16 @@ function renderSeries(timeframe){
   const candles=window._lastCandles;
   const last=candles[candles.length-1];
   candleSeries.setData(candles);
-  futureAxisSeries.setData(futureWhitespace(last.time, timeframe, 15));
-  // Mismo horario que el último punto de futureWhitespace (15 velas a
-  // futuro) pero CON valor — ver el comentario junto a su creación.
+  // El whitespace de verdad (sin valor) sí se carga hasta DRAW_EXTEND_BARS
+  // para que una línea extendida pueda resolver coordenada ahí — pero el
+  // ANCLA (el único punto CON valor, más abajo) se queda chica, en 15 fijo:
+  // scrollToRealTime() usa el punto real más lejano para decidir el rango
+  // visible por default, así que si el ancla también se corriera a
+  // DRAW_EXTEND_BARS (300), la vista inicial/al recargar quedaba mostrando
+  // esa franja vacía bien lejos en vez del chart real (probado a mano:
+  // pantalla en blanco, eje de precio en 0). 15 alcanza para lo que el
+  // ancla necesita (reservar el eje para que no se achique solo).
+  futureAxisSeries.setData(futureWhitespace(last.time, timeframe, DRAW_EXTEND_BARS));
   const _barStep = candles.length>1 ? (candles[candles.length-1].time-candles[candles.length-2].time) : 3600;
   futureAnchorSeries.setData([{ time: last.time + _barStep*15, value: last.close }]);
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
