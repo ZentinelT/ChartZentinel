@@ -5112,6 +5112,39 @@ function redrawDrawing(d) {
   highlightSelectedSvg(d.id);
 }
 
+// Reposiciona TODOS los dibujos contra window._lastCandles actual — hace
+// falta no solo al cambiar de símbolo/TF (loadChart), sino también cada
+// vez que se completa una carga de historial en SEGUNDO PLANO
+// (ensureWeeklyHistoryForWatchtower/loadMoreHistory): esas solo llaman a
+// renderSeries() para repintar las velas, nunca tocan drawings[]. Si un
+// dibujo se creó cuando todavía había MENOS historial cargado que su
+// horario real (p.ej. recién abierto el TF, antes de que termine de
+// completarse el historial semanal), safeLineTime() lo "clampeaba" al
+// candle más viejo disponible EN ESE MOMENTO — y como nada volvía a
+// llamar a updateDrawingGeometry() después, quedaba pegado ahí para
+// siempre (bug reportado: bordes de un rect "proyectados" lejos de donde
+// corresponde tras cambiar de TF, que solo se corregía reconstruyendo el
+// dibujo a mano, p.ej. apagando/prendiendo Show border).
+function refreshAllDrawingsGeometry() {
+  drawings.forEach(d => {
+    // updateDrawingGeometry() primero (reposiciona las series YA
+    // existentes con setData) en vez de sacarlas y reconstruirlas
+    // siempre — mismo criterio que onDtbExtend/el resto de las ediciones
+    // de dibujos. Antes esto SIEMPRE hacía remove+rebuild en cada cambio
+    // de símbolo/TF; si chart.removeSeries(s) fallaba acá (el catch lo
+    // tragaba sin avisar), esa serie vieja quedaba pegada para siempre en
+    // el chart, sin ningún d.series que la referencie — un "fantasma"
+    // (reportado por el usuario: una línea de más encima del dibujo al
+    // cambiar de TF) que solo se notaba en los timeframes con rango
+    // visible suficiente para llegar a su horario viejo.
+    if (!updateDrawingGeometry(d)) {
+      d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
+      d.series=[];
+      buildDrawingOnChart(d);
+    }
+  });
+}
+
 // Mientras se arrastra un dibujo (cuerpo o manija), NO lo reconstruimos
 // desde cero en cada mousemove — eso implica sacar y volver a meter sus
 // series del chart muchas veces por segundo, y ese ir-y-venir hace que el
@@ -12793,6 +12826,7 @@ async function goToDateTime(dateStr, timeStr){
       if (!json.error && Array.isArray(json.bars) && json.bars.length) {
         window._lastCandles = json.bars;
         renderSeries(STATE.timeframe);
+        refreshAllDrawingsGeometry(); // ver su comentario
         candles = window._lastCandles;
       }
     } catch(e) {
@@ -13050,6 +13084,11 @@ async function loadMoreHistory(){
     // hacia atrás y se disparaba esta carga. Con setData() ya haciendo el
     // trabajo, no hace falta (ni hay que) tocar el rango acá.
     renderSeries(STATE.timeframe);
+    // Ver el comentario de refreshAllDrawingsGeometry: con más historial
+    // recién cargado, un dibujo cuyo horario había quedado "clampeado" al
+    // candle más viejo disponible (porque todavía no existía este tramo)
+    // ahora sí puede resolverse bien.
+    refreshAllDrawingsGeometry();
   } catch(e) {
     // sin red/MT5 un instante: se reintenta solo la próxima vez que se scrollee
   } finally {
@@ -13182,6 +13221,8 @@ async function ensureWeeklyHistoryForWatchtower(justLoaded){
     // vivo en el borde derecho — sin ningún salto visible.
     const prevRange = chart.timeScale().getVisibleLogicalRange();
     renderSeries(STATE.timeframe);
+    // Ver el comentario de refreshAllDrawingsGeometry.
+    refreshAllDrawingsGeometry();
     if (prevRange) {
       chart.timeScale().setVisibleLogicalRange({ from: prevRange.from+totalAdded, to: prevRange.to+totalAdded });
     } else if (wasNearRealTime) {
@@ -13499,24 +13540,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // solo en los paneles CON indicadores activos.
     chart.applyOptions({ width:_cc.clientWidth, height:_cc.clientHeight });
 
-    drawings.forEach(d => {
-      // updateDrawingGeometry() primero (reposiciona las series YA
-      // existentes con setData) en vez de sacarlas y reconstruirlas
-      // siempre — mismo criterio que onDtbExtend/el resto de las
-      // ediciones de dibujos. Antes esto SIEMPRE hacía remove+rebuild en
-      // cada cambio de símbolo/TF; si chart.removeSeries(s) fallaba acá
-      // (el catch lo tragaba sin avisar), esa serie vieja quedaba pegada
-      // para siempre en el chart, sin ningún d.series que la referencie —
-      // un "fantasma" (reportado por el usuario: una línea de más
-      // encima del dibujo al cambiar de TF) que solo se notaba en los
-      // timeframes con rango visible suficiente para llegar a su
-      // horario viejo.
-      if (!updateDrawingGeometry(d)) {
-        d.series.forEach(s=>{try{chart.removeSeries(s);}catch(e){}});
-        d.series=[];
-        buildDrawingOnChart(d);
-      }
-    });
+    refreshAllDrawingsGeometry();
     if(selectedDrawingId)highlightSelectedSvg(selectedDrawingId);
 
     const last=candles[candles.length-1];
