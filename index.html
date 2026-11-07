@@ -8633,7 +8633,7 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Confirmed HTF-cross setups to keep visible</span>
         <input type="number" id="sn-max-htf-visibles" min="1" max="200" step="1" value="${sn.maxHtfVisibles}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🔎 Intra-HTF Sweeps</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Intra-HTF Sweeps</div>
       <label class="wt-set-row"><span>Detect sweeps of local swing pivots (not just prev HTF extreme)</span><input type="checkbox" id="sn-detect-intra" ${sn.detectIntraHtf?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Intra-HTF pivot strength (bars each side)</span>
@@ -8643,7 +8643,7 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Confirmed intra-HTF setups to keep visible</span>
         <input type="number" id="sn-max-intra-visibles" min="1" max="200" step="1" value="${sn.maxIntraVisibles}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🎯 Detection Filters</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Detection Filters</div>
       <label class="wt-set-row"><span>Require entry level inside active HTF FVG</span><input type="checkbox" id="sn-require-fvg" ${sn.requireHtfFvg?'checked':''}></label>
       <label class="wt-set-row"><span>&nbsp;&nbsp;· use M15 FVG</span><input type="checkbox" id="sn-req-fvg-m15" ${sn.reqFvgM15?'checked':''}></label>
       <label class="wt-set-row"><span>&nbsp;&nbsp;· use H4 FVG</span><input type="checkbox" id="sn-req-fvg-h4" ${sn.reqFvgH4?'checked':''}></label>
@@ -8655,21 +8655,21 @@ function openIndicatorSettings(name) {
           <option value="through_only" ${sn.fvgMinPenetration==='through_only'?'selected':''}>through_only</option>
         </select>
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · Display</div>
-      <label class="wt-set-row"><span>Hide filled 🟢 (bull)</span><input type="checkbox" id="sn-hide-filled-bull" ${sn.hideFilledBull?'checked':''}></label>
-      <label class="wt-set-row"><span>Hide filled 🔘 (bear)</span><input type="checkbox" id="sn-hide-filled-bear" ${sn.hideFilledBear?'checked':''}></label>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · M15</div>
-      <label class="wt-set-row"><span>Show M15 🟢</span><input type="checkbox" id="sn-show-m15-bull" ${sn.showM15Bull?'checked':''}></label>
-      <label class="wt-set-row"><span>Show M15 🔘</span><input type="checkbox" id="sn-show-m15-bear" ${sn.showM15Bear?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">FVG · Display</div>
+      <label class="wt-set-row"><span>Hide filled (bull)</span><input type="checkbox" id="sn-hide-filled-bull" ${sn.hideFilledBull?'checked':''}></label>
+      <label class="wt-set-row"><span>Hide filled (bear)</span><input type="checkbox" id="sn-hide-filled-bear" ${sn.hideFilledBear?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">FVG · M15</div>
+      <label class="wt-set-row"><span>Show M15 bull</span><input type="checkbox" id="sn-show-m15-bull" ${sn.showM15Bull?'checked':''}></label>
+      <label class="wt-set-row"><span>Show M15 bear</span><input type="checkbox" id="sn-show-m15-bear" ${sn.showM15Bear?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (how many to show)</span><input type="number" id="sn-m15-count" min="1" max="20" step="1" value="${sn.m15Count}" style="width:56px"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-m15-bull-color" value="${snParseRgba(sn.m15BullColor).hex}"><input type="number" id="sn-m15-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BullColor).transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-m15-bear-color" value="${snParseRgba(sn.m15BearColor).hex}"><input type="number" id="sn-m15-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BearColor).transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📊 FVG · H4</div>
-      <label class="wt-set-row"><span>Show H4 🟢</span><input type="checkbox" id="sn-show-h4-bull" ${sn.showH4Bull?'checked':''}></label>
-      <label class="wt-set-row"><span>Show H4 🔘</span><input type="checkbox" id="sn-show-h4-bear" ${sn.showH4Bear?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bull</span><input type="color" id="sn-m15-bull-color" value="${snParseRgba(sn.m15BullColor).hex}"><input type="number" id="sn-m15-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BullColor).transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bear</span><input type="color" id="sn-m15-bear-color" value="${snParseRgba(sn.m15BearColor).hex}"><input type="number" id="sn-m15-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.m15BearColor).transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">FVG · H4</div>
+      <label class="wt-set-row"><span>Show H4 bull</span><input type="checkbox" id="sn-show-h4-bull" ${sn.showH4Bull?'checked':''}></label>
+      <label class="wt-set-row"><span>Show H4 bear</span><input type="checkbox" id="sn-show-h4-bear" ${sn.showH4Bear?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (how many to show)</span><input type="number" id="sn-h4-count" min="1" max="20" step="1" value="${sn.h4Count}" style="width:56px"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🟢</span><input type="color" id="sn-h4-bull-color" value="${snParseRgba(sn.h4BullColor).hex}"><input type="number" id="sn-h4-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BullColor).transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color 🔘</span><input type="color" id="sn-h4-bear-color" value="${snParseRgba(sn.h4BearColor).hex}"><input type="number" id="sn-h4-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BearColor).transparency}" style="width:48px" title="Transparency %"></div>`;
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bull</span><input type="color" id="sn-h4-bull-color" value="${snParseRgba(sn.h4BullColor).hex}"><input type="number" id="sn-h4-bull-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BullColor).transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bear</span><input type="color" id="sn-h4-bear-color" value="${snParseRgba(sn.h4BearColor).hex}"><input type="number" id="sn-h4-bear-color-tr" min="0" max="100" step="1" value="${snParseRgba(sn.h4BearColor).transparency}" style="width:48px" title="Transparency %"></div>`;
   } else if (name === 'Sweeps') {
     const sw = STATE.sweeps;
     body.innerHTML = `
@@ -8768,7 +8768,7 @@ function openIndicatorSettings(name) {
     const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
     body.innerHTML = `
       <label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="sm-behind-candles" ${sm.behindCandles?'checked':''}></label>
-      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">⏱ Sesión Diaria</div>
+      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">Sesión Diaria</div>
       <label class="wt-set-row"><span>Mostrar niveles diarios</span><input type="checkbox" id="sm-show-daily" ${sm.showDaily!==false?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Apertura NY (hora:min)</span>
@@ -8783,7 +8783,7 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Setups a mostrar</span>
         <input type="number" id="sm-lookback" min="1" max="20" step="1" value="${sm.lookbackCount}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📅 Apertura Semanal</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Apertura Semanal</div>
       <label class="wt-set-row"><span>Mostrar niveles semanal</span><input type="checkbox" id="sm-show-weekly" ${sm.showWeekly?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Anclar en</span>
@@ -8809,7 +8809,7 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Semanas a mostrar</span>
         <input type="number" id="sm-w-lookback" min="1" max="8" step="1" value="${sm.wLookback}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">📆 Apertura Mensual</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Apertura Mensual</div>
       <label class="wt-set-row"><span>Mostrar niveles mensual</span><input type="checkbox" id="sm-show-monthly" ${sm.showMonthly?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Anclar en</span>
@@ -8835,7 +8835,7 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Meses a mostrar</span>
         <input type="number" id="sm-m-lookback" min="1" max="6" step="1" value="${sm.mLookback}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">〰 Líneas (diario)</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Líneas (diario)</div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Grosor / Estilo</span>
         <input type="number" id="sm-line-width" min="1" max="5" step="1" value="${sm.lineWidth}" style="width:48px">
@@ -8843,7 +8843,7 @@ function openIndicatorSettings(name) {
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-line-color" value="${lc.hex}"><input type="number" id="sm-line-tr" min="0" max="100" step="1" value="${lc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-mid-color" value="${mc.hex}"><input type="number" id="sm-mid-tr" min="0" max="100" step="1" value="${mc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">▭ Zonas</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Zonas</div>
       <label class="wt-set-row"><span>Mostrar niveles 0 / 1</span><input type="checkbox" id="sm-show-inner" ${sm.showInner?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-zone-color" value="${zc.hex}"><input type="number" id="sm-zone-tr" min="0" max="100" step="1" value="${zc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
@@ -8854,7 +8854,7 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Exterior (%)</span>
         <input type="number" id="sm-zone-size-outer" min="0" max="8" step="0.5" value="${sm.zoneSizeOuter}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">🏷 Etiquetas</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Etiquetas</div>
       <label class="wt-set-row"><span>Mostrar</span><input type="checkbox" id="sm-show-labels" ${sm.showLabels?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Lado</span>
