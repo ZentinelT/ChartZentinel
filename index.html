@@ -6739,12 +6739,93 @@ function initDrawingLayer() {
 
   let previewEl = null;
   let drawStart = null;
+  let measurePreviewEl = null;
 
   function syncSvgSize() { syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSvgSize).observe(container);
   syncSvgSize();
 
   function clearPreview() { if (previewEl) { previewEl.remove(); previewEl=null; } }
+  function clearMeasurePreview() { if (measurePreviewEl) { measurePreviewEl.remove(); measurePreviewEl=null; } }
+
+  // Medición de la herramienta Crosshair (arrastrar mide, como en TV): caja
+  // precio×tiempo entre el punto donde se apretó el mouse y la posición
+  // actual, con Δprecio/Δ% y cantidad de velas/duración. Se dibuja directo
+  // en el SVG de dibujo (window._drawingLayerSvg === svg) aunque ese SVG
+  // tenga pointer-events:none en modo 'cross' — pointer-events solo afecta
+  // qué recibe los clicks, no el renderizado, así que no choca con el
+  // crosshair nativo del chart (que sigue recibiendo el hover normal, ver
+  // updateSvgCapture). Es efímera: nunca se agrega a drawings[], se borra
+  // sola al soltar el mouse (ver mouseup de la sección de abajo).
+  function renderMeasureOverlay(start, cur) {
+    clearMeasurePreview();
+    if (cur.price === null || cur.time === null) return;
+    const up = cur.price >= start.price;
+    const mColor = up ? '#26a69a' : '#ef5350';
+    const rx = Math.min(start.x, cur.x), ry = Math.min(start.y, cur.y);
+    const rw = Math.abs(cur.x - start.x), rh = Math.abs(cur.y - start.y);
+
+    const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',rx); rect.setAttribute('y',ry); rect.setAttribute('width',rw); rect.setAttribute('height',rh);
+    rect.setAttribute('stroke', mColor); rect.setAttribute('stroke-width','1');
+    rect.setAttribute('fill', up ? 'rgba(38,166,154,0.15)' : 'rgba(239,83,80,0.15)');
+    group.appendChild(rect);
+
+    const diagLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+    diagLine.setAttribute('x1', start.x); diagLine.setAttribute('y1', start.y);
+    diagLine.setAttribute('x2', cur.x); diagLine.setAttribute('y2', cur.y);
+    diagLine.setAttribute('stroke', mColor); diagLine.setAttribute('stroke-width','1.5');
+    group.appendChild(diagLine);
+
+    [[start.x,start.y],[cur.x,cur.y]].forEach(([cx,cy]) => {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      dot.setAttribute('cx',cx); dot.setAttribute('cy',cy); dot.setAttribute('r','3');
+      dot.setAttribute('fill', mColor);
+      group.appendChild(dot);
+    });
+
+    const diff = cur.price - start.price;
+    const pct = start.price ? (diff/start.price*100) : 0;
+    const sign = diff >= 0 ? '+' : '';
+    const decimals = Math.abs(diff) < 1 ? 5 : Math.abs(diff) < 10 ? 4 : 2;
+    const candles = window._lastCandles || [];
+    const tMin = Math.min(start.time, cur.time), tMax = Math.max(start.time, cur.time);
+    const barsCount = candles.length ? candles.filter(c => c.time >= tMin && c.time <= tMax).length : 0;
+    const line1 = `${sign}${diff.toFixed(decimals)} (${sign}${pct.toFixed(2)}%)`;
+    const line2 = `${barsCount} velas · ${fmtMeasureDuration(cur.time - start.time)}`;
+
+    const labelW = Math.max(line1.length, line2.length) * 6.4 + 16;
+    const labelH = 34;
+    let labelX = Math.min(Math.max(rx + rw/2 - labelW/2, 4), container.clientWidth - labelW - 4);
+    let labelY = ry - labelH - 6;
+    if (labelY < 4) labelY = ry + rh + 6;
+
+    const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bg.setAttribute('x',labelX); bg.setAttribute('y',labelY);
+    bg.setAttribute('width',labelW); bg.setAttribute('height',labelH);
+    bg.setAttribute('rx','4');
+    bg.setAttribute('fill','rgba(10,10,12,0.92)');
+    bg.setAttribute('stroke',mColor); bg.setAttribute('stroke-width','1');
+    group.appendChild(bg);
+
+    const t1el = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t1el.setAttribute('x', labelX+8); t1el.setAttribute('y', labelY+15);
+    t1el.setAttribute('fill', mColor); t1el.setAttribute('font-size','11.5');
+    t1el.setAttribute('font-family','var(--font-mono)'); t1el.setAttribute('font-weight','700');
+    t1el.textContent = line1;
+    group.appendChild(t1el);
+
+    const t2el = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2el.setAttribute('x', labelX+8); t2el.setAttribute('y', labelY+28);
+    t2el.setAttribute('fill', '#c7c7cc'); t2el.setAttribute('font-size','10.5');
+    t2el.setAttribute('font-family','var(--font-mono)');
+    t2el.textContent = line2;
+    group.appendChild(t2el);
+
+    svg.appendChild(group); measurePreviewEl = group;
+  }
 
   function getCoords(e) {
     const rect = container.getBoundingClientRect();
@@ -6783,6 +6864,17 @@ function initDrawingLayer() {
     return { x, y, price, time };
   }
 
+  // Duración legible para la herramienta Crosshair/medición — "2d 4h",
+  // "3h 15m", "40m", "12s" — según el rango que entre más claro.
+  function fmtMeasureDuration(sec) {
+    sec = Math.abs(sec);
+    const d = Math.floor(sec/86400), h = Math.floor((sec%86400)/3600), m = Math.floor((sec%3600)/60);
+    if (d>0) return `${d}d ${h}h`;
+    if (h>0) return `${h}h ${m}m`;
+    if (m>0) return `${m}m`;
+    return `${Math.round(sec)}s`;
+  }
+
   // Shift mientras se dibuja una trend line: la fuerza a quedar perfectamente
   // horizontal o vertical (como en TV), según hacia qué lado se movió más.
   function shiftSnap(e, start, cur) {
@@ -6799,13 +6891,19 @@ function initDrawingLayer() {
   function updateSvgCapture() {
     const tool = STATE.activeTool;
     const isDrawTool = !['cursor','cross'].includes(tool);
+    // El SVG de dibujo se queda en pointer-events:none para 'cross' (a
+    // diferencia de una herramienta de dibujo real) — si no, taparía el
+    // hover normal del chart y el crosshair NATIVO de lightweight-charts
+    // (líneas punteadas + precio/hora en los ejes) dejaría de verse apenas
+    // se activa la herramienta. El arrastre para medir se captura aparte,
+    // en el mousedown/mousemove del `container` de más abajo (misma
+    // sección que selección/drag de dibujos), que si necesita bloquear el
+    // pan del chart mientras dura el arrastre.
     svg.style.pointerEvents = isDrawTool ? 'all' : 'none';
     svg.style.cursor = isDrawTool ? (tool==='text'?'text':'crosshair') : '';
-    // Crosshair: cursor fijo en cruz y SIN hover/drag de dibujos (ver el
-    // mousedown/mousemove de abajo, gateados en activeTool==='cursor') —
-    // sirve para medir/mirar el chart sin arriesgarse a mover algo sin
-    // querer. Con 'cursor' se deja vacío: el mousemove decide el cursor
-    // dinámicamente según lo que haya debajo (move/resize/pointer/etc).
+    // Crosshair: cursor fijo en cruz (el mousemove del container, en modo
+    // Cursor, lo pisa dinámicamente según lo que haya debajo — acá no hace
+    // falta, 'cross' no tiene esa lógica de hover).
     container.style.cursor = tool === 'cross' ? 'crosshair' : '';
   }
 
@@ -6928,12 +7026,20 @@ function initDrawingLayer() {
   // ── Selección + arrastre (mover cuerpo entero / estirar una punta) ──
   window._dragSession = null; // { kind:'handle'|'body', drawing, role, startPrice, startTime, origP1, origP2 }
   window._orderLineDragSession = null; // { line, price, kind, id, field } — ver hitTestOrderLine/commitOrderLineDrag
+  window._measureSession = null; // { x, y, price, time } del punto donde arrancó la medición con Crosshair
 
   // capture:true + stopPropagation: si no, el canvas del chart (debajo de
   // esta capa) también recibe el mismo mousedown/mousemove y arranca su
   // propio pan/zoom al mismo tiempo que arrastramos el dibujo — por eso
   // "el gráfico se movía solo" al mover una línea.
   container.addEventListener('mousedown', e => {
+    if (STATE.activeTool === 'cross') {
+      const p = getCoords(e);
+      if (p.price === null || p.time === null) return;
+      e.preventDefault(); e.stopPropagation();
+      window._measureSession = p;
+      return;
+    }
     if (STATE.activeTool !== 'cursor') return;
     const rect = container.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
@@ -6992,6 +7098,12 @@ function initDrawingLayer() {
   container.addEventListener('mousemove', e => {
     const rect = container.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (window._measureSession) {
+      e.preventDefault(); e.stopPropagation();
+      renderMeasureOverlay(window._measureSession, getCoords(e));
+      return;
+    }
 
     if (window._orderLineDragSession) {
       e.preventDefault(); e.stopPropagation();
@@ -7100,6 +7212,12 @@ function initDrawingLayer() {
   }
 
   window.addEventListener('mouseup', e => {
+    if (window._measureSession) {
+      e.preventDefault(); e.stopPropagation();
+      clearMeasurePreview();
+      window._measureSession = null;
+      return;
+    }
     if (window._orderLineDragSession) {
       e.preventDefault(); e.stopPropagation();
       commitOrderLineDrag(window._orderLineDragSession);
