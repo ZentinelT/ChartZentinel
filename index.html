@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zentinel Charts</title>
+<title>ChartZentinel</title>
+<link rel="icon" type="image/png" href="logo-unicorn.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Orbitron:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -13693,7 +13694,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
 
     document.getElementById('symbol-input').value=symbol;
     updateTfBarSymbol(symbol, timeframe);
-    document.title=`${symbol} · Zentinel`;
+    document.title=`ChartZentinel — ${symbol}`;
     setStatus('ok','● live');
     showOverlay(false);
 
