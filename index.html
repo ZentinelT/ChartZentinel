@@ -7610,6 +7610,35 @@ function initDrawingLayer() {
       toggleReplayPlay();
     }
   });
+
+  // Mantener apretado Cmd (Meta) en modo Cursor activa Crosshair/medir
+  // momentáneamente — como el Alt+drag de TradingView. Se restaura solo a
+  // Cursor al soltar la tecla; si se soltaba con el mouse todavía apretado
+  // (midiendo), se corta la medición ahí mismo, igual que un mouseup normal.
+  // No usa el setTool() de siempre (que además destaca el botón de la
+  // toolbar y deselecciona el dibujo activo) — es un cambio liviano de
+  // STATE.activeTool nada más, para no perder la selección de golpe.
+  let _tempMeasureFromCmd = false;
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Meta' || e.repeat) return;
+    const tag = document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) return;
+    if (STATE.activeTool !== 'cursor' || window._dragSession || window._orderLineDragSession) return;
+    _tempMeasureFromCmd = true;
+    STATE.activeTool = 'cross';
+    updateSvgCapture();
+  });
+  function _endTempMeasureFromCmd() {
+    if (!_tempMeasureFromCmd) return;
+    _tempMeasureFromCmd = false;
+    if (window._measureSession) { clearMeasurePreview(); window._measureSession = null; }
+    if (STATE.activeTool === 'cross') { STATE.activeTool = 'cursor'; updateSvgCapture(); }
+  }
+  document.addEventListener('keyup', e => { if (e.key === 'Meta') _endTempMeasureFromCmd(); });
+  // Cmd+Tab (u otro atajo que se lleve el foco de la página) a veces nunca
+  // dispara el keyup de Meta — sin esto, Crosshair se quedaba pegado hasta
+  // el próximo click en la toolbar.
+  window.addEventListener('blur', _endTempMeasureFromCmd);
 }
 
 // ══════════════════════════════════════════════════════════
