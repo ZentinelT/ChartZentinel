@@ -6801,6 +6801,12 @@ function initDrawingLayer() {
     const isDrawTool = !['cursor','cross'].includes(tool);
     svg.style.pointerEvents = isDrawTool ? 'all' : 'none';
     svg.style.cursor = isDrawTool ? (tool==='text'?'text':'crosshair') : '';
+    // Crosshair: cursor fijo en cruz y SIN hover/drag de dibujos (ver el
+    // mousedown/mousemove de abajo, gateados en activeTool==='cursor') —
+    // sirve para medir/mirar el chart sin arriesgarse a mover algo sin
+    // querer. Con 'cursor' se deja vacío: el mousemove decide el cursor
+    // dinámicamente según lo que haya debajo (move/resize/pointer/etc).
+    container.style.cursor = tool === 'cross' ? 'crosshair' : '';
   }
 
   const _origSetTool = window.setTool;
