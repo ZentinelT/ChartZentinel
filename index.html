@@ -1932,6 +1932,22 @@
     <option value="1">- - - Dashed</option>
     <option value="2">··· Dotted</option>
   </select>
+  <select class="dtb-select" id="dtb-text-size" title="Font size" onchange="onDtbTextSizeChange(this.value)" style="display:none">
+    <option value="10">10px</option>
+    <option value="12">12px</option>
+    <option value="14">14px</option>
+    <option value="16">16px</option>
+    <option value="18">18px</option>
+    <option value="20">20px</option>
+    <option value="24">24px</option>
+    <option value="28">28px</option>
+    <option value="32">32px</option>
+  </select>
+  <div class="dtb-color-wrap" id="dtb-text-bg-wrap" title="Background color" style="display:none">
+    <div class="dtb-color-swatch" id="dtb-text-bg-swatch">
+      <input type="color" id="dtb-text-bg-color" oninput="onDtbTextBgChange(this.value)">
+    </div>
+  </div>
   <div class="dtb-sep"></div>
   <button class="dtb-btn" id="dtb-levels" title="Fibonacci Levels" onclick="openFibLevelsModal()" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -4442,6 +4458,7 @@ function refreshToolDefaultsFor(type){
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
     upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
     pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined, barOpacity:undefined,
+    fontSize: type==='text' ? 14 : undefined, bgColor: type==='text' ? '#0a0a0c' : undefined,
   }, TOOL_STYLE_STORE[type] || {});
 }
 // Llamar DESPUÉS de aplicarle un cambio de apariencia a un dibujo ya
@@ -4496,6 +4513,11 @@ function captureDrawingStyle(d){
     // derecho (lastValueVisible) — antes no existía como campo, siempre
     // quedaba prendido sin forma de apagarlo ni de guardarlo en un template.
     return Object.assign(base, { color: d.color, showPriceLabel: d.showPriceLabel !== false });
+  }
+  if (d.type === 'text') {
+    // width/style (heredados de `base`) no tienen ningún uso acá — font
+    // size y color de fondo son los campos propios de texto.
+    return Object.assign(base, { color: d.color, fontSize: d.fontSize || 14, bgColor: d.bgColor || '#0a0a0c' });
   }
   return Object.assign(base, { color: d.color });
 }
@@ -4612,13 +4634,16 @@ window.applyExternalDrawings = function(list){
       const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined };
       drawings.push(d);
       if (d.type === 'text') {
+        const fontSize = d.fontSize || 14, bgColor = d.bgColor || '#0a0a0c';
         const label = document.createElement('div');
         label.contentEditable = 'false';
         label.textContent = data.text || '';
-        label.style.cssText = `position:absolute;color:${d.color};font-family:var(--font-mono);font-size:${11+d.width}px;pointer-events:none;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;outline:1px solid ${d.color}88;min-width:10px;`;
+        label.style.cssText = `position:absolute;color:${d.color};font-family:var(--font-mono);font-size:${fontSize}px;pointer-events:none;z-index:5;white-space:nowrap;background:${bgColor}b3;padding:1px 4px;border-radius:3px;outline:1px solid ${d.color}88;min-width:10px;`;
         document.getElementById('chart-container').appendChild(label);
         d.label = label;
+        label.addEventListener('keydown', e => { if (label.isContentEditable && e.key==='Enter') { e.preventDefault(); label.blur(); } });
         syncTextLabelPos(d);
+        applyDrawingZOrder(d);
       } else {
         buildDrawingOnChart(d);
       }
@@ -4728,8 +4753,19 @@ function selectDrawing(id) {
     document.getElementById('dtb-color').value = d.color;
     document.getElementById('dtb-color-swatch').style.background = d.color;
   }
+  const isText = d.type === 'text';
+  document.getElementById('dtb-width').style.display = isText ? 'none' : '';
+  document.getElementById('dtb-style').style.display = isText ? 'none' : '';
+  document.getElementById('dtb-text-size').style.display = isText ? '' : 'none';
+  document.getElementById('dtb-text-bg-wrap').style.display = isText ? '' : 'none';
   document.getElementById('dtb-width').value = d.width;
   document.getElementById('dtb-style').value = d.style;
+  if (isText) {
+    document.getElementById('dtb-text-size').value = d.fontSize || 14;
+    const bg = d.bgColor || '#0a0a0c';
+    document.getElementById('dtb-text-bg-color').value = bg;
+    document.getElementById('dtb-text-bg-swatch').style.background = bg;
+  }
   document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
   document.getElementById('dtb-fib-label-mode').style.display = d.type==='fib' ? '' : 'none';
   if (d.type === 'fib') document.getElementById('dtb-fib-label-mode').value = d.fibLabelMode || 'percent';
@@ -4749,7 +4785,6 @@ function selectDrawing(id) {
   document.getElementById('dtb-pos-labels').style.display = isPosition ? '' : 'none';
   document.getElementById('dtb-pos-labels').classList.toggle('active', d.showLabels !== false);
   document.getElementById('dtb-lock').classList.toggle('active', !!d.locked);
-  document.getElementById('dtb-send-back').style.display = d.type === 'text' ? 'none' : '';
   document.getElementById('dtb-send-back').classList.toggle('active', !!d.sendToBack);
   document.getElementById('dtb-confirm-trade').style.display = (isPosition && !d.tradeId) ? '' : 'none';
   document.getElementById('dtb-close-trade').style.display = (isPosition && d.tradeId) ? '' : 'none';
@@ -4842,13 +4877,15 @@ function restyleDrawingAppearance(d) {
     // posicionado encima) — por eso el color/tamaño quedaban PEGADOS al
     // valor con el que se creó el cartel: cambiar el swatch o aplicar un
     // template sobre un texto ya puesto no hacía nada en pantalla, acá era
-    // donde faltaba el caso. "width" se reusa como tamaño de fuente (mismo
-    // criterio que la creación del cartel, ver el handler de 'text' en el
-    // mousedown del canvas de dibujo).
+    // donde faltaba el caso. d.fontSize/d.bgColor (no width/style, que acá
+    // no tienen sentido — ver dtb-text-size/dtb-text-bg-wrap) son propios
+    // de 'text', con su propio default si el dibujo viene de antes de que
+    // existieran estos campos.
     if (d.label) {
       d.label.style.color = C;
       d.label.style.outlineColor = C + '88';
-      d.label.style.fontSize = (11 + lw) + 'px';
+      d.label.style.fontSize = (d.fontSize || 14) + 'px';
+      d.label.style.background = (d.bgColor || '#0a0a0c') + 'b3';
     }
   } else {
     d.series.forEach(s => { try { s.applyOptions({ color: C, lineWidth: lw, lineStyle: ls }); } catch(e){} });
@@ -4862,6 +4899,15 @@ function onDtbWidthChange(val) {
 function onDtbStyleChange(val) {
   if (!getSelected()) { rememberToolStyleField(STATE.activeTool, 'style', parseInt(val)); return; }
   applyStyleToSelected({ style: parseInt(val) });
+}
+function onDtbTextSizeChange(val) {
+  if (!getSelected()) { rememberToolStyleField('text', 'fontSize', parseInt(val)); return; }
+  applyStyleToSelected({ fontSize: parseInt(val) });
+}
+function onDtbTextBgChange(val) {
+  document.getElementById('dtb-text-bg-swatch').style.background = val;
+  if (!getSelected()) { rememberToolStyleField('text', 'bgColor', val); return; }
+  applyStyleToSelected({ bgColor: val });
 }
 function onDtbExtend(dir) {
   const d = getSelected(); if (!d) return;
@@ -5264,6 +5310,43 @@ function updateDrawingGeometry(d) {
 
   if (ok) { applyDrawingZOrder(d); highlightSelectedSvg(d.id); }
   return ok;
+}
+
+// Entra/sale de edición de un cartel de texto — reusado tanto al crearlo
+// (mousedown con la herramienta Text armada) como al reabrirlo con un
+// doble click (ver el mousedown del container, hitTest de 'text' con
+// detección de doble click). Antes esto vivía inline en la creación nomás
+// — una vez que el blur lo "cerraba" (contentEditable=false,
+// pointerEvents=none) no había manera de volver a abrirlo: el bug
+// reportado, "escribo algo... no se puede volver a editar".
+function startTextEdit(d) {
+  if (!d || !(d.label instanceof Element)) return;
+  const label = d.label;
+  label.contentEditable = 'true';
+  label.style.pointerEvents = 'auto';
+  label.style.cursor = 'text';
+  label.style.outline = `1px solid ${d.color}88`;
+  label.focus();
+  // Selecciona todo el texto existente — como abrir cualquier campo de
+  // texto para editarlo de nuevo, no hay que ir a borrar a mano.
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch(e){}
+  label.addEventListener('blur', () => commitTextEdit(d), { once:true });
+}
+function commitTextEdit(d) {
+  if (!d || !(d.label instanceof Element)) return;
+  const label = d.label;
+  label.contentEditable = 'false';
+  label.style.pointerEvents = 'none';
+  label.style.outline = 'none';
+  label.style.cursor = '';
+  if (!label.textContent.trim()) { removeDrawingById(d.id); deselectDrawing(); }
+  else markDrawingsDirty();
 }
 
 function removeDrawingById(id) {
@@ -6379,6 +6462,7 @@ class ZentinelBehindDrawingsPrimitive {
               if (!d.sendToBack) return;
               drawBehindDrawingSeries(ctx, d);
               drawBehindDrawingSvgParts(ctx, d);
+              drawBehindDrawingText(ctx, d);
             });
             if (STATE.statMap && STATE.statMap.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._statMapSvg);
@@ -6517,6 +6601,33 @@ function drawBehindDrawingSvgParts(ctx, d) {
     ctx.restore();
   }
 }
+// El cartel de la herramienta Text, repintado a mano en el canvas cuando
+// d.sendToBack está activo (ver applyDrawingZOrder, que oculta el <div>
+// real con visibility:hidden). Lee left/top/ancho/alto directo del <div>
+// (layout calculado por el browser, offsetWidth/Height siguen funcionando
+// aunque esté visibility:hidden) en vez de recalcular nada a mano.
+function drawBehindDrawingText(ctx, d) {
+  if (d.type !== 'text' || !(d.label instanceof Element)) return;
+  const text = d.label.textContent;
+  if (!text) return;
+  const x = parseFloat(d.label.style.left) || 0;
+  const y = parseFloat(d.label.style.top) || 0;
+  const w = d.label.offsetWidth, h = d.label.offsetHeight;
+  if (!(w > 0) || !(h > 0)) return;
+  const fontSize = d.fontSize || 14;
+  const bg = (d.bgColor || '#0a0a0c') + 'b3';
+  ctx.save();
+  ctx.fillStyle = bg;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, 3); ctx.fill(); }
+  else ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = d.color;
+  // canvas no resuelve custom properties CSS (var(--font-mono)) en
+  // ctx.font — hace falta el nombre real de la fuente.
+  ctx.font = `${fontSize}px 'DM Mono', monospace`;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + 4, y + h/2 + 1);
+  ctx.restore();
+}
 // Visibilidad "de fondo" de cada serie de un dibujo, SIN contar
 // d.sendToBack (esa parte la decide applyDrawingZOrder) — mismos flags que
 // ya usa buildDrawingOnChart/applyVpLevelLines para decidir qué serie
@@ -6542,6 +6653,14 @@ function applyDrawingZOrder(d) {
   [d.fillEl, d.vLineEl, d.profitFillEl, d.lossFillEl].forEach(el => {
     if (el instanceof Element) el.style.visibility = back ? 'hidden' : '';
   });
+  // El cartel de texto, a diferencia del resto (que son series del chart o
+  // <rect>/<line> SVG), es un <div> HTML normal — mismo truco: se oculta
+  // con visibility:hidden (nunca display:none, eso lo pisarían las
+  // funciones sync* normales) y drawBehindDrawingText() dentro del
+  // primitive lo repinta a mano en el canvas, DETRÁS de las velas.
+  if (d.type === 'text' && d.label instanceof Element) {
+    d.label.style.visibility = back ? 'hidden' : '';
+  }
   if (Array.isArray(d.vpBarEls)) {
     d.vpBarEls.forEach(p => {
       p.upEl.style.visibility = back ? 'hidden' : '';
@@ -7205,6 +7324,7 @@ function initDrawingLayer() {
   window._dragSession = null; // { kind:'handle'|'body', drawing, role, startPrice, startTime, origP1, origP2 }
   window._orderLineDragSession = null; // { line, price, kind, id, field } — ver hitTestOrderLine/commitOrderLineDrag
   window._measureSession = null; // { x, y, price, time } del punto donde arrancó la medición con Crosshair
+  let _lastTextClickId = null, _lastTextClickTime = 0; // doble click a mano sobre un cartel de texto — ver más abajo
 
   // capture:true + stopPropagation: si no, el canvas del chart (debajo de
   // esta capa) también recibe el mismo mousedown/mousemove y arranca su
@@ -7258,6 +7378,23 @@ function initDrawingLayer() {
     }
     if (hit) {
       e.preventDefault(); e.stopPropagation();
+      // Doble click sobre un cartel de texto YA puesto: reabrirlo para
+      // editar, en vez de arrancar un drag — el label vive con
+      // pointer-events:none mientras no se edita (así el click/drag normal
+      // de este mismo handler lo agarra como "cuerpo" de un dibujo más),
+      // así que un dblclick nativo sobre el <div> nunca llega a dispararse
+      // solo; se detecta acá, a mano, comparando contra el último click.
+      if (hit.type === 'text') {
+        const now = Date.now();
+        const isDblClick = _lastTextClickId === hit.id && (now - _lastTextClickTime) < 400;
+        _lastTextClickId = hit.id; _lastTextClickTime = now;
+        if (isDblClick) {
+          _lastTextClickId = null;
+          selectDrawing(hit.id);
+          startTextEdit(hit);
+          return;
+        }
+      }
       selectDrawing(hit.id);
       _pendingDragUndoSnapshot = serializeDrawings(); // ídem
       const { price, time } = getCoords(e);
@@ -7525,29 +7662,24 @@ function initDrawingLayer() {
 
     if (tool === 'text') {
       // Como en TV: se escribe directo sobre el chart, no un prompt() nativo.
+      const fontSize = toolDefaults.fontSize || 14;
+      const bgColor = toolDefaults.bgColor || '#0a0a0c';
       const label = document.createElement('div');
-      label.contentEditable = 'true';
       label.dataset.placeholder = 'Add text';
-      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolDefaults.color};font-family:var(--font-mono);font-size:${11+toolDefaults.width}px;pointer-events:auto;z-index:5;white-space:nowrap;background:rgba(10,10,12,.7);padding:1px 4px;border-radius:3px;outline:1px solid ${toolDefaults.color}88;min-width:10px;cursor:text;`;
+      label.style.cssText = `position:absolute;left:${x+6}px;top:${y-10}px;color:${toolDefaults.color};font-family:var(--font-mono);font-size:${fontSize}px;pointer-events:none;z-index:5;white-space:nowrap;background:${bgColor}b3;padding:1px 4px;border-radius:3px;outline:1px solid ${toolDefaults.color}88;min-width:10px;cursor:text;`;
       container.appendChild(label);
 
-      const d = { id:genId(), type:'text', series:[], svgEls:[], label, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price,time}, p2:{price,time} };
+      const d = { id:genId(), type:'text', series:[], svgEls:[], label, locked:false, color:toolDefaults.color, fontSize, bgColor, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price,time}, p2:{price,time} };
       captureUndoSnapshot();
       drawings.push(d);
       selectDrawing(d.id);
       backToCursor();
 
-      label.focus();
-      const commitText = () => {
-        label.contentEditable = 'false';
-        label.style.pointerEvents = 'none';
-        label.style.outline = 'none';
-        label.style.cursor = '';
-        if (!label.textContent.trim()) { removeDrawingById(d.id); deselectDrawing(); }
-        else markDrawingsDirty();
-      };
-      label.addEventListener('blur', commitText, { once:true });
-      label.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); label.blur(); } });
+      // Enter solo intercepta mientras se está editando (isContentEditable)
+      // — el listener queda puesto para siempre, no hace falta reengancharlo
+      // cada vez que se reabre para editar (ver startTextEdit/commitTextEdit).
+      label.addEventListener('keydown', e => { if (label.isContentEditable && e.key==='Enter') { e.preventDefault(); label.blur(); } });
+      startTextEdit(d);
       return;
     }
 
