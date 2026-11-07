@@ -11482,6 +11482,17 @@ async function changeReplayTimeframe(newTf){
     for (let i=0; i<candles.length; i++){ if (candles[i].time <= cutTime) idx = i; else break; }
     window._lastCandles = candles;
     startReplay(idx);
+    // Ver el comentario grande de refreshAllDrawingsGeometry(): cualquier
+    // dibujo ya puesto (hline/trendline/rect/fib/posición) tenía sus
+    // series armadas con safeLineTime() contra el array de velas VIEJO —
+    // cambiar de TF en medio de un replay reemplaza window._lastCandles
+    // por uno completamente distinto (otra escala, otro recorte) sin que
+    // nada vuelva a recalcular esas series. Para dibujos con varios puntos
+    // por serie (rect, fib, long/short) eso puede terminar mandando un
+    // punto "para atrás" relativo al nuevo horario — lightweight-charts
+    // exige orden ascendente estricto y ante eso rompe el chart ENTERO
+    // (bug reportado: "alternar TF en replay hace desaparecer velas").
+    refreshAllDrawingsGeometry();
     window._replay.speedMs = speedMs;
     // setActiveTF (arriba) solo resalta el botón del TF-bar — sin esto el
     // título del panel ("NAS100.fs · 5m") se quedaba pegado al TF viejo
