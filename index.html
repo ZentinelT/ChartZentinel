@@ -4594,6 +4594,7 @@ function serializeDrawings(){
       fillEl:undefined, profitFillEl:undefined, lossFillEl:undefined,
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
+      extSvgEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -4850,6 +4851,7 @@ function restyleDrawingAppearance(d) {
     }
   } else {
     d.series.forEach(s => { try { s.applyOptions({ color: C, lineWidth: lw, lineStyle: ls }); } catch(e){} });
+    if (d.type === 'hline' || d.type === 'trendline') syncExtendedLineSvg(d);
   }
 }
 function onDtbWidthChange(val) {
@@ -5134,20 +5136,27 @@ function updateDrawingGeometry(d) {
   let ok = false;
 
   if (d.type === 'hline' && d.series.length === 1) {
-    let t1 = safeLineTime(d.p1.time), t2 = t1 + barInterval;
-    if (d.extLeft)  t1 = tPast;
-    if (d.extRight) t2 = tFuture;
+    // La serie real del chart SIEMPRE queda cortita (un segmento mínimo,
+    // sin extender) — la extensión de verdad la dibuja syncExtendedLineSvg
+    // como overlay SVG en coordenadas de pantalla, recalculado en cada
+    // pan/zoom (ver syncOverlayPositions). Antes esto estiraba el punto de
+    // la serie hasta tFuture/tPast: funcionaba pero quedaba atado al
+    // whitespace cargado (se cortaba al zoomear/scrollear lo suficiente) y
+    // un presupuesto más grande rompía la vista por default (ver
+    // DRAW_EXTEND_BARS) — el overlay SVG no tiene ninguna de esas
+    // limitaciones, llega siempre hasta el borde real del panel.
+    const t1 = safeLineTime(d.p1.time), t2 = t1 + barInterval;
     d.series[0].setData([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}]);
+    syncExtendedLineSvg(d);
     ok = true;
 
   } else if (d.type === 'trendline' && d.series.length === 1) {
-    const rawT1=d.p1.time, rawT2=d.p2.time, rawP1=d.p1.price, rawP2=d.p2.price;
-    const slope = (rawT2 !== rawT1) ? (rawP2 - rawP1) / (rawT2 - rawT1) : 0;
-    let t1=safeLineTime(rawT1), t2=safeLineTime(rawT2), p1=rawP1, p2=rawP2;
+    // Mismo criterio que hline arriba: la serie real queda en el segmento
+    // p1-p2 sin extender, la extensión es el overlay SVG.
+    let t1=safeLineTime(d.p1.time), t2=safeLineTime(d.p2.time), p1=d.p1.price, p2=d.p2.price;
     if (t1 === t2) t2 = t1 + barInterval;
-    if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1); }
-    if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
     d.series[0].setData([{time:t1,value:p1},{time:t2,value:p2}]);
+    syncExtendedLineSvg(d);
     ok = true;
 
   } else if (d.type === 'rect' && d.series.length === 4) {
@@ -5225,6 +5234,7 @@ function removeDrawingById(id) {
   const d = drawings[idx];
   d.series.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
   d.svgEls.forEach(el => el.remove());
+  if (d.extSvgEl instanceof Element) d.extSvgEl.remove();
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
@@ -5556,6 +5566,65 @@ function clearDrawings() {
   deselectDrawing();
 }
 
+// Dibuja/actualiza la porción "extendida" de hline/trendline (más allá del
+// segmento real p1-p2, que vive como serie del chart) como una línea SVG
+// pura en coordenadas de PANTALLA — no de tiempo. Se recalcula en cada
+// pan/zoom (ver syncOverlayPositions) así que siempre llega hasta el borde
+// actual del panel, sin importar cuánto se haya zoomeado/scrolleado, y sin
+// tocar el eje de tiempo compartido del chart (que es justo lo que rompía
+// la vista por default cuando se probó estirar el punto real de la serie
+// en vez de esto — ver DRAW_EXTEND_BARS). Puramente visual: no participa
+// de isClickOnDrawing (el hit-test de hline ya cubre el ancho completo —
+// solo compara precio — y el de trendline, desde antes, solo contra el
+// segmento real).
+function syncExtendedLineSvg(d) {
+  const svg = window._drawingLayerSvg;
+  if (!svg || !candleSeries || !chart) return;
+  const extend = !!(d.extLeft || d.extRight);
+  if (!extend) { if (d.extSvgEl) d.extSvgEl.style.display = 'none'; return; }
+  const container = document.getElementById('chart-container');
+  if (!container) return;
+  const w = container.clientWidth;
+  let x1, y1, x2, y2;
+  if (d.type === 'hline') {
+    const y = candleSeries.priceToCoordinate(d.p1.price);
+    if (y === null) { if (d.extSvgEl) d.extSvgEl.style.display = 'none'; return; }
+    const xp = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
+    x1 = d.extLeft ? 0 : (xp ?? 0);
+    x2 = d.extRight ? w : (xp ?? w);
+    y1 = y; y2 = y;
+  } else if (d.type === 'trendline') {
+    const x1raw = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
+    const y1raw = candleSeries.priceToCoordinate(d.p1.price);
+    const x2raw = chart.timeScale().timeToCoordinate(safeLineTime(d.p2.time));
+    const y2raw = candleSeries.priceToCoordinate(d.p2.price);
+    if (x1raw===null||y1raw===null||x2raw===null||y2raw===null) { if (d.extSvgEl) d.extSvgEl.style.display = 'none'; return; }
+    x1=x1raw; y1=y1raw; x2=x2raw; y2=y2raw;
+    const dx = x2raw - x1raw;
+    if (Math.abs(dx) >= 0.5) {
+      const m = (y2raw - y1raw) / dx;
+      if (d.extLeft)  { x1 = 0; y1 = y1raw + m*(0 - x1raw); }
+      if (d.extRight) { x2 = w; y2 = y2raw + m*(w - x2raw); }
+    }
+  } else {
+    return;
+  }
+  if (!d.extSvgEl) {
+    d.extSvgEl = document.createElementNS('http://www.w3.org/2000/svg','line');
+    d.extSvgEl.style.pointerEvents = 'none';
+    svg.appendChild(d.extSvgEl);
+  }
+  const ls = lwStyle(d.style);
+  d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
+  d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
+  d.extSvgEl.setAttribute('stroke', d.color);
+  d.extSvgEl.setAttribute('stroke-width', d.width);
+  if (ls === 1) d.extSvgEl.setAttribute('stroke-dasharray', '6,4');
+  else if (ls === 2) d.extSvgEl.setAttribute('stroke-dasharray', '2,3');
+  else d.extSvgEl.removeAttribute('stroke-dasharray');
+  d.extSvgEl.style.display = '';
+}
+
 function buildDrawingOnChart(d) {
   const candles = window._lastCandles || [];
   if (!candles.length) return;
@@ -5599,40 +5668,27 @@ function buildDrawingOnChart(d) {
   }
 
   if (d.type === 'hline') {
-    // Extiende hacia cada lado según d.extLeft/d.extRight (igual que
-    // trendline/rect) — por default ambos quedan prendidos al crearla (ver
-    // refreshToolDefaultsFor), así que una Horizontal Line nueva ya nace
-    // "infinita" en los dos sentidos, como en TradingView; destildando
-    // alguno de los dos queda como un rayo de un solo lado. safeLineTime:
-    // ver el comentario grande junto a su definición — d.p1.time puede no
-    // ser un horario de vela real de ESTE panel (p.ej. dibujado en M5,
-    // visto en D), y crear una serie del chart con ese horario crudo
-    // insertaba un punto nuevo en el eje de tiempo compartido, corriendo
-    // TODO el gráfico un lugar — cada vez que esta serie se recreaba (p.ej.
-    // al cambiar el color) se insertaba de nuevo, así que se notaba como un
-    // corrimiento acumulativo en cada cambio.
-    let t1 = safeLineTime(d.p1.time), t2 = t1 + barInterval;
-    if (d.extLeft)  t1 = tPast;
-    if (d.extRight) t2 = tFuture;
+    // La serie real del chart queda SIEMPRE cortita (un segmento mínimo,
+    // sin extender) — solo sostiene el precio/label nativo. La extensión
+    // de verdad (según d.extLeft/d.extRight — por default ambos prendidos
+    // al crearla, ver refreshToolDefaultsFor) la dibuja syncExtendedLineSvg
+    // como overlay SVG en coordenadas de pantalla, recalculado en cada
+    // pan/zoom. Antes esto estiraba el punto de la serie hasta
+    // tFuture/tPast: se cortaba al zoomear/scrollear lo suficiente, y
+    // agrandar ese presupuesto rompía la vista por default (ver
+    // DRAW_EXTEND_BARS) — el overlay SVG no tiene esas limitaciones.
+    const t1 = safeLineTime(d.p1.time), t2 = t1 + barInterval;
     mkLine([{time:t1, value:d.p1.price},{time:t2, value:d.p1.price}], { lastValue: d.showPriceLabel !== false });
+    syncExtendedLineSvg(d);
 
   } else if (d.type === 'trendline') {
-    const rawT1  = d.p1.time;
-    const rawT2  = d.p2.time;
-    const rawP1  = d.p1.price;
-    const rawP2  = d.p2.price;
-    const slope  = (rawT2 !== rawT1) ? (rawP2 - rawP1) / (rawT2 - rawT1) : 0;
-
-    // safeLineTime sobre los horarios crudos (mismo motivo que hline) — las
-    // PRECIOS quedan tal cual (anclados al precio real), solo el horario se
-    // redondea al de una vela/whitespace real de este panel.
-    let t1 = safeLineTime(rawT1), t2 = safeLineTime(rawT2), p1 = rawP1, p2 = rawP2;
+    // Mismo criterio que hline arriba: la serie real queda en el segmento
+    // p1-p2 sin extender, la extensión es el overlay SVG.
+    let t1 = safeLineTime(d.p1.time), t2 = safeLineTime(d.p2.time), p1 = d.p1.price, p2 = d.p2.price;
     if (t1 === t2) t2 = t1 + barInterval; // los dos puntos cayeron en la misma vela de este TF
 
-    if (d.extLeft)  { t1 = tPast;   p1 = rawP1 + slope * (tPast - rawT1);   }
-    if (d.extRight) { t2 = tFuture; p2 = rawP2 + slope * (tFuture - rawT2); }
-
     mkLine([{time:t1,value:p1},{time:t2,value:p2}], { lastValue: d.showPriceLabel !== false });
+    syncExtendedLineSvg(d);
 
   } else if (d.type === 'rect') {
     const hi = Math.max(d.p1.price, d.p2.price);
@@ -6739,6 +6795,9 @@ function initChart() {
         syncFibLabels(d);
       } else if (d.type==='long' || d.type==='short') {
         syncPositionTool(d);
+      }
+      if (d.type==='hline' || d.type==='trendline') {
+        syncExtendedLineSvg(d);
       }
     });
     positionOrderPositionBadges();
