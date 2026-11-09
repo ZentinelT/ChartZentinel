@@ -1003,6 +1003,10 @@
      RSI/MACD "subpane" en lightweight-charts v4. */
   #rsi-pane-container { flex: none; height: 120px; position: relative; border-top: 1px solid var(--sep-color); }
   #rsi-pane-container.hidden { display: none; }
+  /* Franja invisible a caballo del borde superior (mitad adentro, mitad
+     afuera) para poder agarrar el borde sin tener que acertarle al pixel
+     exacto — mismo criterio que .grid-divider-row del modo grilla. */
+  #rsi-resize-handle { position: absolute; top: -3px; left: 0; right: 0; height: 7px; cursor: row-resize; z-index: 6; }
   #rsi-pane-label {
     position: absolute; top: 4px; left: 8px; z-index: 5;
     font-size: 11px; color: var(--text-dim); pointer-events: none;
@@ -1822,6 +1826,7 @@
       <div id="crosshair-info"></div>
     </div>
     <div id="rsi-pane-container" class="hidden">
+      <div id="rsi-resize-handle"></div>
       <div id="rsi-pane-label"></div>
     </div>
   </div>
@@ -9276,11 +9281,56 @@ function rsi(data, period){
 // 0-100 siempre fijo, igual que lo muestra cualquier plataforma.
 let rsiChart=null, rsiSeries=null, rsiObLine=null, rsiOsLine=null;
 let _rsiMainRangeHandler=null, _suppressRsiRangeSync=false, _rsiResizeObserver=null;
+const RSI_PANE_MIN_H = 60, RSI_PANE_MAX_H = 400;
+function getRsiPaneHeight(){ const h=Number(lsGet(lsKey('td_rsi_height'))); return Number.isFinite(h) && h>0 ? Math.max(RSI_PANE_MIN_H, Math.min(RSI_PANE_MAX_H, h)) : 120; }
+function saveRsiPaneHeight(h){ lsSet(lsKey('td_rsi_height'), String(h)); }
+
+// Arrastre de la franja de arriba del subpanel para agrandarlo/achicarlo —
+// mismo patrón (overlay fullscreen con cursor fijo + rAF para no aplicar
+// más de un resize por frame) que startDrag() de los divisores del modo
+// grilla, pero en un solo eje y con un alto en px en vez de fracciones.
+function initRsiResizeHandle(){
+  const handle = document.getElementById('rsi-resize-handle');
+  if (!handle || handle._wired) return;
+  handle._wired = true;
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const container = document.getElementById('rsi-pane-container');
+    const startY = e.clientY;
+    const startH = container.getBoundingClientRect().height;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:row-resize;';
+    document.body.appendChild(overlay);
+    let pendingH = null, rafId = null;
+    function applyPending(){
+      rafId = null;
+      container.style.height = pendingH + 'px';
+    }
+    function onMove(ev){
+      // Arrastrar hacia ARRIBA agranda el subpanel (el borde que se mueve
+      // es el de arriba) — de ahí el signo invertido.
+      const h = Math.max(RSI_PANE_MIN_H, Math.min(RSI_PANE_MAX_H, startH - (ev.clientY - startY)));
+      pendingH = h;
+      if (rafId === null) rafId = requestAnimationFrame(applyPending);
+    }
+    function onUp(){
+      overlay.removeEventListener('mousemove', onMove);
+      overlay.removeEventListener('mouseup', onUp);
+      overlay.remove();
+      if (rafId !== null) { cancelAnimationFrame(rafId); applyPending(); }
+      if (pendingH !== null) saveRsiPaneHeight(pendingH);
+    }
+    overlay.addEventListener('mousemove', onMove);
+    overlay.addEventListener('mouseup', onUp);
+  });
+}
 
 function createRsiChart(){
   if (rsiChart) return;
   const container = document.getElementById('rsi-pane-container');
+  container.style.height = getRsiPaneHeight() + 'px';
   container.classList.remove('hidden');
+  initRsiResizeHandle();
   rsiChart = LightweightCharts.createChart(container, {
     layout: { background: buildChartBackground(STATE.chartSettings), textColor:STATE.chartSettings.textColor, fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
     grid: { vertLines:{visible:false}, horzLines:{visible:false} },
