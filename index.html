@@ -989,7 +989,26 @@
      porque el disparador real era cualquier capa compuesta encima del
      canvas, no el blur puntualmente — aislar el canvas en su propia capa
      ataca la causa de raíz en vez de cambiar lo que hay arriba. */
-  #chart-container { flex: 1; position: relative; transform: translateZ(0); }
+  /* min-height:0 es necesario porque sin eso un flex item no se encoge
+     por debajo de la altura intrínseca de su contenido — el <canvas> del
+     chart (con su height en px seteado a mano por JS) fija ese piso, y
+     al agregar #rsi-pane-container como hermano (ver más abajo) eso
+     empujaba TODO fuera de la ventana en vez de cederle espacio. */
+  #chart-container { flex: 1; min-height: 0; position: relative; transform: translateZ(0); }
+
+  /* Subpanel del RSI: lightweight-charts@4.2.3 no tiene paneles múltiples
+     nativos (eso recién llegó en v5), así que es un SEGUNDO chart propio,
+     apilado debajo del principal, con su eje de tiempo sincronizado a mano
+     (ver rsiChart/syncRsiTimeScale) — mismo approach que cualquier
+     RSI/MACD "subpane" en lightweight-charts v4. */
+  #rsi-pane-container { flex: none; height: 120px; position: relative; border-top: 1px solid var(--sep-color); }
+  #rsi-pane-container.hidden { display: none; }
+  #rsi-pane-label {
+    position: absolute; top: 4px; left: 8px; z-index: 5;
+    font-size: 11px; color: var(--text-dim); pointer-events: none;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  #rsi-pane-label b { color: var(--text-primary); font-weight: 500; }
 
   #loading-overlay {
     position: absolute; inset: 0;
@@ -1801,6 +1820,9 @@
         <div class="loader-msg" id="loader-msg">Initializing…</div>
       </div>
       <div id="crosshair-info"></div>
+    </div>
+    <div id="rsi-pane-container" class="hidden">
+      <div id="rsi-pane-label"></div>
     </div>
   </div>
 
@@ -4373,6 +4395,7 @@ function getIndSettingsObject(name){
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
   if (name === 'Stat Map') return STATE.statMap;
+  if (name === 'RSI') return getRsiSettings();
   const def = INDICATOR_DEFS.find(d => d.name === name);
   return getIndicatorStyle(name, def || {});
 }
@@ -4393,6 +4416,11 @@ function setIndSettingsObject(name, obj){
   } else if (name === 'Stat Map') {
     STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, obj, { enabled: STATE.statMap.enabled });
     saveStatMapState(); renderStatMap();
+  } else if (name === 'RSI') {
+    STATE.indicatorStyles['RSI'] = obj;
+    saveIndicatorStylesState();
+    renderRsi();
+    applyRsiStyle();
   } else {
     STATE.indicatorStyles[name] = obj;
     saveIndicatorStylesState();
@@ -4400,6 +4428,16 @@ function setIndSettingsObject(name, obj){
   }
 }
 function getIndicatorStyle(name, def){ return Object.assign({ color: def.color, lineWidth: 1 }, STATE.indicatorStyles[name] || {}); }
+// RSI vive aparte de "overlays" (no es una línea sobre el precio, tiene su
+// propia escala 0-100 en un subpanel — ver renderRsi/createRsiChart más
+// abajo) pero su configuración se guarda igual que cualquier indicador
+// "simple" (en indicatorStyles), así entra gratis al save/restore de
+// Workspace y al sistema de templates sin duplicar nada de eso.
+const RSI_DEFAULTS = {
+  length: 14, color: '#c9a84c', lineWidth: 2,
+  obLevel: 70, osLevel: 30, obColor: '#e05a5a', osColor: '#3d8bfd',
+};
+function getRsiSettings(){ return Object.assign({}, RSI_DEFAULTS, STATE.indicatorStyles['RSI'] || {}); }
 function savePresetsState(){ lsSet('td_presets', JSON.stringify(STATE.presets)); }
 function saveWorkspacesState(){ lsSet('td_workspaces', JSON.stringify(STATE.workspaces)); }
 
@@ -8396,6 +8434,7 @@ const INDICATOR_DEFS = [
   { name:'SMA 20',  desc:'Simple MA 20',        color:'#60f0a0', calc:d=>sma(d,20)  },
   { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', calc:d=>sma(d,50)  },
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
+  { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
@@ -8428,6 +8467,7 @@ function applyIndicators() {
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
       else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); }
+      else if(name==='RSI'){ destroyRsiChart(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   });
@@ -8451,6 +8491,7 @@ function addIndicatorSeries(name) {
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map'){ STATE.statMap.enabled=true; saveStatMapState(); renderStatMap(); }
+    else if(name==='RSI'){ renderRsi(); }
     return;
   }
   if(overlays[name])return;
@@ -8865,6 +8906,32 @@ function openIndicatorSettings(name) {
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-label-color" value="${lblc.hex}"><input type="number" id="sm-label-tr" min="0" max="100" step="1" value="${lblc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media (diario)</span><input type="color" id="sm-mid-lbl-color" value="${mlblc.hex}"><input type="number" id="sm-mid-lbl-tr" min="0" max="100" step="1" value="${mlblc.transparency}" style="width:48px" title="Transparency %"></div>`;
+  } else if (name === 'RSI') {
+    const s = getRsiSettings();
+    body.innerHTML = `
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Length</span>
+        <input type="number" id="rsi-length" min="2" max="100" step="1" value="${s.length}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="rsi-color" value="${s.color}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Line thickness</span>
+        <input type="number" id="rsi-width" min="1" max="5" step="1" value="${s.lineWidth}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Levels</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Overbought</span>
+        <input type="number" id="rsi-ob-level" min="51" max="100" step="1" value="${s.obLevel}" style="width:56px">
+        <input type="color" id="rsi-ob-color" value="${s.obColor}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Oversold</span>
+        <input type="number" id="rsi-os-level" min="0" max="49" step="1" value="${s.osLevel}" style="width:56px">
+        <input type="color" id="rsi-os-color" value="${s.osColor}">
+      </div>`;
   } else {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     const style = getIndicatorStyle(name, def);
@@ -9096,6 +9163,19 @@ function applyIndSettingsForm() {
 
     saveStatMapState();
     renderStatMap();
+  } else if (_indSettingsTarget === 'RSI') {
+    const g = id => document.getElementById(id);
+    const obLevel = Math.max(51, Math.min(100, Number(g('rsi-ob-level').value)||70));
+    const osLevel = Math.max(0, Math.min(49, Number(g('rsi-os-level').value)||30));
+    const obj = {
+      length: Math.max(2, Math.min(100, Number(g('rsi-length').value)||14)),
+      color: g('rsi-color').value,
+      lineWidth: Math.max(1, Math.min(5, Number(g('rsi-width').value)||2)),
+      obLevel, osLevel,
+      obColor: g('rsi-ob-color').value,
+      osColor: g('rsi-os-color').value,
+    };
+    setIndSettingsObject('RSI', obj);
   } else {
     const colorEl=document.getElementById('ind-style-color');
     const widthEl=document.getElementById('ind-style-width');
@@ -9123,6 +9203,7 @@ function removeIndicator(name){
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); renderStatMap(); }
+    else if(name==='RSI'){ destroyRsiChart(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
@@ -9159,6 +9240,129 @@ function vwap(data){
     cumPV+=tp*(d.volume||1);cumV+=(d.volume||1);
     return{time:d.time,value:cumPV/cumV};
   });
+}
+// RSI de Wilder (el estándar, mismo que usa TradingView) — promedio de
+// ganancias/pérdidas suavizado exponencialmente (factor 1/period), no una
+// media simple de los últimos N cambios.
+function rsi(data, period){
+  if (data.length < period+1) return [];
+  const rsAt=(g,l)=> l===0 ? 100 : 100-100/(1+g/l);
+  let avgGain=0, avgLoss=0;
+  for(let i=1;i<=period;i++){
+    const change=data[i].close-data[i-1].close;
+    avgGain += change>0?change:0;
+    avgLoss += change<0?-change:0;
+  }
+  avgGain/=period; avgLoss/=period;
+  const out=[{time:data[period].time, value:rsAt(avgGain,avgLoss)}];
+  for(let i=period+1;i<data.length;i++){
+    const change=data[i].close-data[i-1].close;
+    const gain=change>0?change:0, loss=change<0?-change:0;
+    avgGain=(avgGain*(period-1)+gain)/period;
+    avgLoss=(avgLoss*(period-1)+loss)/period;
+    out.push({time:data[i].time, value:rsAt(avgGain,avgLoss)});
+  }
+  return out;
+}
+
+// ══════════════════════════════════════════════════════════
+//  RSI — subpanel propio (0-100), aparte del chart principal
+// ══════════════════════════════════════════════════════════
+// lightweight-charts@4.2.3 no tiene paneles múltiples nativos (eso llegó
+// recién en v5), así que esto es un SEGUNDO chart entero, apilado abajo en
+// #rsi-pane-container (ver su CSS) con el eje de tiempo sincronizado a
+// mano contra el chart principal — el approach estándar para un
+// RSI/MACD/Stochastic "subpane" en v4. autoscaleInfoProvider fuerza el eje
+// 0-100 siempre fijo, igual que lo muestra cualquier plataforma.
+let rsiChart=null, rsiSeries=null, rsiObLine=null, rsiOsLine=null;
+let _rsiMainRangeHandler=null, _suppressRsiRangeSync=false, _rsiResizeObserver=null;
+
+function createRsiChart(){
+  if (rsiChart) return;
+  const container = document.getElementById('rsi-pane-container');
+  container.classList.remove('hidden');
+  rsiChart = LightweightCharts.createChart(container, {
+    layout: { background: buildChartBackground(STATE.chartSettings), textColor:STATE.chartSettings.textColor, fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
+    grid: { vertLines:{visible:false}, horzLines:{visible:false} },
+    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, scaleMargins:{top:0.15,bottom:0.15} },
+    timeScale: { borderColor:STATE.chartSettings.axisColor, timeVisible:true, secondsVisible:false },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
+      horzLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
+    },
+    localization: { timeFormatter: fmtCrosshairTime },
+    watermark: { visible:false },
+  });
+  rsiSeries = rsiChart.addLineSeries({
+    priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:true,
+    autoscaleInfoProvider: () => ({ priceRange: { minValue:0, maxValue:100 } }),
+  });
+  applyRsiStyle();
+
+  // Sincroniza el rango visible (zoom/scroll) entre los dos charts, con un
+  // flag anti-eco — cada uno dispara el evento del otro al aplicarle el
+  // rango, sin el flag quedarían rebotando entre sí.
+  _rsiMainRangeHandler = (range) => {
+    if (!rsiChart || _suppressRsiRangeSync || !range) return;
+    _suppressRsiRangeSync = true;
+    try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e){}
+    _suppressRsiRangeSync = false;
+  };
+  chart.timeScale().subscribeVisibleLogicalRangeChange(_rsiMainRangeHandler);
+  rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+    if (_suppressRsiRangeSync || !range) return;
+    _suppressRsiRangeSync = true;
+    try { chart.timeScale().setVisibleLogicalRange(range); } catch(e){}
+    _suppressRsiRangeSync = false;
+  });
+  const initRange = chart.timeScale().getVisibleLogicalRange();
+  if (initRange) rsiChart.timeScale().setVisibleLogicalRange(initRange);
+
+  _rsiResizeObserver = new ResizeObserver(() => {
+    if (!rsiChart) return;
+    rsiChart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
+  });
+  _rsiResizeObserver.observe(container);
+}
+
+function destroyRsiChart(){
+  if (!rsiChart) return;
+  if (_rsiMainRangeHandler) { try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_rsiMainRangeHandler); } catch(e){} _rsiMainRangeHandler=null; }
+  if (_rsiResizeObserver) { _rsiResizeObserver.disconnect(); _rsiResizeObserver=null; }
+  rsiChart.remove();
+  rsiChart=null; rsiSeries=null; rsiObLine=null; rsiOsLine=null;
+  document.getElementById('rsi-pane-container').classList.add('hidden');
+  document.getElementById('rsi-pane-label').innerHTML='';
+}
+
+// Aplica color/ancho/niveles de overbought-oversold actuales — se llama al
+// crear el subpanel y de nuevo cada vez que se guardan sus Settings (no
+// hace falta recrear las price lines en cada vela nueva, solo acá).
+function applyRsiStyle(){
+  if (!rsiSeries) return;
+  const s = getRsiSettings();
+  rsiSeries.applyOptions({ color:s.color, lineWidth:s.lineWidth });
+  if (rsiObLine) { rsiSeries.removePriceLine(rsiObLine); rsiObLine=null; }
+  if (rsiOsLine) { rsiSeries.removePriceLine(rsiOsLine); rsiOsLine=null; }
+  rsiObLine = rsiSeries.createPriceLine({ price:s.obLevel, color:s.obColor, lineWidth:1, lineStyle:LightweightCharts.LineStyle.Dashed, axisLabelVisible:true, title:'' });
+  rsiOsLine = rsiSeries.createPriceLine({ price:s.osLevel, color:s.osColor, lineWidth:1, lineStyle:LightweightCharts.LineStyle.Dashed, axisLabelVisible:true, title:'' });
+}
+
+function renderRsi(){
+  const active = STATE.indicators.includes('RSI');
+  if (!active) { destroyRsiChart(); return; }
+  if (!rsiChart) createRsiChart();
+  const candles = window._lastCandles || [];
+  if (!candles.length) return;
+  const s = getRsiSettings();
+  const data = rsi(candles, s.length);
+  rsiSeries.setData(data);
+  const label = document.getElementById('rsi-pane-label');
+  if (label) {
+    const last = data[data.length-1];
+    label.innerHTML = `<span>RSI ${s.length}</span>${last ? `<b>${last.value.toFixed(2)}</b>` : ''}`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -12270,6 +12474,7 @@ function restoreIndicatorsAndTools(s){
   renderSweeps();
   renderFractalModel();
   renderStatMap();
+  renderRsi();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -12845,6 +13050,7 @@ function renderSeries(timeframe){
   futureAnchorSeries.setData([{ time: last.time + _barStep*15, value: last.close }]);
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
+  renderRsi();
   renderWatchtower();
   renderSniper();
   renderSweeps();
@@ -12868,6 +13074,7 @@ function updateFormingCandleLive(bar){
   candleSeries.update(bar);
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
+  renderRsi();
   renderWatchtower();
   renderSniper();
   renderSweeps();
@@ -13980,6 +14187,7 @@ window.addEventListener('message', (e) => {
         if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
         else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
         else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
+        else if(name==='RSI'){ destroyRsiChart(); }
       }
       else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
     });
