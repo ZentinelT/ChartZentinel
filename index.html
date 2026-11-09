@@ -9265,8 +9265,20 @@ function vwap(data){
 // RSI de Wilder (el estándar, mismo que usa TradingView) — promedio de
 // ganancias/pérdidas suavizado exponencialmente (factor 1/period), no una
 // media simple de los últimos N cambios.
+// Devuelve SIEMPRE un punto por cada vela de entrada (mismo largo que
+// `data`), rellenando el "calentamiento" inicial (las primeras `period`
+// velas, que no alcanzan para calcular nada) con puntos whitespace (sin
+// `value`) en vez de omitirlos. El RSI vive en un chart de
+// lightweight-charts APARTE del principal (ver createRsiChart) — cada
+// chart arma su propio eje de índices lógicos a partir de los puntos que
+// tiene SU serie, así que si a este array le faltaran esas `period`
+// velas del arranque, el índice lógico 0 del subpanel del RSI apuntaría
+// a una vela distinta del índice lógico 0 del chart principal: quedaban
+// permanentemente corridos un `period` de velas entre sí en TODO el eje,
+// no solo en el extremo derecho (el usuario lo notó como "el RSI termina
+// antes que la última vela").
 function rsi(data, period){
-  if (data.length < period+1) return [];
+  if (data.length < period+1) return data.map(d=>({time:d.time}));
   const rsAt=(g,l)=> l===0 ? 100 : 100-100/(1+g/l);
   let avgGain=0, avgLoss=0;
   for(let i=1;i<=period;i++){
@@ -9275,7 +9287,9 @@ function rsi(data, period){
     avgLoss += change<0?-change:0;
   }
   avgGain/=period; avgLoss/=period;
-  const out=[{time:data[period].time, value:rsAt(avgGain,avgLoss)}];
+  const out=[];
+  for(let i=0;i<period;i++) out.push({time:data[i].time});
+  out.push({time:data[period].time, value:rsAt(avgGain,avgLoss)});
   for(let i=period+1;i<data.length;i++){
     const change=data[i].close-data[i-1].close;
     const gain=change>0?change:0, loss=change<0?-change:0;
@@ -9427,7 +9441,7 @@ function renderRsi(){
   const label = document.getElementById('rsi-pane-label');
   if (label) {
     const last = data[data.length-1];
-    label.innerHTML = `<span>RSI ${s.length}</span>${last ? `<b>${last.value.toFixed(2)}</b>` : ''}`;
+    label.innerHTML = `<span>RSI ${s.length}</span>${last && last.value!==undefined ? `<b>${last.value.toFixed(2)}</b>` : ''}`;
   }
 }
 
