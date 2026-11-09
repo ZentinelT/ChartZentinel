@@ -9312,7 +9312,19 @@ function rsi(data, period){
 let rsiChart=null, rsiSeries=null, rsiObLine=null, rsiOsLine=null;
 let _rsiMainRangeHandler=null, _suppressRsiRangeSync=false, _rsiResizeObserver=null;
 const RSI_PANE_MIN_H = 60, RSI_PANE_MAX_H = 400;
-function getRsiPaneHeight(){ const h=Number(lsGet(lsKey('td_rsi_height'))); return Number.isFinite(h) && h>0 ? Math.max(RSI_PANE_MIN_H, Math.min(RSI_PANE_MAX_H, h)) : 120; }
+// Tope REAL = lo que sea más chico entre RSI_PANE_MAX_H y la mitad de lo
+// que mide #chart-wrap ahora mismo — sin esto, un alto guardado de una
+// sesión con la ventana grande (o arrastrado hasta el tope de 400) podía
+// dejar las velas aplastadas en una tira finita al volver a cargar en una
+// ventana más chica: el candle-chart recibe lo que "sobra" del alto fijo
+// del RSI, nunca al revés. Mitad y mitad como piso razonable: el RSI
+// nunca se come más de la mitad de la pantalla, pase lo que pase.
+function getRsiMaxHeight(){
+  const wrap = document.getElementById('chart-wrap');
+  const total = wrap ? wrap.getBoundingClientRect().height : 600;
+  return Math.max(RSI_PANE_MIN_H, Math.min(RSI_PANE_MAX_H, Math.floor(total * 0.5)));
+}
+function getRsiPaneHeight(){ const h=Number(lsGet(lsKey('td_rsi_height'))); const max=getRsiMaxHeight(); return Number.isFinite(h) && h>0 ? Math.max(RSI_PANE_MIN_H, Math.min(max, h)) : Math.min(120, max); }
 function saveRsiPaneHeight(h){ lsSet(lsKey('td_rsi_height'), String(h)); }
 
 // Arrastre de la franja de arriba del subpanel para agrandarlo/achicarlo —
@@ -9328,6 +9340,7 @@ function initRsiResizeHandle(){
     const container = document.getElementById('rsi-pane-container');
     const startY = e.clientY;
     const startH = container.getBoundingClientRect().height;
+    const maxH = getRsiMaxHeight();
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:row-resize;';
     document.body.appendChild(overlay);
@@ -9339,7 +9352,7 @@ function initRsiResizeHandle(){
     function onMove(ev){
       // Arrastrar hacia ARRIBA agranda el subpanel (el borde que se mueve
       // es el de arriba) — de ahí el signo invertido.
-      const h = Math.max(RSI_PANE_MIN_H, Math.min(RSI_PANE_MAX_H, startH - (ev.clientY - startY)));
+      const h = Math.max(RSI_PANE_MIN_H, Math.min(maxH, startH - (ev.clientY - startY)));
       pendingH = h;
       if (rafId === null) rafId = requestAnimationFrame(applyPending);
     }
@@ -9353,12 +9366,36 @@ function initRsiResizeHandle(){
     overlay.addEventListener('mousemove', onMove);
     overlay.addEventListener('mouseup', onUp);
   });
+  // Si la ventana se achica DESPUÉS de haber dejado el RSI grande (otro
+  // monitor, otra sesión), reclampea el alto ya aplicado contra la mitad
+  // de la nueva altura disponible — mismo criterio que getRsiMaxHeight(),
+  // para no dejar las velas aplastadas sin que haga falta arrastrar nada.
+  window.addEventListener('resize', () => {
+    if (!rsiChart) return;
+    const container = document.getElementById('rsi-pane-container');
+    const current = container.getBoundingClientRect().height;
+    const max = getRsiMaxHeight();
+    if (current > max) container.style.height = max + 'px';
+  });
 }
 
+// Reclampea el alto aplicado contra getRsiMaxHeight() actual — se llama
+// de nuevo en CADA renderRsi() (no solo al crear el chart) porque la
+// primera vez que createRsiChart() corre puede ser durante el boot, antes
+// de que #chart-wrap haya asentado su alto final (mismo problema de
+// timing que ya atacan el doble-rAF/fonts.ready de _resyncChartLayout
+// para el chart principal) — medir el 50% de un #chart-wrap todavía
+// chico de entrada dejaba el alto guardado pegado en el mínimo para
+// siempre. Idempotente y barato: llamarlo de más no hace nada si ya
+// estaba bien.
+function applyRsiPaneHeight(){
+  const container = document.getElementById('rsi-pane-container');
+  if (container) container.style.height = getRsiPaneHeight() + 'px';
+}
 function createRsiChart(){
   if (rsiChart) return;
   const container = document.getElementById('rsi-pane-container');
-  container.style.height = getRsiPaneHeight() + 'px';
+  applyRsiPaneHeight();
   container.classList.remove('hidden');
   initRsiResizeHandle();
   rsiChart = LightweightCharts.createChart(container, {
@@ -9433,6 +9470,7 @@ function renderRsi(){
   const active = STATE.indicators.includes('RSI');
   if (!active) { destroyRsiChart(); return; }
   if (!rsiChart) createRsiChart();
+  applyRsiPaneHeight();
   const candles = window._lastCandles || [];
   if (!candles.length) return;
   const s = getRsiSettings();
