@@ -4448,6 +4448,22 @@ function saveWorkspacesState(){ lsSet('td_workspaces', JSON.stringify(STATE.work
 
 let chart, candleSeries, volumeSeries, futureAxisSeries, futureAnchorSeries;
 const overlays = {};
+// Ancho mínimo fijo para la escala de precio de AMBOS charts (el principal
+// y el subpanel del RSI) — probado a mano: rightPriceScale.minimumWidth
+// solo surte efecto si viaja en las opciones de LightweightCharts.createChart()
+// al CREARLO; un applyOptions() posterior lo guarda en las opciones (se ve
+// reflejado en chart.options()) pero el layout interno nunca lo relee, así
+// que el ancho real queda pegado para siempre en lo que midió al nacer. Con
+// dos charts de ancho de precio distinto (el RSI con "27.61"/"100.00" vs un
+// precio entero tipo "74110"), sus ejes de tiempo terminaban con anchos de
+// plot-area distintos aunque compartieran el mismo rango lógico — la línea
+// del RSI quedaba desalineada, cortada una vela antes del borde real. Al no
+// poder cambiar esto después de crear el chart principal (son MUCHOS cambios
+// para recrearlo entero), la solución es fijar el MISMO piso en los dos
+// desde que nacen: alcanza para la inmensa mayoría de símbolos reales
+// (forex/cripto/acciones), aunque un precio con muchísimos dígitos podría
+// en teoría volver a desalinearlos.
+const RIGHT_PRICE_SCALE_MIN_WIDTH = 78;
 
 // ══════════════════════════════════════════════════════════
 //  DRAWING SYSTEM
@@ -6730,7 +6746,7 @@ function initChart() {
       vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
       horzLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
     },
-    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, scaleMargins:{
+    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, minimumWidth: RIGHT_PRICE_SCALE_MIN_WIDTH, scaleMargins:{
       top: STATE.chartSettings.marginTop ?? CHART_SETTINGS_DEFAULTS.marginTop,
       bottom: STATE.chartSettings.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom,
     } },
@@ -9334,7 +9350,7 @@ function createRsiChart(){
   rsiChart = LightweightCharts.createChart(container, {
     layout: { background: buildChartBackground(STATE.chartSettings), textColor:STATE.chartSettings.textColor, fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
     grid: { vertLines:{visible:false}, horzLines:{visible:false} },
-    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, scaleMargins:{top:0.15,bottom:0.15} },
+    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, minimumWidth: RIGHT_PRICE_SCALE_MIN_WIDTH, scaleMargins:{top:0.15,bottom:0.15} },
     timeScale: { borderColor:STATE.chartSettings.axisColor, timeVisible:true, secondsVisible:false },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
