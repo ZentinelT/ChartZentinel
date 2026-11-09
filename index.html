@@ -4366,6 +4366,7 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map') renderStatMap();
+  else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
 }
 // Ojo de la toolbar (antes ocultaba la LISTA, ver toggleIndicatorLegend —
@@ -9310,7 +9311,7 @@ function rsi(data, period){
 // RSI/MACD/Stochastic "subpane" en v4. autoscaleInfoProvider fuerza el eje
 // 0-100 siempre fijo, igual que lo muestra cualquier plataforma.
 let rsiChart=null, rsiSeries=null, rsiObLine=null, rsiOsLine=null;
-let _rsiMainRangeHandler=null, _suppressRsiRangeSync=false, _rsiResizeObserver=null;
+let _rsiMainRangeHandler=null, _rsiResizeObserver=null;
 const RSI_PANE_MIN_H = 60, RSI_PANE_MAX_H = 400;
 // Tope REAL = lo que sea más chico entre RSI_PANE_MAX_H y la mitad de lo
 // que mide #chart-wrap ahora mismo — sin esto, un alto guardado de una
@@ -9417,21 +9418,34 @@ function createRsiChart(){
   });
   applyRsiStyle();
 
-  // Sincroniza el rango visible (zoom/scroll) entre los dos charts, con un
-  // flag anti-eco — cada uno dispara el evento del otro al aplicarle el
-  // rango, sin el flag quedarían rebotando entre sí.
+  // Sincroniza el rango visible (zoom/scroll) entre los dos charts.
+  // Antes esto usaba un flag anti-eco (poner la bandera, escribir,
+  // sacarla) asumiendo que subscribeVisibleLogicalRangeChange dispara
+  // SIEMPRE sincrónico — pero scrollToRealTime() puede animar el scroll
+  // en varios frames, y cada frame intermedio dispara el evento DESPUÉS
+  // de que la bandera ya se había bajado, así que el "eco" de vuelta
+  // SÍ pasaba: el rsiChart terminaba pisando el rango recién acomodado
+  // del chart principal con el suyo propio (rightOffset:0, sin el margen
+  // configurado), dejando la vela más reciente afuera de vista — pero
+  // SOLO cuando el RSI estaba activo, porque sin el rsiChart creado no
+  // hay con quién hacer eco. Fix real: no depender de timing, chequear
+  // si el rango destino YA es (básicamente) el mismo antes de escribir
+  // — así no importa cuántos frames tarde la animación, nunca hay un
+  // segundo escritor compitiendo porque el primero en llegar ya deja
+  // los rangos iguales y corta la cadena ahí.
+  function rangesClose(a, b){
+    return a && b && Math.abs(a.from-b.from) < 0.05 && Math.abs(a.to-b.to) < 0.05;
+  }
   _rsiMainRangeHandler = (range) => {
-    if (!rsiChart || _suppressRsiRangeSync || !range) return;
-    _suppressRsiRangeSync = true;
+    if (!rsiChart || !range) return;
+    if (rangesClose(rsiChart.timeScale().getVisibleLogicalRange(), range)) return;
     try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e){}
-    _suppressRsiRangeSync = false;
   };
   chart.timeScale().subscribeVisibleLogicalRangeChange(_rsiMainRangeHandler);
   rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-    if (_suppressRsiRangeSync || !range) return;
-    _suppressRsiRangeSync = true;
+    if (!range) return;
+    if (rangesClose(chart.timeScale().getVisibleLogicalRange(), range)) return;
     try { chart.timeScale().setVisibleLogicalRange(range); } catch(e){}
-    _suppressRsiRangeSync = false;
   });
   const initRange = chart.timeScale().getVisibleLogicalRange();
   if (initRange) rsiChart.timeScale().setVisibleLogicalRange(initRange);
@@ -9467,7 +9481,12 @@ function applyRsiStyle(){
 }
 
 function renderRsi(){
-  const active = STATE.indicators.includes('RSI');
+  // Ocultarlo con el ojo (sin sacarlo de STATE.indicators) colapsa el
+  // subpanel entero y le devuelve el espacio al chart principal — en vez
+  // de solo apagar la línea y dejar el hueco vacío ahí, que es lo que
+  // haría un simple overlays[name].applyOptions({visible:false}) como el
+  // resto de los indicadores "simples" (que no tienen pane propio).
+  const active = STATE.indicators.includes('RSI') && !isIndicatorHidden('RSI');
   if (!active) { destroyRsiChart(); return; }
   if (!rsiChart) createRsiChart();
   applyRsiPaneHeight();
