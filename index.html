@@ -4312,6 +4312,12 @@ const STATE = {
     // así que en modo claro (fondo blanco) el blanco quedaba invisible.
     labelColor:'#ffffff',
     behindCandles:false,
+    // Daily Bias Table — mismos inputs que el Pine original (Table
+    // location, Previous days for average, Neutral Threshold %), que
+    // acá venían todos hardcodeados (posición fija abajo-derecha,
+    // n_dias_prev=1, umbral=0.3%) sin ningún control.
+    biasPosition:'Bottom Right', biasLookbackDays:1, biasThreshold:0.3,
+    biasBullColor:'#26a69a', biasBearColor:'#ef5350',
   }, _wtSaved, { kz: _wtKz }),
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
@@ -8596,6 +8602,10 @@ const WT_TOGGLE_DEFS = [
   { key:'org',       label:'ORG (Opening Range Gap)' },
   { key:'bias',      label:'Daily bias table' },
 ];
+// Mismas 6 opciones (y mismo orden) que "Table location" en el Pine
+// original (ICT_Zentinel_Watchtower.pine) — ver WT_BIAS_POS_STYLE más
+// abajo para cómo cada una se traduce a top/bottom/left/right CSS.
+const WT_BIAS_POSITIONS = ['Top Right','Bottom Right','Middle Right','Bottom Center','Middle Left','Top Center'];
 let _indSettingsTarget = null;
 
 function openIndicatorSettings(name) {
@@ -8643,6 +8653,29 @@ function openIndicatorSettings(name) {
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Color</span>
         <input type="color" id="wt-org-color" value="${STATE.watchtower.orgColor}">
+      </div>`
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Daily Bias Table</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Table location</span>
+        <select id="wt-bias-position" class="dtb-select" style="flex:1;">
+          ${WT_BIAS_POSITIONS.map(p => `<option value="${p}" ${STATE.watchtower.biasPosition===p?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Previous days for average</span>
+        <input type="number" id="wt-bias-lookback" min="1" max="30" step="1" value="${STATE.watchtower.biasLookbackDays}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Neutral threshold (%)</span>
+        <input type="number" id="wt-bias-threshold" min="0.1" max="1" step="0.1" value="${STATE.watchtower.biasThreshold}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bullish color</span>
+        <input type="color" id="wt-bias-bull-color" value="${STATE.watchtower.biasBullColor}">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Bearish color</span>
+        <input type="color" id="wt-bias-bear-color" value="${STATE.watchtower.biasBearColor}">
       </div>`;
   } else if (name === 'Sniper') {
     const sn = STATE.sniper;
@@ -9068,6 +9101,16 @@ function applyIndSettingsForm() {
     if (labelColorEl) STATE.watchtower.labelColor = labelColorEl.value;
     const wtBehindEl=document.getElementById('wt-behind-candles');
     if (wtBehindEl) STATE.watchtower.behindCandles = wtBehindEl.checked;
+    const biasPosEl=document.getElementById('wt-bias-position');
+    const biasLookbackEl=document.getElementById('wt-bias-lookback');
+    const biasThresholdEl=document.getElementById('wt-bias-threshold');
+    const biasBullEl=document.getElementById('wt-bias-bull-color');
+    const biasBearEl=document.getElementById('wt-bias-bear-color');
+    if (biasPosEl) STATE.watchtower.biasPosition = biasPosEl.value;
+    if (biasLookbackEl) STATE.watchtower.biasLookbackDays = Math.max(1, Math.min(30, Number(biasLookbackEl.value) || 1));
+    if (biasThresholdEl) STATE.watchtower.biasThreshold = Math.max(0.1, Math.min(1, Number(biasThresholdEl.value) || 0.3));
+    if (biasBullEl) STATE.watchtower.biasBullColor = biasBullEl.value;
+    if (biasBearEl) STATE.watchtower.biasBearColor = biasBearEl.value;
     saveWatchtowerState();
     renderWatchtower();
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
@@ -10083,14 +10126,20 @@ function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
 function renderWtBias(byDate, dateKeys, lastTime){
   const el=document.getElementById('watchtower-bias-badge');
   if(!el) return;
-  if(dateKeys.length<2){ el.style.display='none'; return; }
+  const wt=STATE.watchtower;
+  // Mismo cálculo que el Pine original: close de hoy vs. el promedio
+  // (SMA) de los `biasLookbackDays` días ANTERIORES a hoy (no solo el
+  // de ayer) — antes esto venía fijo en 1 día sin forma de ajustarlo.
+  const lookback = Math.max(1, wt.biasLookbackDays || 1);
+  if(dateKeys.length<lookback+1){ el.style.display='none'; return; }
   const closesByDay=dateKeys.map(dk=>{ const arr=byDate.get(dk); return arr[arr.length-1].close; });
   const todayClose=closesByDay[closesByDay.length-1];
-  const avgPrev=closesByDay[closesByDay.length-2];
+  const prevSlice=closesByDay.slice(closesByDay.length-1-lookback, closesByDay.length-1);
+  const avgPrev=prevSlice.reduce((a,b)=>a+b,0)/prevSlice.length;
   const diff=(todayClose-avgPrev)/avgPrev;
-  const thr=0.003;
+  const thr=(wt.biasThreshold ?? 0.3)/100;
   const bias=diff>thr?'Bullish':diff<-thr?'Bearish':'Neutral';
-  const color=bias==='Bullish'?'#26a69a':bias==='Bearish'?'#ef5350':STATE.chartSettings.textColor;
+  const color=bias==='Bullish'?(wt.biasBullColor||'#26a69a'):bias==='Bearish'?(wt.biasBearColor||'#ef5350'):STATE.chartSettings.textColor;
   const d=new Date(lastTime*1000);
   const dateStr=`${String(d.getUTCDate()).padStart(2,'0')}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${d.getUTCFullYear()}`;
   // Mismo label corto que ya usan los botones de TF (ALL_TIMEFRAMES, p.ej.
@@ -10106,8 +10155,31 @@ function renderWtBias(byDate, dateKeys, lastTime){
   // para que no los tape — ambos cambian de ancho/alto según el chart.
   const priceScaleW = chart.priceScale('right').width() || 0;
   const timeScaleH = chart.timeScale().height() || 0;
-  el.style.right = (priceScaleW + 8) + 'px';
-  el.style.bottom = (timeScaleH + 8) + 'px';
+  // 'auto' explícito, no '' — el CSS de la hoja de estilos ya trae
+  // right/bottom fijos (el look de siempre, "Bottom Right"); limpiar
+  // solo el inline style con '' no los anula, así que quedaban compitiendo
+  // con el left/top de una posición distinta y estiraban la caja entera
+  // de borde a borde (probado a mano: "Middle Left" terminaba ocupando
+  // casi todo el ancho/alto del chart).
+  el.style.top = el.style.bottom = el.style.left = el.style.right = 'auto';
+  el.style.transform = '';
+  // Mismas 6 posiciones que "Table location" en el Pine original — ver
+  // WT_BIAS_POSITIONS.
+  switch (wt.biasPosition) {
+    case 'Top Right':
+      el.style.top = '8px'; el.style.right = (priceScaleW + 8) + 'px'; break;
+    case 'Middle Right':
+      el.style.top = '50%'; el.style.right = (priceScaleW + 8) + 'px'; el.style.transform = 'translateY(-50%)'; break;
+    case 'Bottom Center':
+      el.style.bottom = (timeScaleH + 8) + 'px'; el.style.left = '50%'; el.style.transform = 'translateX(-50%)'; break;
+    case 'Middle Left':
+      el.style.top = '50%'; el.style.left = '8px'; el.style.transform = 'translateY(-50%)'; break;
+    case 'Top Center':
+      el.style.top = '8px'; el.style.left = '50%'; el.style.transform = 'translateX(-50%)'; break;
+    case 'Bottom Right':
+    default:
+      el.style.bottom = (timeScaleH + 8) + 'px'; el.style.right = (priceScaleW + 8) + 'px'; break;
+  }
 }
 
 function renderWatchtower(){
