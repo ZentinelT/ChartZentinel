@@ -4839,7 +4839,11 @@ function selectDrawing(id) {
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
   const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp' || d.type === 'hline');
   document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect' && d.type!=='vp') ? '' : 'none';
-  document.getElementById('dtb-ext-right').style.display = extendApplies ? '' : 'none';
+  // Volume Profile ya tiene su propio "Extend POC right" adentro de VP
+  // Settings (vp-set-extendpoc) — este botón genérico de la toolbar
+  // quedó mostrándose igual para 'vp' sin que el usuario lo necesitara,
+  // duplicando esa opción sin agregar nada.
+  document.getElementById('dtb-ext-right').style.display = (extendApplies && d.type!=='vp') ? '' : 'none';
   document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
   document.getElementById('dtb-ext-right').classList.toggle('active', !!d.extRight);
   document.getElementById('dtb-rect-border').style.display = d.type==='rect' ? '' : 'none';
