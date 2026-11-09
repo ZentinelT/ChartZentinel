@@ -9145,7 +9145,21 @@ function sma(data,period){
   }
   return out;
 }
-function vwap(data){let cumPV=0,cumV=0;return data.map(d=>{const tp=(d.high+d.low+d.close)/3;cumPV+=tp*(d.volume||1);cumV+=(d.volume||1);return{time:d.time,value:cumPV/cumV};});}
+function vwap(data){
+  // Ancla el cálculo a cada día de trading (mismo corte de 17:00 UTC que
+  // usa wtDayKey para PDH/PDL etc.) en vez de acumular desde la primera
+  // vela cargada — con historial de varios días, acumular sin reset hacía
+  // que la línea quedara pegada cerca del precio de arranque del historial
+  // y prácticamente inmóvil, bien lejos del precio actual ("no funciona").
+  let cumPV=0,cumV=0,curDay=null;
+  return data.map(d=>{
+    const dayKey=wtDayKey(d.time);
+    if(dayKey!==curDay){curDay=dayKey;cumPV=0;cumV=0;}
+    const tp=(d.high+d.low+d.close)/3;
+    cumPV+=tp*(d.volume||1);cumV+=(d.volume||1);
+    return{time:d.time,value:cumPV/cumV};
+  });
+}
 
 // ══════════════════════════════════════════════════════════
 //  WATCHTOWER — puerto de "ICT Zentinel Watchtower" (Pine)
