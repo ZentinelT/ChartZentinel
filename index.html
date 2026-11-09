@@ -1570,7 +1570,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
     <span class="tb-label">Replay</span>
   </button>
-  <button class="topbar-btn" id="btn-dashboard" title="Abrir el Dashboard/Journal (pestaña nueva)" onclick="window.open('dashboard.html','_blank')">
+  <button class="topbar-btn" id="btn-dashboard" title="Open the Dashboard/Journal (new tab)" onclick="window.open('dashboard.html','_blank')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5" rx="0.5" fill="currentColor" stroke="none"/><rect x="12.5" y="9" width="3" height="9" rx="0.5" fill="currentColor" stroke="none"/><rect x="18" y="5" width="3" height="13" rx="0.5" fill="currentColor" stroke="none"/></svg>
     <span class="tb-label">Dashboard</span>
   </button>
@@ -1808,17 +1808,17 @@
        "Operar" de la topbar y la × de adentro — ver toggleOrdersPanel) ── -->
   <div id="orders-panel">
     <div class="orders-panel-inner">
-      <div class="sidebar-header">Operar
-        <button class="sidebar-add-btn" onclick="closeOrdersPanel()" title="Cerrar panel">×</button>
+      <div class="sidebar-header">Trade
+        <button class="sidebar-add-btn" onclick="closeOrdersPanel()" title="Close panel">×</button>
       </div>
-      <div id="orders-live-note" class="orders-live-note hidden">Trading real (MT5) activo: este panel solo arma órdenes en papel. Para abrir/cerrar en tu cuenta real usá el toggle y los botones del modal de Trades.</div>
+      <div id="orders-live-note" class="orders-live-note hidden">Real trading (MT5) is active: this panel only places paper orders. To open/close on your real account, use the toggle and buttons in the Trades modal.</div>
       <div class="orders-form">
         <div class="orders-side-row">
           <button id="orders-side-buy" class="orders-side-btn buy active" onclick="setOrdersSide('long')">Buy</button>
           <button id="orders-side-sell" class="orders-side-btn sell" onclick="setOrdersSide('short')">Sell</button>
         </div>
         <div class="orders-field">
-          <label class="cs-field-label">Tipo de orden</label>
+          <label class="cs-field-label">Order type</label>
           <select id="orders-type" class="dtb-select" style="width:100%;" onchange="onOrdersTypeChange()">
             <option value="market">Market</option>
             <option value="limit">Limit</option>
@@ -1826,26 +1826,26 @@
           </select>
         </div>
         <div class="orders-field hidden" id="orders-price-field">
-          <label class="cs-field-label">Precio de la orden</label>
-          <input id="orders-price" type="text" class="topbar-input" style="width:100%;" placeholder="Precio" autocomplete="off">
+          <label class="cs-field-label">Order price</label>
+          <input id="orders-price" type="text" class="topbar-input" style="width:100%;" placeholder="Price" autocomplete="off">
         </div>
         <div class="orders-field">
-          <label class="cs-field-label">Tamaño (lotes)</label>
+          <label class="cs-field-label">Size (lots)</label>
           <input id="orders-volume" type="number" step="0.01" min="0" class="topbar-input" style="width:100%;" value="1">
         </div>
         <div class="orders-field">
           <label class="cs-field-label">Stop loss</label>
-          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
+          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Empty = auto, drag to set later" autocomplete="off">
         </div>
         <div class="orders-field">
           <label class="cs-field-label">Take profit</label>
-          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
+          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Empty = auto, drag to set later" autocomplete="off">
         </div>
-        <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Colocar orden</button>
+        <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Place order</button>
       </div>
-      <div class="sidebar-header">Pendientes (<span id="orders-pending-count">0</span>)</div>
+      <div class="sidebar-header">Pending (<span id="orders-pending-count">0</span>)</div>
       <div id="orders-pending-list" class="orders-list"></div>
-      <div class="sidebar-header">Abiertas (<span id="orders-open-count">0</span>)</div>
+      <div class="sidebar-header">Open (<span id="orders-open-count">0</span>)</div>
       <div id="orders-open-list" class="orders-list"></div>
     </div>
   </div>
@@ -2088,11 +2088,11 @@
             <div class="cs-group-title">Branding</div>
             <div class="cs-row" style="align-items:center;gap:10px;margin-bottom:0;">
               <img id="cs-logo-preview" src="logo-unicorn.png" style="height:28px;width:auto;border-radius:3px;background:#111;padding:2px;flex:none;">
-              <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Subir mi logo</button>
-              <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Quitar</button>
+              <button class="btn-ghost" style="flex:1;" onclick="document.getElementById('cs-logo-file').click()">Upload my logo</button>
+              <button class="btn-ghost" style="color:var(--red);" onclick="clearCustomLogo()">Remove</button>
             </div>
             <input type="file" id="cs-logo-file" accept="image/*" style="display:none;" onchange="onLogoFileChosen(event)">
-            <div class="cs-field-label" style="margin-top:8px;opacity:.65;white-space:normal;">Reemplaza el logo en toda la plataforma (incluye modo multigráficos). Recomendado: PNG con fondo transparente.</div>
+            <div class="cs-field-label" style="margin-top:8px;opacity:.65;white-space:normal;">Replaces the logo across the whole platform (including multi-chart mode). Recommended: PNG with transparent background.</div>
           </div>
           <div class="cs-group">
             <div class="cs-group-title">Theme</div>
@@ -2116,7 +2116,7 @@
 
         <div class="cs-tab" data-cs-tab-content="canvas" hidden>
           <div class="cs-group">
-            <div class="cs-group-title">Estilos básicos del gráfico</div>
+            <div class="cs-group-title">Basic chart styles</div>
             <div class="cs-grid">
               <div class="cs-field"><input type="color" id="cs-bg" class="cs-swatch"><span class="cs-field-label">Background</span></div>
               <div class="cs-field"><input type="color" id="cs-text-color" class="cs-swatch"><span class="cs-field-label">Text color</span></div>
@@ -2238,7 +2238,7 @@
 <!-- ══ MODAL: LOGO CROP (pan + zoom, estilo "foto de perfil" de X) ═ -->
 <div class="modal-overlay" id="modal-logo-crop">
   <div class="modal" style="width:320px;">
-    <h2>Recortar logo</h2>
+    <h2>Crop logo</h2>
     <div id="logo-crop-frame" style="position:relative;width:260px;height:260px;margin:0 auto;overflow:hidden;border-radius:10px;background:#0a0a0a;cursor:grab;touch-action:none;">
       <img id="logo-crop-img" draggable="false" style="position:absolute;top:0;left:0;user-select:none;-webkit-user-drag:none;pointer-events:none;">
     </div>
@@ -2247,10 +2247,10 @@
       <input type="range" id="logo-crop-zoom" min="0" max="100" value="0" style="flex:1;" oninput="onLogoCropZoom(this.value)">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex:none;opacity:.6;"><circle cx="7" cy="7" r="5.5"/><path d="M4.5 7h5M7 4.5v5M13 13l-2.5-2.5"/></svg>
     </div>
-    <div class="cs-field-label" style="margin-top:10px;opacity:.65;text-align:center;">Arrastrá para mover, deslizá para hacer zoom</div>
+    <div class="cs-field-label" style="margin-top:10px;opacity:.65;text-align:center;">Drag to move, slide to zoom</div>
     <div class="modal-btns">
-      <button class="btn-ghost" onclick="closeLogoCropModal()">Cancelar</button>
-      <button class="btn-primary" onclick="applyLogoCrop()">Usar este recorte</button>
+      <button class="btn-ghost" onclick="closeLogoCropModal()">Cancel</button>
+      <button class="btn-primary" onclick="applyLogoCrop()">Use this crop</button>
     </div>
   </div>
 </div>
@@ -2309,10 +2309,10 @@
       <label style="font-size:11px;color:var(--text-dim);display:block;">Value Area Volume (%)
         <input type="number" id="vp-set-va" min="1" max="99" step="1" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('vaPct', Math.max(1,Math.min(99,parseInt(this.value)||70)))">
       </label>
-      <label style="font-size:11px;color:var(--text-dim);display:block;" title="Qué tan largas llegan las barras — como % del ancho de la caja. Bajalo si el rango abarca muchas velas (p.ej. 1 día en M5) y las barras quedan tapando todo.">Width (%)
+      <label style="font-size:11px;color:var(--text-dim);display:block;" title="How far the bars reach — as % of the box width. Lower it if the range spans many candles (e.g. 1 day on M5) and the bars end up covering everything.">Width (%)
         <input type="number" id="vp-set-width" min="5" max="100" step="5" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('widthPct', Math.max(5,Math.min(100,parseInt(this.value)||70)))">
       </label>
-      <label style="font-size:11px;color:var(--text-dim);display:block;" title="Transparencia de las filas de volumen (Value Area y afuera) — bajalo para ver las velas a través de las barras.">Opacity (%)
+      <label style="font-size:11px;color:var(--text-dim);display:block;" title="Transparency of the volume rows (Value Area and outside) — lower it to see the candles through the bars.">Opacity (%)
         <input type="number" id="vp-set-opacity" min="5" max="100" step="5" class="topbar-input" style="width:100%;margin-top:4px;" onchange="onVpSettingChange('barOpacity', Math.max(5,Math.min(100,parseInt(this.value)||70)))">
       </label>
       <label style="font-size:11px;color:var(--text-dim);display:block;">Volume
@@ -2411,12 +2411,12 @@
 
 <div class="modal-overlay" id="modal-ind-settings">
   <div class="modal" id="ind-settings-panel" style="max-height:85vh;overflow-y:auto;">
-    <h2 id="ind-settings-title" title="Arrastrar para mover">Settings</h2>
+    <h2 id="ind-settings-title" title="Drag to move">Settings</h2>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;">Template</label>
       <select id="ind-settings-template-select" class="dtb-select" style="width:100%;margin-bottom:8px;"></select>
       <div style="display:flex;gap:6px;">
-        <button class="btn-ghost" style="flex:1;" onclick="applySelectedIndTemplate()" title="Aplica el template elegido arriba — para guardar los cambios del formulario de abajo, usá el botón Save al final del todo">Apply template</button>
+        <button class="btn-ghost" style="flex:1;" onclick="applySelectedIndTemplate()" title="Applies the template selected above — to save the changes from the form below, use the Save button at the very end">Apply template</button>
         <button class="btn-ghost" style="flex:1;" onclick="saveCurrentAsIndTemplate()">Save as…</button>
         <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedIndTemplate()">Delete</button>
       </div>
@@ -2433,7 +2433,7 @@
 <div class="modal-overlay" id="modal-trades">
   <div class="modal" style="max-height:85vh;overflow-y:auto;max-width:560px;">
     <h2>Trades</h2>
-    <label class="live-trading-row" for="live-trading-toggle" title="Cuando está prendido, Confirm/Close/Edit mandan órdenes reales a la cuenta de MT5 (via el bridge) en vez de simularlas acá. El volumen lo decide MT5, no esta app. Se apaga solo al recargar/cerrar la pestaña.">
+    <label class="live-trading-row" for="live-trading-toggle" title="When on, Confirm/Close/Edit send real orders to the MT5 account (via the bridge) instead of simulating them here. Volume is decided by MT5, not this app. It turns off only on reload/closing the tab.">
       <span class="cs-field-label">Real trading (MT5) — <span id="live-trading-status">OFF</span></span>
       <span class="live-switch"><input type="checkbox" id="live-trading-toggle" onchange="toggleLiveTrading(this.checked)"><span class="track"><span class="thumb"></span></span></span>
     </label>
@@ -2913,7 +2913,7 @@ function renderLayoutGrid(n){
       <div id="tf-fav-popup" class="tf-fav-popup"></div>
     </div>
     <div class="tf-sep"></div>
-    <select id="gc-datasource" class="topbar-input" title="Fuente de datos — se aplica al panel Activo o a Todos según el selector de arriba">
+    <select id="gc-datasource" class="topbar-input" title="Data source — applies to the Active panel or to All, depending on the selector above">
       ${SHARED_ICON.datasourceOptions}
     </select>
     <div class="tf-sep"></div>
@@ -2946,7 +2946,7 @@ function renderLayoutGrid(n){
         <button class="topbar-btn" id="gc-replay-exit" title="Exit replay" style="color:var(--red);">✕</button>
       </div>
     </div>
-    <button class="topbar-btn" id="gc-dashboard" title="Abrir el Dashboard/Journal (pestaña nueva)">
+    <button class="topbar-btn" id="gc-dashboard" title="Open the Dashboard/Journal (new tab)">
       ${SHARED_ICON.dashboard}
       <span class="tb-label">Dashboard</span>
     </button>
@@ -3423,7 +3423,7 @@ function renderLayoutGrid(n){
   };
   function renderScopeBtns(){
     scopeWrap.innerHTML = ['active','all'].map(s =>
-      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="${s==='active'?'Panel activo':'Todos los paneles'} — a quién afecta el símbolo y el TF rápido de esta barra">
+      `<button class="layout-btn${s===scope?' active':''}" data-scope="${s}" title="${s==='active'?'Active panel':'All panels'} — who is affected by the symbol and quick TF in this bar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">${SCOPE_ICONS[s]}</svg>
       </button>`
     ).join('');
@@ -3914,17 +3914,17 @@ function renderLayoutGrid(n){
   shellOrdersPanel.id = 'orders-panel';
   shellOrdersPanel.innerHTML = `
     <div class="orders-panel-inner">
-      <div class="sidebar-header">Operar
-        <button class="sidebar-add-btn" onclick="closeOrdersPanel()" title="Cerrar panel">×</button>
+      <div class="sidebar-header">Trade
+        <button class="sidebar-add-btn" onclick="closeOrdersPanel()" title="Close panel">×</button>
       </div>
-      <div id="orders-live-note" class="orders-live-note hidden">Trading real (MT5) activo: este panel solo arma órdenes en papel. Para abrir/cerrar en tu cuenta real usá el toggle y los botones del modal de Trades.</div>
+      <div id="orders-live-note" class="orders-live-note hidden">Real trading (MT5) is active: this panel only places paper orders. To open/close on your real account, use the toggle and buttons in the Trades modal.</div>
       <div class="orders-form">
         <div class="orders-side-row">
           <button id="orders-side-buy" class="orders-side-btn buy active" onclick="setOrdersSide('long')">Buy</button>
           <button id="orders-side-sell" class="orders-side-btn sell" onclick="setOrdersSide('short')">Sell</button>
         </div>
         <div class="orders-field">
-          <label class="cs-field-label">Tipo de orden</label>
+          <label class="cs-field-label">Order type</label>
           <select id="orders-type" class="dtb-select" style="width:100%;" onchange="onOrdersTypeChange()">
             <option value="market">Market</option>
             <option value="limit">Limit</option>
@@ -3932,26 +3932,26 @@ function renderLayoutGrid(n){
           </select>
         </div>
         <div class="orders-field hidden" id="orders-price-field">
-          <label class="cs-field-label">Precio de la orden</label>
-          <input id="orders-price" type="text" class="topbar-input" style="width:100%;" placeholder="Precio" autocomplete="off">
+          <label class="cs-field-label">Order price</label>
+          <input id="orders-price" type="text" class="topbar-input" style="width:100%;" placeholder="Price" autocomplete="off">
         </div>
         <div class="orders-field">
-          <label class="cs-field-label">Tamaño (lotes)</label>
+          <label class="cs-field-label">Size (lots)</label>
           <input id="orders-volume" type="number" step="0.01" min="0" class="topbar-input" style="width:100%;" value="1">
         </div>
         <div class="orders-field">
           <label class="cs-field-label">Stop loss</label>
-          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
+          <input id="orders-sl" type="text" class="topbar-input" style="width:100%;" placeholder="Empty = auto, drag to set later" autocomplete="off">
         </div>
         <div class="orders-field">
           <label class="cs-field-label">Take profit</label>
-          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Vacío = auto, se arrastra después" autocomplete="off">
+          <input id="orders-tp" type="text" class="topbar-input" style="width:100%;" placeholder="Empty = auto, drag to set later" autocomplete="off">
         </div>
-        <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Colocar orden</button>
+        <button id="orders-place-btn" class="btn-primary" style="width:100%;" onclick="placeOrderFromPanel()">Place order</button>
       </div>
-      <div class="sidebar-header">Pendientes (<span id="orders-pending-count">0</span>)</div>
+      <div class="sidebar-header">Pending (<span id="orders-pending-count">0</span>)</div>
       <div id="orders-pending-list" class="orders-list"></div>
-      <div class="sidebar-header">Abiertas (<span id="orders-open-count">0</span>)</div>
+      <div class="sidebar-header">Open (<span id="orders-open-count">0</span>)</div>
       <div id="orders-open-list" class="orders-list"></div>
     </div>
   `;
@@ -8555,7 +8555,7 @@ function openIndicatorSettings(name) {
         <input type="time" data-kz-end="${s.key}" value="${wtTimeToStr(cfg.end)}" style="width:92px">
       </div>`;
     }).join('');
-    body.innerHTML = `<label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="wt-behind-candles" ${STATE.watchtower.behindCandles?'checked':''}></label>`
+    body.innerHTML = `<label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="wt-behind-candles" ${STATE.watchtower.behindCandles?'checked':''}></label>`
       + togglesHtml
       + `<div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Box transparency (all)</span>
@@ -8582,7 +8582,7 @@ function openIndicatorSettings(name) {
     const sweepLow = snParseRgba(sn.colorSweepLow), sweepHigh = snParseRgba(sn.colorSweepHigh);
     const cisdBull = snParseRgba(sn.colorCisdBull), cisdBear = snParseRgba(sn.colorCisdBear);
     body.innerHTML = `
-      <label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="sn-behind-candles" ${sn.behindCandles?'checked':''}></label>
+      <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sn-behind-candles" ${sn.behindCandles?'checked':''}></label>
       <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">HTF Sweep</div>
       <label class="wt-set-row"><span>Detect bullish reversal (low sweep)</span><input type="checkbox" id="sn-mostrar-alcista" ${sn.mostrarAlcista?'checked':''}></label>
       <label class="wt-set-row"><span>Detect bearish reversal (high sweep)</span><input type="checkbox" id="sn-mostrar-bajista" ${sn.mostrarBajista?'checked':''}></label>
@@ -8767,100 +8767,100 @@ function openIndicatorSettings(name) {
     const mlc = snParseRgba(sm.mLineColor), mmc = snParseRgba(sm.mMidColor), mzc = snParseRgba(sm.mZoneColor);
     const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
     body.innerHTML = `
-      <label class="wt-set-row"><span>Dibujar detrás de las velas</span><input type="checkbox" id="sm-behind-candles" ${sm.behindCandles?'checked':''}></label>
-      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">Sesión Diaria</div>
-      <label class="wt-set-row"><span>Mostrar niveles diarios</span><input type="checkbox" id="sm-show-daily" ${sm.showDaily!==false?'checked':''}></label>
+      <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sm-behind-candles" ${sm.behindCandles?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">Daily Session</div>
+      <label class="wt-set-row"><span>Show daily levels</span><input type="checkbox" id="sm-show-daily" ${sm.showDaily!==false?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Apertura NY (hora:min)</span>
+        <span style="flex:1">NY open (hour:min)</span>
         <input type="number" id="sm-anchor-hour" min="0" max="23" step="1" value="${sm.anchorHour}" style="width:48px">
         <input type="number" id="sm-anchor-min" min="0" max="59" step="1" value="${sm.anchorMin}" style="width:48px">
       </div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Duración (h)</span>
+        <span style="flex:1">Duration (h)</span>
         <input type="number" id="sm-anchor-step" min="1" max="24" step="1" value="${sm.anchorStep}" style="width:56px">
       </div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Setups a mostrar</span>
+        <span style="flex:1">Setups to show</span>
         <input type="number" id="sm-lookback" min="1" max="20" step="1" value="${sm.lookbackCount}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Apertura Semanal</div>
-      <label class="wt-set-row"><span>Mostrar niveles semanal</span><input type="checkbox" id="sm-show-weekly" ${sm.showWeekly?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Weekly Open</div>
+      <label class="wt-set-row"><span>Show weekly levels</span><input type="checkbox" id="sm-show-weekly" ${sm.showWeekly?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Anclar en</span>
+        <span style="flex:1">Anchor at</span>
         <select id="sm-w-anchor-mode" class="dtb-select" style="flex:1;">
-          <option value="open" ${sm.wAnchorMode==='open'?'selected':''}>Vela de apertura</option>
-          <option value="custom" ${sm.wAnchorMode==='custom'?'selected':''}>Hora personalizada</option>
+          <option value="open" ${sm.wAnchorMode==='open'?'selected':''}>Opening candle</option>
+          <option value="custom" ${sm.wAnchorMode==='custom'?'selected':''}>Custom time</option>
         </select>
       </div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Hora NY (si personalizada)</span>
+        <span style="flex:1">NY time (if custom)</span>
         <input type="number" id="sm-w-anchor-hour" min="0" max="23" step="1" value="${sm.wAnchorHour}" style="width:48px">
         <input type="number" id="sm-w-anchor-min" min="0" max="59" step="1" value="${sm.wAnchorMin}" style="width:48px">
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-w-line-color" value="${wlc.hex}"><input type="number" id="sm-w-line-tr" min="0" max="100" step="1" value="${wlc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-w-mid-color" value="${wmc.hex}"><input type="number" id="sm-w-mid-tr" min="0" max="100" step="1" value="${wmc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Grosor / Estilo</span>
+        <span style="flex:1">Width / Style</span>
         <input type="number" id="sm-w-line-width" min="1" max="5" step="1" value="${sm.wLineWidth}" style="width:48px">
         <select id="sm-w-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.wLineStyle)}</select>
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-w-zone-color" value="${wzc.hex}"><input type="number" id="sm-w-zone-tr" min="0" max="100" step="1" value="${wzc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Semanas a mostrar</span>
+        <span style="flex:1">Weeks to show</span>
         <input type="number" id="sm-w-lookback" min="1" max="8" step="1" value="${sm.wLookback}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Apertura Mensual</div>
-      <label class="wt-set-row"><span>Mostrar niveles mensual</span><input type="checkbox" id="sm-show-monthly" ${sm.showMonthly?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Monthly Open</div>
+      <label class="wt-set-row"><span>Show monthly levels</span><input type="checkbox" id="sm-show-monthly" ${sm.showMonthly?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Anclar en</span>
+        <span style="flex:1">Anchor at</span>
         <select id="sm-m-anchor-mode" class="dtb-select" style="flex:1;">
-          <option value="open" ${sm.mAnchorMode==='open'?'selected':''}>Vela de apertura</option>
-          <option value="custom" ${sm.mAnchorMode==='custom'?'selected':''}>Hora personalizada</option>
+          <option value="open" ${sm.mAnchorMode==='open'?'selected':''}>Opening candle</option>
+          <option value="custom" ${sm.mAnchorMode==='custom'?'selected':''}>Custom time</option>
         </select>
       </div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Hora NY (si personalizada)</span>
+        <span style="flex:1">NY time (if custom)</span>
         <input type="number" id="sm-m-anchor-hour" min="0" max="23" step="1" value="${sm.mAnchorHour}" style="width:48px">
         <input type="number" id="sm-m-anchor-min" min="0" max="59" step="1" value="${sm.mAnchorMin}" style="width:48px">
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-m-line-color" value="${mlc.hex}"><input type="number" id="sm-m-line-tr" min="0" max="100" step="1" value="${mlc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-m-mid-color" value="${mmc.hex}"><input type="number" id="sm-m-mid-tr" min="0" max="100" step="1" value="${mmc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Grosor / Estilo</span>
+        <span style="flex:1">Width / Style</span>
         <input type="number" id="sm-m-line-width" min="1" max="5" step="1" value="${sm.mLineWidth}" style="width:48px">
         <select id="sm-m-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.mLineStyle)}</select>
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-m-zone-color" value="${mzc.hex}"><input type="number" id="sm-m-zone-tr" min="0" max="100" step="1" value="${mzc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Meses a mostrar</span>
+        <span style="flex:1">Months to show</span>
         <input type="number" id="sm-m-lookback" min="1" max="6" step="1" value="${sm.mLookback}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Líneas (diario)</div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Lines (daily)</div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Grosor / Estilo</span>
+        <span style="flex:1">Width / Style</span>
         <input type="number" id="sm-line-width" min="1" max="5" step="1" value="${sm.lineWidth}" style="width:48px">
         <select id="sm-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.lineStyle)}</select>
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-line-color" value="${lc.hex}"><input type="number" id="sm-line-tr" min="0" max="100" step="1" value="${lc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-mid-color" value="${mc.hex}"><input type="number" id="sm-mid-tr" min="0" max="100" step="1" value="${mc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Zonas</div>
-      <label class="wt-set-row"><span>Mostrar niveles 0 / 1</span><input type="checkbox" id="sm-show-inner" ${sm.showInner?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Zones</div>
+      <label class="wt-set-row"><span>Show 0 / 1 levels</span><input type="checkbox" id="sm-show-inner" ${sm.showInner?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-zone-color" value="${zc.hex}"><input type="number" id="sm-zone-tr" min="0" max="100" step="1" value="${zc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Interior (%)</span>
+        <span style="flex:1">Inner (%)</span>
         <input type="number" id="sm-zone-size" min="0" max="5" step="0.5" value="${sm.zoneSize}" style="width:56px">
       </div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Exterior (%)</span>
+        <span style="flex:1">Outer (%)</span>
         <input type="number" id="sm-zone-size-outer" min="0" max="8" step="0.5" value="${sm.zoneSizeOuter}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Etiquetas</div>
-      <label class="wt-set-row"><span>Mostrar</span><input type="checkbox" id="sm-show-labels" ${sm.showLabels?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Labels</div>
+      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="sm-show-labels" ${sm.showLabels?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Lado</span>
+        <span style="flex:1">Side</span>
         <select id="sm-label-side" class="dtb-select" style="flex:1;">
-          <option value="left" ${sm.labelSide==='left'?'selected':''}>Izquierda</option>
-          <option value="right" ${sm.labelSide==='right'?'selected':''}>Derecha</option>
+          <option value="left" ${sm.labelSide==='left'?'selected':''}>Left</option>
+          <option value="right" ${sm.labelSide==='right'?'selected':''}>Right</option>
         </select>
       </div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-label-color" value="${lblc.hex}"><input type="number" id="sm-label-tr" min="0" max="100" step="1" value="${lblc.transparency}" style="width:48px" title="Transparency %"></div>
@@ -15664,7 +15664,7 @@ function renderOrdersPanel(){
 
   const pendingList = document.getElementById('orders-pending-list');
   if (pendingList) {
-    pendingList.innerHTML = !pending.length ? '<div class="orders-empty">Sin órdenes pendientes.</div>' : pending.map(o => {
+    pendingList.innerHTML = !pending.length ? '<div class="orders-empty">No pending orders.</div>' : pending.map(o => {
       const meta = `${o.type === 'limit' ? 'Limit' : 'Stop'} ${fmt(o.price)} · SL${o.sl != null ? fmt(o.sl) : '—'} TP${o.tp != null ? fmt(o.tp) : '—'} · ${o.volume}L`;
       return `<div class="order-row">
         <span class="trade-side ${o.side}">${o.side === 'long' ? 'B' : 'S'}</span>
@@ -15695,7 +15695,7 @@ function renderOrdersPanel(){
         <span class="order-row-meta">${meta}</span>
         ${plHtml}
         <button class="order-edit-btn" title="Editar SL/TP" onclick="editTradeById('${t.id}')">✎</button>
-        <button class="order-cancel-btn" title="Cerrar operación" onclick="closeTradeById('${t.id}')">✕</button>
+        <button class="order-cancel-btn" title="Close trade" onclick="closeTradeById('${t.id}')">✕</button>
       </div>`;
     }).join('');
   }
