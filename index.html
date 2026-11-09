@@ -13868,7 +13868,11 @@ function refreshChart(){
   }
   btn.classList.add('spinning');
   chart.priceScale('right').applyOptions({ autoScale: true });
-  chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
+  // Antes esto traía un rightOffset:15 fijo, pisando siempre el margen
+  // derecho configurado en Chart Settings (cs-margin-right) — con el
+  // usuario puesto en 0, el refresh igual dejaba 15 barras de aire. Usar
+  // el valor guardado en vez del número mágico.
+  chart.timeScale().applyOptions({ rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing: 8 });
   scrollToRealTimeReliably();
   setTimeout(() => btn.classList.remove('spinning'), 400); // ya no hay fetch que esperar — spin breve, solo de feedback
 }
@@ -14039,7 +14043,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // precio viejo en vez de reacomodarse a los datos nuevos.
     chart.priceScale('right').applyOptions({ autoScale: true });
     renderSeries(timeframe);
-    chart.timeScale().applyOptions({ rightOffset: 15, barSpacing: 8 });
+    chart.timeScale().applyOptions({ rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing: 8 });
     scrollToRealTimeReliably();
     // El resync de más arriba lee clientWidth/clientHeight EN ESE INSTANTE —
     // si algo que afecta el layout todavía no terminó de asentarse justo
