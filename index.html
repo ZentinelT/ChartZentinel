@@ -302,6 +302,11 @@
     color: inherit; cursor: pointer; flex-shrink: 0;
   }
   .ind-eye-btn:hover { color: var(--gold); }
+  .ind-close-btn {
+    background: none; border: none; padding: 0; margin: 0; display: flex;
+    color: inherit; cursor: pointer; flex-shrink: 0;
+  }
+  .ind-close-btn:hover { color: var(--red); }
   /* Colapsar la LISTA (los nombres) — separado de ocultar los dibujos de
      cada indicador (eso lo hace el ojo de la toolbar, ver
      toggleAllIndicatorsVisibility). Vive como última fila de la lista,
@@ -8536,6 +8541,7 @@ function addIndicatorSeries(name) {
 
 const IND_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 const IND_EYE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const IND_CLOSE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>`;
 const IND_EYE_OFF_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.4 18.4 0 0 1 4.22-5.07M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 // Fila para colapsar la LISTA (no los dibujos, ver toggleAllIndicatorsVisibility)
 // — chevron hacia arriba: "se repliega para arriba, detrás del símbolo".
@@ -8557,8 +8563,9 @@ function renderIndicatorChips() {
     const chip = document.createElement('div');
     chip.className = 'ind-chip' + (hidden ? ' ind-chip-hidden' : '');
     chip.title = name + ' settings';
-    chip.innerHTML = `<span>${name}</span><button class="ind-eye-btn" title="${hidden ? 'Mostrar' : 'Ocultar'} ${name}">${hidden ? IND_EYE_OFF_SVG : IND_EYE_SVG}</button>${IND_GEAR_SVG}`;
+    chip.innerHTML = `<span>${name}</span><button class="ind-eye-btn" title="${hidden ? 'Mostrar' : 'Ocultar'} ${name}">${hidden ? IND_EYE_OFF_SVG : IND_EYE_SVG}</button>${IND_GEAR_SVG}<button class="ind-close-btn" title="Remove ${name}">${IND_CLOSE_SVG}</button>`;
     chip.querySelector('.ind-eye-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleIndicatorVisibility(name); });
+    chip.querySelector('.ind-close-btn').addEventListener('click', (e) => { e.stopPropagation(); removeIndicator(name); });
     chip.addEventListener('click', () => openIndicatorSettings(name));
     el.appendChild(chip);
   });
