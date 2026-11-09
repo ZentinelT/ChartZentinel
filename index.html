@@ -13868,6 +13868,18 @@ function _resyncChartLayout(){
   const cc = document.getElementById('chart-container');
   if (!cc || !cc.clientWidth || !cc.clientHeight) return;
   chart.applyOptions({ width: cc.clientWidth, height: cc.clientHeight });
+  // Mismo problema de fondo que motiva todo este resync (layout que no
+  // terminó de asentarse en el primer pasada — ver el comentario grande
+  // de más abajo): si el RSI le robó espacio al chart principal recién
+  // acá (DESPUÉS de que scrollToRealTimeReliably() ya había corrido con
+  // el tamaño viejo), la vista se quedaba pegada mostrando un margen
+  // derecho distinto al configurado, escondiendo las velas más
+  // recientes — reportado por el usuario como "el margen derecho no se
+  // respeta al refrescar". Repetirlos acá, con el tamaño YA correcto,
+  // los deja consistentes sin importar en qué pasada terminó de asentar
+  // el layout real.
+  renderRsi();
+  scrollToRealTimeReliably();
   // El resize de arriba por sí solo NO corrige nada de Watchtower/Sniper/
   // Sweeps ni de las líneas/manijas de los dibujos propios — esas cajas y
   // líneas se dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN
@@ -14035,6 +14047,14 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // — el que explicaba por qué el "mal acomodado al refrescar" aparecía
     // solo en los paneles CON indicadores activos.
     chart.applyOptions({ width:_cc.clientWidth, height:_cc.clientHeight });
+    // El RSI (si está activo) recién reclama su espacio vertical ACÁ, al
+    // agregarse como el resto de los indicadores (ver renderRsi dentro de
+    // addIndicatorSeries) — eso corre DESPUÉS del scrollToRealTimeReliably()
+    // de más arriba, que entonces calculó el margen derecho contra un
+    // chart todavía más alto de lo que terminó quedando. Repetirlo acá,
+    // ya con el tamaño final, evita que el margen configurado quede mal
+    // aplicado y la vela más reciente termine tapada/afuera de vista.
+    scrollToRealTimeReliably();
 
     refreshAllDrawingsGeometry();
     if(selectedDrawingId)highlightSelectedSvg(selectedDrawingId);
