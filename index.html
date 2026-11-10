@@ -11400,6 +11400,7 @@ function sm2Line(svg, t1, t2, y, color, width, dash) {
   if (dash) el.setAttribute('stroke-dasharray', dash);
   tagIndicatorEl(el, 'Stat Map 2');
   svg.appendChild(el);
+  registerIndicatorHit('Stat Map 2', {kind:'line', x1, x2, y: yy, tol: 8});
 }
 
 function sm2Rect(svg, t1, t2, top, bottom, fill) {
@@ -11414,6 +11415,7 @@ function sm2Rect(svg, t1, t2, top, bottom, fill) {
   el.setAttribute('fill', fill); el.setAttribute('stroke', 'none');
   tagIndicatorEl(el, 'Stat Map 2');
   svg.appendChild(el);
+  registerIndicatorHit('Stat Map 2', {kind:'rect', x1: Math.min(x1,x2), y1: Math.min(y1,y2), x2: Math.max(x1,x2), y2: Math.max(y1,y2), tol: 3});
 }
 
 // Dibuja los niveles de un setup. t2 = lastTime + LEVEL_EXTEND_BARS * barInterval (igual que Watchtower).
