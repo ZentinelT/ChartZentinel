@@ -4313,7 +4313,6 @@ const STAT_MAP_DEFAULTS = {
 // Cada slot tiene sus propios colores; los toggles de nivel son globales.
 const STAT_MAP_2_DEFAULTS = {
   enabled:false, behindCandles:false,
-  projectionBars:24,
   // TF1
   tf1:'4H', tf1HistCount:60, tf1Lookback:1,
   tf1OpenColor:'rgba(208,208,208,1)', tf1OpenWidth:1, tf1OpenStyle:'dotted',
@@ -9078,7 +9077,6 @@ function openIndicatorSettings(name) {
     const qc=snParseRgba(s2.quantileColor);
     body.innerHTML = `
       <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sm2-behind" ${s2.behindCandles?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Projection bars</span><input type="number" id="sm2-proj" min="1" max="500" step="1" value="${s2.projectionBars}" style="width:56px"></div>
       ${sm2tfBlock(1)}${sm2tfBlock(2)}${sm2tfBlock(3)}${sm2tfBlock(4)}
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Levels</div>
       <label class="wt-set-row"><span>Show Manipulation</span><input type="checkbox" id="sm2-show-manip" ${s2.showManip?'checked':''}></label>
@@ -9375,7 +9373,6 @@ function applyIndSettingsForm() {
     const g = id => document.getElementById(id);
     const s2 = STATE.statMap2;
     s2.behindCandles = g('sm2-behind').checked;
-    s2.projectionBars = Math.max(1, Math.min(500, Number(g('sm2-proj').value)||24));
     for (let n = 1; n <= 4; n++) {
       s2[`tf${n}`] = g(`sm2-tf${n}`).value;
       s2[`tf${n}HistCount`] = Math.max(2, Math.min(500, Number(g(`sm2-tf${n}-hist`).value)||60));
@@ -12085,10 +12082,10 @@ function sm2Rect(svg, t1, t2, top, bottom, fill) {
   svg.appendChild(el);
 }
 
-// Dibuja los niveles de un setup. t2 = lastTime + projectionBars * barInterval.
-function sm2DrawSetup(svg, setup, lastTime, barInterval, projectionBars, opts) {
+// Dibuja los niveles de un setup. t2 = lastTime + LEVEL_EXTEND_BARS * barInterval (igual que Watchtower).
+function sm2DrawSetup(svg, setup, lastTime, barInterval, opts) {
   const t1 = safeLineTime(setup.startTime);
-  const t2 = safeLineTime(lastTime + projectionBars * barInterval);
+  const t2 = safeLineTime(lastTime + LEVEL_EXTEND_BARS * barInterval);
   const open = setup.openPrice;
   const lblX = opts.labelSide === 'left' ? t1 : t2;
 
@@ -12169,7 +12166,7 @@ function renderStatMap2() {
     const tfStr = s2[`tf${n}`];
     if (!tfStr || tfStr === 'None') continue;
     const setups = sm2BuildTfSetupsCached(candles, tfStr, s2[`tf${n}HistCount`], s2[`tf${n}Lookback`], n - 1);
-    setups.forEach(setup => sm2DrawSetup(svg, setup, lastTime, barInterval, s2.projectionBars, Object.assign({
+    setups.forEach(setup => sm2DrawSetup(svg, setup, lastTime, barInterval, Object.assign({
       openColor: s2[`tf${n}OpenColor`], openWidth: s2[`tf${n}OpenWidth`], openStyle: s2[`tf${n}OpenStyle`],
       manipColor: s2[`tf${n}ManipColor`], distColor: s2[`tf${n}DistColor`],
       avgHlColor: s2[`tf${n}AvgHlColor`], lineWidth: s2[`tf${n}LineWidth`],
