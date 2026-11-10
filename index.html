@@ -4277,24 +4277,36 @@ const FRACTAL_MODEL_DEFAULTS = {
 //     salta a futuro y nunca necesita "encogerse" — crece solo, de a poco.
 // line/zoneColor en gris claro (no negro, como venía el Pine) — un fondo
 // oscuro como el de ChartZentinel vuelve invisible una línea negra.
+// Niveles: ver el comentario grande arriba de smBuildDailySetups — en vez
+// de fracciones fijas del rango anterior (versión vieja), ahora replica la
+// lógica del indicador "OHLC StatMap" de referencia (Pine) que el usuario
+// pidió portar: Manipulation/Distribution son DIRECCIONALES (dependen de
+// si el período anterior cerró alcista o bajista) y se promedian/median-an
+// sobre un historial rodante de histCount períodos, en vez de tomar un
+// único período anterior. Sin cuantiles (pedido explícito del usuario).
 const STAT_MAP_DEFAULTS = {
   enabled:false, behindCandles:false,
   // Sesión diaria
   showDaily:true, anchorHour:0, anchorMin:0, anchorStep:24, lookbackCount:1,
+  histCount:60,
+  openColor:'rgba(208,208,208,1)', openWidth:1, openStyle:'solid',
+  manipColor:'rgba(255,152,0,1)', distColor:'rgba(41,121,255,1)', avgHlColor:'rgba(76,175,80,1)',
+  lineWidth:1,
   // Apertura semanal
   showWeekly:false, wAnchorMode:'open', wAnchorHour:0, wAnchorMin:0,
-  wLineColor:'rgba(0,150,150,1)', wMidColor:'rgba(0,150,150,0.7)',
-  wLineWidth:1, wLineStyle:'dashed', wZoneColor:'rgba(0,150,150,0.10)', wLookback:1,
+  wLineColor:'rgba(0,150,150,1)', wLineWidth:1, wLineStyle:'dashed',
+  wZoneColor:'rgba(0,150,150,0.10)', wLookback:1, wHistCount:12,
+  wManipColor:'rgba(255,152,0,1)', wDistColor:'rgba(41,121,255,1)', wAvgHlColor:'rgba(76,175,80,1)',
   // Apertura mensual
   showMonthly:false, mAnchorMode:'open', mAnchorHour:0, mAnchorMin:0,
-  mLineColor:'rgba(170,0,170,1)', mMidColor:'rgba(170,0,170,0.7)',
-  mLineWidth:1, mLineStyle:'dashed', mZoneColor:'rgba(170,0,170,0.10)', mLookback:1,
-  // Líneas (diario)
-  lineWidth:1, lineStyle:'solid', lineColor:'rgba(208,208,208,1)', midColor:'rgba(255,165,0,1)',
-  // Zonas
-  showInner:true, zoneColor:'rgba(255,255,255,0.15)', zoneSize:4, zoneSizeOuter:8,
+  mLineColor:'rgba(170,0,170,1)', mLineWidth:1, mLineStyle:'dashed',
+  mZoneColor:'rgba(170,0,170,0.10)', mLookback:1, mHistCount:12,
+  mManipColor:'rgba(255,152,0,1)', mDistColor:'rgba(41,121,255,1)', mAvgHlColor:'rgba(76,175,80,1)',
+  // Niveles a mostrar (aplica a diario/semanal/mensual) + sombreado entre
+  // el nivel promedio y el de mediana de cada banda (Manipulation/Distribution)
+  showManip:true, showDist:true, showMedian:true, showAvgHL:true, showShading:true,
   // Etiquetas
-  showLabels:true, labelSide:'right', labelColor:'rgba(255,255,255,0.5)', midLblColor:'rgba(255,165,0,1)',
+  showLabels:true, labelSide:'right',
 };
 const STATE = {
   dataSource: lsGet(lsKey('td_datasource')) || 'binance', // 'mt5' | 'binance'
@@ -8868,10 +8880,7 @@ function openIndicatorSettings(name) {
       </div>`;
   } else if (name === 'Stat Map') {
     const sm = STATE.statMap;
-    const lc = snParseRgba(sm.lineColor), mc = snParseRgba(sm.midColor), zc = snParseRgba(sm.zoneColor);
-    const lblc = snParseRgba(sm.labelColor), mlblc = snParseRgba(sm.midLblColor);
-    const wlc = snParseRgba(sm.wLineColor), wmc = snParseRgba(sm.wMidColor), wzc = snParseRgba(sm.wZoneColor);
-    const mlc = snParseRgba(sm.mLineColor), mmc = snParseRgba(sm.mMidColor), mzc = snParseRgba(sm.mZoneColor);
+    const wzc = snParseRgba(sm.wZoneColor), mzc = snParseRgba(sm.mZoneColor), zc = snParseRgba(sm.zoneColor);
     const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
     body.innerHTML = `
       <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sm-behind-candles" ${sm.behindCandles?'checked':''}></label>
@@ -8890,6 +8899,23 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Setups to show</span>
         <input type="number" id="sm-lookback" min="1" max="20" step="1" value="${sm.lookbackCount}" style="width:56px">
       </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Historical periods</span>
+        <input type="number" id="sm-hist-count" min="2" max="500" step="1" value="${sm.histCount}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Open: width / style</span>
+        <input type="number" id="sm-open-width" min="1" max="5" step="1" value="${sm.openWidth}" style="width:48px">
+        <select id="sm-open-style" class="dtb-select" style="flex:1;">${styleOpts(sm.openStyle)}</select>
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm-open-color" value="${snParseRgba(sm.openColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm-manip-color" value="${snParseRgba(sm.manipColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm-dist-color" value="${snParseRgba(sm.distColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm-avg-hl-color" value="${snParseRgba(sm.avgHlColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Lines width (bandas)</span>
+        <input type="number" id="sm-line-width" min="1" max="5" step="1" value="${sm.lineWidth}" style="width:56px">
+      </div>
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Weekly Open</div>
       <label class="wt-set-row"><span>Show weekly levels</span><input type="checkbox" id="sm-show-weekly" ${sm.showWeekly?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
@@ -8904,17 +8930,23 @@ function openIndicatorSettings(name) {
         <input type="number" id="sm-w-anchor-hour" min="0" max="23" step="1" value="${sm.wAnchorHour}" style="width:48px">
         <input type="number" id="sm-w-anchor-min" min="0" max="59" step="1" value="${sm.wAnchorMin}" style="width:48px">
       </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-w-line-color" value="${wlc.hex}"><input type="number" id="sm-w-line-tr" min="0" max="100" step="1" value="${wlc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-w-mid-color" value="${wmc.hex}"><input type="number" id="sm-w-mid-tr" min="0" max="100" step="1" value="${wmc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Width / Style</span>
+        <span style="flex:1">Open: width / style</span>
         <input type="number" id="sm-w-line-width" min="1" max="5" step="1" value="${sm.wLineWidth}" style="width:48px">
         <select id="sm-w-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.wLineStyle)}</select>
       </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm-w-line-color" value="${snParseRgba(sm.wLineColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm-w-manip-color" value="${snParseRgba(sm.wManipColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm-w-dist-color" value="${snParseRgba(sm.wDistColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm-w-avg-hl-color" value="${snParseRgba(sm.wAvgHlColor).hex}"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-w-zone-color" value="${wzc.hex}"><input type="number" id="sm-w-zone-tr" min="0" max="100" step="1" value="${wzc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Weeks to show</span>
         <input type="number" id="sm-w-lookback" min="1" max="8" step="1" value="${sm.wLookback}" style="width:56px">
+      </div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Historical periods</span>
+        <input type="number" id="sm-w-hist-count" min="2" max="200" step="1" value="${sm.wHistCount}" style="width:56px">
       </div>
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Monthly Open</div>
       <label class="wt-set-row"><span>Show monthly levels</span><input type="checkbox" id="sm-show-monthly" ${sm.showMonthly?'checked':''}></label>
@@ -8930,37 +8962,31 @@ function openIndicatorSettings(name) {
         <input type="number" id="sm-m-anchor-hour" min="0" max="23" step="1" value="${sm.mAnchorHour}" style="width:48px">
         <input type="number" id="sm-m-anchor-min" min="0" max="59" step="1" value="${sm.mAnchorMin}" style="width:48px">
       </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-m-line-color" value="${mlc.hex}"><input type="number" id="sm-m-line-tr" min="0" max="100" step="1" value="${mlc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-m-mid-color" value="${mmc.hex}"><input type="number" id="sm-m-mid-tr" min="0" max="100" step="1" value="${mmc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Width / Style</span>
+        <span style="flex:1">Open: width / style</span>
         <input type="number" id="sm-m-line-width" min="1" max="5" step="1" value="${sm.mLineWidth}" style="width:48px">
         <select id="sm-m-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.mLineStyle)}</select>
       </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm-m-line-color" value="${snParseRgba(sm.mLineColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm-m-manip-color" value="${snParseRgba(sm.mManipColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm-m-dist-color" value="${snParseRgba(sm.mDistColor).hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm-m-avg-hl-color" value="${snParseRgba(sm.mAvgHlColor).hex}"></div>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-m-zone-color" value="${mzc.hex}"><input type="number" id="sm-m-zone-tr" min="0" max="100" step="1" value="${mzc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="gap:8px">
         <span style="flex:1">Months to show</span>
         <input type="number" id="sm-m-lookback" min="1" max="6" step="1" value="${sm.mLookback}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Lines (daily)</div>
       <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Width / Style</span>
-        <input type="number" id="sm-line-width" min="1" max="5" step="1" value="${sm.lineWidth}" style="width:48px">
-        <select id="sm-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.lineStyle)}</select>
+        <span style="flex:1">Historical periods</span>
+        <input type="number" id="sm-m-hist-count" min="2" max="120" step="1" value="${sm.mHistCount}" style="width:56px">
       </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color</span><input type="color" id="sm-line-color" value="${lc.hex}"><input type="number" id="sm-line-tr" min="0" max="100" step="1" value="${lc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media</span><input type="color" id="sm-mid-color" value="${mc.hex}"><input type="number" id="sm-mid-tr" min="0" max="100" step="1" value="${mc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Zones</div>
-      <label class="wt-set-row"><span>Show 0 / 1 levels</span><input type="checkbox" id="sm-show-inner" ${sm.showInner?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-zone-color" value="${zc.hex}"><input type="number" id="sm-zone-tr" min="0" max="100" step="1" value="${zc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Inner (%)</span>
-        <input type="number" id="sm-zone-size" min="0" max="5" step="0.5" value="${sm.zoneSize}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Outer (%)</span>
-        <input type="number" id="sm-zone-size-outer" min="0" max="8" step="0.5" value="${sm.zoneSizeOuter}" style="width:56px">
-      </div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Levels</div>
+      <label class="wt-set-row"><span>Show Manipulation</span><input type="checkbox" id="sm-show-manip" ${sm.showManip?'checked':''}></label>
+      <label class="wt-set-row"><span>Show Distribution</span><input type="checkbox" id="sm-show-dist" ${sm.showDist?'checked':''}></label>
+      <label class="wt-set-row"><span>Show Median</span><input type="checkbox" id="sm-show-median" ${sm.showMedian?'checked':''}></label>
+      <label class="wt-set-row"><span>Show Avg High/Low</span><input type="checkbox" id="sm-show-avg-hl" ${sm.showAvgHL?'checked':''}></label>
+      <label class="wt-set-row"><span>Show shading (avg↔median)</span><input type="checkbox" id="sm-show-shading" ${sm.showShading?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Shading color (diario)</span><input type="color" id="sm-zone-color" value="${zc.hex}"><input type="number" id="sm-zone-tr" min="0" max="100" step="1" value="${zc.transparency}" style="width:48px" title="Transparency %"></div>
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Labels</div>
       <label class="wt-set-row"><span>Show</span><input type="checkbox" id="sm-show-labels" ${sm.showLabels?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px">
@@ -8969,9 +8995,7 @@ function openIndicatorSettings(name) {
           <option value="left" ${sm.labelSide==='left'?'selected':''}>Left</option>
           <option value="right" ${sm.labelSide==='right'?'selected':''}>Right</option>
         </select>
-      </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color (diario)</span><input type="color" id="sm-label-color" value="${lblc.hex}"><input type="number" id="sm-label-tr" min="0" max="100" step="1" value="${lblc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color media (diario)</span><input type="color" id="sm-mid-lbl-color" value="${mlblc.hex}"><input type="number" id="sm-mid-lbl-tr" min="0" max="100" step="1" value="${mlblc.transparency}" style="width:48px" title="Transparency %"></div>`;
+      </div>`;
   } else if (name === 'RSI') {
     const s = getRsiSettings();
     body.innerHTML = `
@@ -9199,43 +9223,52 @@ function applyIndSettingsForm() {
     sm.anchorMin  = Math.max(0, Math.min(59, Number(g('sm-anchor-min').value)||0));
     sm.anchorStep = Math.max(1, Math.min(24, Number(g('sm-anchor-step').value)||24));
     sm.lookbackCount = Math.max(1, Math.min(20, Number(g('sm-lookback').value)||1));
+    sm.histCount = Math.max(2, Math.min(500, Number(g('sm-hist-count').value)||60));
+    sm.openWidth = Math.max(1, Math.min(5, Number(g('sm-open-width').value)||1));
+    sm.openStyle = g('sm-open-style').value;
+    sm.openColor = snRgba(g('sm-open-color').value, 0);
+    sm.manipColor = snRgba(g('sm-manip-color').value, 0);
+    sm.distColor = snRgba(g('sm-dist-color').value, 0);
+    sm.avgHlColor = snRgba(g('sm-avg-hl-color').value, 0);
+    sm.lineWidth = Math.max(1, Math.min(5, Number(g('sm-line-width').value)||1));
 
     sm.showWeekly = g('sm-show-weekly').checked;
     sm.wAnchorMode = g('sm-w-anchor-mode').value;
     sm.wAnchorHour = Math.max(0, Math.min(23, Number(g('sm-w-anchor-hour').value)||0));
     sm.wAnchorMin  = Math.max(0, Math.min(59, Number(g('sm-w-anchor-min').value)||0));
-    sm.wLineColor = snRgba(g('sm-w-line-color').value, Number(g('sm-w-line-tr').value)||0);
-    sm.wMidColor  = snRgba(g('sm-w-mid-color').value, Number(g('sm-w-mid-tr').value)||0);
+    sm.wLineColor = snRgba(g('sm-w-line-color').value, 0);
     sm.wLineWidth = Math.max(1, Math.min(5, Number(g('sm-w-line-width').value)||1));
     sm.wLineStyle = g('sm-w-line-style').value;
+    sm.wManipColor = snRgba(g('sm-w-manip-color').value, 0);
+    sm.wDistColor = snRgba(g('sm-w-dist-color').value, 0);
+    sm.wAvgHlColor = snRgba(g('sm-w-avg-hl-color').value, 0);
     sm.wZoneColor = snRgba(g('sm-w-zone-color').value, Number(g('sm-w-zone-tr').value)||0);
     sm.wLookback  = Math.max(1, Math.min(8, Number(g('sm-w-lookback').value)||1));
+    sm.wHistCount = Math.max(2, Math.min(200, Number(g('sm-w-hist-count').value)||12));
 
     sm.showMonthly = g('sm-show-monthly').checked;
     sm.mAnchorMode = g('sm-m-anchor-mode').value;
     sm.mAnchorHour = Math.max(0, Math.min(23, Number(g('sm-m-anchor-hour').value)||0));
     sm.mAnchorMin  = Math.max(0, Math.min(59, Number(g('sm-m-anchor-min').value)||0));
-    sm.mLineColor = snRgba(g('sm-m-line-color').value, Number(g('sm-m-line-tr').value)||0);
-    sm.mMidColor  = snRgba(g('sm-m-mid-color').value, Number(g('sm-m-mid-tr').value)||0);
+    sm.mLineColor = snRgba(g('sm-m-line-color').value, 0);
     sm.mLineWidth = Math.max(1, Math.min(5, Number(g('sm-m-line-width').value)||1));
     sm.mLineStyle = g('sm-m-line-style').value;
+    sm.mManipColor = snRgba(g('sm-m-manip-color').value, 0);
+    sm.mDistColor = snRgba(g('sm-m-dist-color').value, 0);
+    sm.mAvgHlColor = snRgba(g('sm-m-avg-hl-color').value, 0);
     sm.mZoneColor = snRgba(g('sm-m-zone-color').value, Number(g('sm-m-zone-tr').value)||0);
     sm.mLookback  = Math.max(1, Math.min(6, Number(g('sm-m-lookback').value)||1));
+    sm.mHistCount = Math.max(2, Math.min(120, Number(g('sm-m-hist-count').value)||12));
 
-    sm.lineWidth = Math.max(1, Math.min(5, Number(g('sm-line-width').value)||1));
-    sm.lineStyle = g('sm-line-style').value;
-    sm.lineColor = snRgba(g('sm-line-color').value, Number(g('sm-line-tr').value)||0);
-    sm.midColor  = snRgba(g('sm-mid-color').value, Number(g('sm-mid-tr').value)||0);
-
-    sm.showInner = g('sm-show-inner').checked;
+    sm.showManip = g('sm-show-manip').checked;
+    sm.showDist = g('sm-show-dist').checked;
+    sm.showMedian = g('sm-show-median').checked;
+    sm.showAvgHL = g('sm-show-avg-hl').checked;
+    sm.showShading = g('sm-show-shading').checked;
     sm.zoneColor = snRgba(g('sm-zone-color').value, Number(g('sm-zone-tr').value)||0);
-    sm.zoneSize = Math.max(0, Math.min(5, Number(g('sm-zone-size').value)||0));
-    sm.zoneSizeOuter = Math.max(0, Math.min(8, Number(g('sm-zone-size-outer').value)||0));
 
     sm.showLabels = g('sm-show-labels').checked;
     sm.labelSide = g('sm-label-side').value;
-    sm.labelColor = snRgba(g('sm-label-color').value, Number(g('sm-label-tr').value)||0);
-    sm.midLblColor = snRgba(g('sm-mid-lbl-color').value, Number(g('sm-mid-lbl-tr').value)||0);
 
     saveStatMapState();
     renderStatMap();
@@ -11366,10 +11399,44 @@ function renderFractalModel(){
 //  raíz (apertura semanal que casi nunca disparaba + parpadeo al nacer
 //  un setup nuevo).
 // ══════════════════════════════════════════════════════════
-const SM_LEVEL_OFFSETS = [0.0, -0.5, 0.2, 0.5, 0.8, 1.0, 1.5];
-const SM_LEVEL_NAMES   = ['', '-D', '+M', '0.5', '-M', '', '+D'];
-function smIsOuterOffset(o){ return o === -0.5 || o === 1.5; }
 function smDash(styleStr){ return styleStr === 'dashed' ? '6,4' : styleStr === 'dotted' ? '2,2' : null; }
+
+// Historial rodante (tamaño histCount) de distancias Manipulation/Distribution/
+// High/Low usado para los promedios y medianas de cada banda — ver el
+// comentario grande de smBuildDailySetups.
+function smPushStat(arr, val, histCount){
+  arr.push(val);
+  while (arr.length > histCount) arr.shift();
+}
+function smAvg(arr){ return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+function smMedian(arr){
+  if (!arr.length) return 0;
+  const s = arr.slice().sort((a,b)=>a-b);
+  const mid = Math.floor(s.length/2);
+  return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+// Empuja al historial las distancias del período que ACABA de cerrar y
+// devuelve una foto de los stats resultantes (avg/mediana) — se llama justo
+// antes de abrir el setup siguiente, igual que el Pine original (que
+// recalcula avg/median apenas push-ea tf1[1] al array, y dibuja el setup
+// NUEVO con esos valores ya actualizados).
+function smPushAndSnapshot(period, hist, histCount){
+  const highDist = period.high - period.open, lowDist = period.open - period.low;
+  smPushStat(hist.high, highDist, histCount);
+  smPushStat(hist.low, lowDist, histCount);
+  // Direccional (igual que el Pine): alcista -> manip fue el swing hacia
+  // abajo antes de subir (open-low), dist fue la extensión hacia arriba
+  // (high-open); bajista, al revés. Doji (close===open) no aporta nada —
+  // mismo criterio que el Pine original (si no entra en ninguna rama, no
+  // empuja nada a los arrays de manip/dist).
+  if (period.close > period.open){ smPushStat(hist.manip, lowDist, histCount); smPushStat(hist.dist, highDist, histCount); }
+  else if (period.close < period.open){ smPushStat(hist.manip, highDist, histCount); smPushStat(hist.dist, lowDist, histCount); }
+  return {
+    avgManip: smAvg(hist.manip), avgDist: smAvg(hist.dist),
+    medManip: smMedian(hist.manip), medDist: smMedian(hist.dist),
+    avgHigh: smAvg(hist.high), avgLow: smAvg(hist.low),
+  };
+}
 
 // "Día" calendario NY medianoche-a-medianoche — DISTINTO de wtDayKey (que
 // usa el rollover 18:00 del D1 de MT5, para PDH/PDL de Watchtower): el
@@ -11431,15 +11498,28 @@ function smNearestCandle(candles, targetTime){
 // también dispararía.
 // "Rango anterior" = el día calendario NY completo inmediatamente previo
 // (mismo criterio que prevDayHigh/prevDayLow del Pine).
-function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval){
+// Manipulation/Distribution/Avg High/Avg Low — portados del indicador
+// "OHLC StatMap" (Pine) que el usuario pidió usar como referencia: en vez
+// de un único período anterior (versión vieja de este archivo), acá se
+// mantiene un historial rodante de histCount períodos ya cerrados y se
+// dibuja cada setup con el promedio/mediana de ESE historial (igual que el
+// Pine, que recalcula avg/median cada vez que cierra una vela de su TF).
+// Direccional: en una vela alcista, "Manipulation" es el swing en contra
+// (open-low) que barrió liquidez antes de subir, y "Distribution" es la
+// extensión en la dirección del movimiento (high-open); en una bajista se
+// invierte. Sin cuantiles (pedido explícito del usuario, a diferencia del
+// Pine original que sí los tiene).
+function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval, histCount){
   const setups = [];
   let cur = null, prevCompleted = null, pendingTarget = null;
+  const hist = { manip:[], dist:[], high:[], low:[] };
+  let lastStats = { avgManip:0, avgDist:0, medManip:0, medDist:0, avgHigh:0, avgLow:0 };
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = smDayKey(c.time);
     if (!cur || cur.key !== k){
-      if (cur) prevCompleted = cur;
-      cur = { key:k, high:c.high, low:c.low };
+      if (cur){ lastStats = smPushAndSnapshot(cur, hist, histCount); prevCompleted = cur; }
+      cur = { key:k, open:c.open, high:c.high, low:c.low, close:c.close };
       // Horario pedido de ESTE día — recién se resuelve a una vela más
       // abajo, cuando el día YA llegó a esa hora (ver el chequeo
       // "c.time >= pendingTarget"), no acá. Si el día todavía no tiene
@@ -11455,6 +11535,7 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterva
     } else {
       if (c.high>cur.high) cur.high=c.high;
       if (c.low<cur.low) cur.low=c.low;
+      cur.close = c.close;
     }
     if (pendingTarget !== null && c.time >= pendingTarget){
       // Recién acá, con el horario ya alcanzado, smNearestCandle tiene
@@ -11469,7 +11550,7 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterva
       // MISMO horario — reportado por el usuario comparando H1 contra H4.
       const startCandle = smNearestCandle(candles, pendingTarget);
       if (Math.abs(startCandle.time - pendingTarget) <= Math.max(barInterval, 4*3600)){
-        setups.push({ openPrice:startCandle.open, startTime:startCandle.time, high:prevCompleted.high, low:prevCompleted.low });
+        setups.push(Object.assign({ openPrice:startCandle.open, startTime:startCandle.time }, lastStats));
       }
       pendingTarget = null;
     }
@@ -11504,17 +11585,19 @@ function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterva
 // nuevo, se calcula ese horario exacto con wtDayKey y se busca la vela
 // real más cercana en TODO el historial cargado (smNearestCandle), sin
 // restricción de "hacia adelante".
-function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval){
+function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
   const setups = [];
   let cur = null, prevCompleted = null, pending = false;
   const targetSec = anchorHour*3600 + anchorMin*60;
+  const hist = { manip:[], dist:[], high:[], low:[] };
+  let lastStats = { avgManip:0, avgDist:0, medManip:0, medDist:0, avgHigh:0, avgLow:0 };
   for (let i=0;i<candles.length;i++){
     const c = candles[i];
     const k = keyFn(c.time);
     const isNewPeriod = !cur || cur.key !== k;
     if (isNewPeriod){
-      if (cur) prevCompleted = cur;
-      cur = { key:k, high:c.high, low:c.low };
+      if (cur){ lastStats = smPushAndSnapshot(cur, hist, histCount); prevCompleted = cur; }
+      cur = { key:k, open:c.open, high:c.high, low:c.low, close:c.close };
       pending = true;
       if (mode === 'custom' && anchorHour >= 18){
         const target = wtDayKey(c.time) + (anchorHour-18)*3600 + anchorMin*60;
@@ -11526,19 +11609,20 @@ function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorM
         // cargado) — mejor no generar un setup mal anclado que uno
         // silenciosamente desplazado varias horas.
         if (prevCompleted && Math.abs(startCandle.time - target) <= 4*3600){
-          setups.push({ openPrice:startCandle.open, startTime:startCandle.time, high:prevCompleted.high, low:prevCompleted.low });
+          setups.push(Object.assign({ openPrice:startCandle.open, startTime:startCandle.time }, lastStats));
         }
         continue;
       }
     } else {
       if (c.high>cur.high) cur.high=c.high;
       if (c.low<cur.low) cur.low=c.low;
+      cur.close = c.close;
     }
     if (pending){
       const hit = mode === 'open' ? isNewPeriod : smHourHit(c, targetSec, barInterval);
       if (hit){
         pending = false;
-        if (prevCompleted) setups.push({ openPrice:c.open, startTime:c.time, high:prevCompleted.high, low:prevCompleted.low });
+        if (prevCompleted) setups.push(Object.assign({ openPrice:c.open, startTime:c.time }, lastStats));
       }
     }
   }
@@ -11567,7 +11651,6 @@ function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorM
 // hasta esa aproximación, que es lo mejor que se puede hacer sin saber
 // todavía cuándo va a arrancar el siguiente período real.
 function smDrawSetup(svg, setup, nextStart, durationSec, lastTime, barInterval, opts){
-  const range = setup.high - setup.low;
   const naturalEnd = nextStart != null ? nextStart : setup.startTime + durationSec;
   const liveEnd = Math.min(naturalEnd, lastTime + LEVEL_EXTEND_BARS*barInterval);
   // naturalEnd (startTime + duración en segundos) casi nunca cae justo en
@@ -11580,18 +11663,39 @@ function smDrawSetup(svg, setup, nextStart, durationSec, lastTime, barInterval, 
   // hace falta el mismo redondeo.
   const t2 = safeLineTime(lastTime < naturalEnd ? liveEnd : naturalEnd);
   const t1 = safeLineTime(setup.startTime);
-  for (let i=0;i<SM_LEVEL_OFFSETS.length;i++){
-    const off = SM_LEVEL_OFFSETS[i];
-    const isInner = off === 0.0 || off === 1.0;
-    if (isInner && !opts.showInner) continue;
-    const lvl = setup.openPrice + (off-0.5)*range;
-    const isMiddle = off === 0.5;
-    const halfZone = range * (smIsOuterOffset(off) ? opts.zoneSizeOuter : opts.zoneSize) / 100;
-    wtLine(svg, t1, t2, lvl, isMiddle?opts.midColor:opts.lineColor, opts.lineWidth, opts.dash, 'Stat Map');
-    if (!isMiddle) wtRect(svg, t1, t2, lvl+halfZone, lvl-halfZone, opts.zoneColor, 1, 'none', 'Stat Map');
-    if (opts.showLabels){
-      const lblX = opts.labelSide==='left' ? t1 : t2;
-      wtLabel(svg, lblX, lvl, opts.labelPrefix+SM_LEVEL_NAMES[i], isMiddle?opts.midLblColor:opts.labelColor, 'Stat Map');
+  const open = setup.openPrice;
+  const lblX = opts.labelSide==='left' ? t1 : t2;
+
+  wtLine(svg, t1, t2, open, opts.openColor, opts.openWidth, smDash(opts.openStyle), 'Stat Map');
+  if (opts.showLabels) wtLabel(svg, lblX, open, opts.labelPrefix+'Open', opts.openColor, 'Stat Map');
+
+  function level(show, value, color, name, dash){
+    if (!show) return;
+    wtLine(svg, t1, t2, value, color, opts.lineWidth, dash, 'Stat Map');
+    if (opts.showLabels) wtLabel(svg, lblX, value, opts.labelPrefix+name, color, 'Stat Map');
+  }
+  level(opts.showManip, open+setup.avgManip, opts.manipColor, '+M', null);
+  level(opts.showManip, open-setup.avgManip, opts.manipColor, '-M', null);
+  level(opts.showDist,  open+setup.avgDist,  opts.distColor,  '+D', null);
+  level(opts.showDist,  open-setup.avgDist,  opts.distColor,  '-D', null);
+  level(opts.showManip && opts.showMedian, open+setup.medManip, opts.manipColor, '+M (Med)', '4,3');
+  level(opts.showManip && opts.showMedian, open-setup.medManip, opts.manipColor, '-M (Med)', '4,3');
+  level(opts.showDist  && opts.showMedian, open+setup.medDist,  opts.distColor,  '+D (Med)', '4,3');
+  level(opts.showDist  && opts.showMedian, open-setup.medDist,  opts.distColor,  '-D (Med)', '4,3');
+  level(opts.showAvgHL, open+setup.avgHigh, opts.avgHlColor, 'Avg High', '6,4');
+  level(opts.showAvgHL, open-setup.avgLow,  opts.avgHlColor, 'Avg Low',  '6,4');
+
+  // Franja sombreada entre el nivel promedio y el de mediana de cada banda
+  // (Manipulation/Distribution, igual que el Pine original) — solo tiene
+  // sentido con ambos niveles visibles a la vez.
+  if (opts.showShading){
+    if (opts.showManip && opts.showMedian){
+      wtRect(svg, t1, t2, open+Math.max(setup.avgManip,setup.medManip), open+Math.min(setup.avgManip,setup.medManip), opts.zoneColor, 1, 'none', 'Stat Map');
+      wtRect(svg, t1, t2, open-Math.min(setup.avgManip,setup.medManip), open-Math.max(setup.avgManip,setup.medManip), opts.zoneColor, 1, 'none', 'Stat Map');
+    }
+    if (opts.showDist && opts.showMedian){
+      wtRect(svg, t1, t2, open+Math.max(setup.avgDist,setup.medDist), open+Math.min(setup.avgDist,setup.medDist), opts.zoneColor, 1, 'none', 'Stat Map');
+      wtRect(svg, t1, t2, open-Math.min(setup.avgDist,setup.medDist), open-Math.max(setup.avgDist,setup.medDist), opts.zoneColor, 1, 'none', 'Stat Map');
     }
   }
 }
@@ -11605,26 +11709,26 @@ function smDrawSetup(svg, setup, nextStart, durationSec, lastTime, barInterval, 
 // reporte del usuario que con Watchtower; Sniper no lo sufre porque ya
 // tenía su propio cache desde antes).
 let _smDailyCache = null, _smWeeklyCache = null, _smMonthlyCache = null;
-function smBuildDailySetupsCached(candles, anchorHour, anchorMin, lookback, barInterval){
-  const key = _candlesFingerprint(candles) + '|' + anchorHour + '|' + anchorMin + '|' + lookback;
+function smBuildDailySetupsCached(candles, anchorHour, anchorMin, lookback, barInterval, histCount){
+  const key = _candlesFingerprint(candles) + '|' + anchorHour + '|' + anchorMin + '|' + lookback + '|' + histCount;
   if (_smDailyCache && _smDailyCache.key === key) return _smDailyCache.result;
-  const result = smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval);
+  const result = smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval, histCount);
   _smDailyCache = { key, result };
   return result;
 }
-function _smBuildPeriodSetupsCached(cacheGetSet, candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval){
-  const key = _candlesFingerprint(candles) + '|' + lookback + '|' + mode + '|' + anchorHour + '|' + anchorMin;
+function _smBuildPeriodSetupsCached(cacheGetSet, candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
+  const key = _candlesFingerprint(candles) + '|' + lookback + '|' + mode + '|' + anchorHour + '|' + anchorMin + '|' + histCount;
   const cached = cacheGetSet.get();
   if (cached && cached.key === key) return cached.result;
-  const result = smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval);
+  const result = smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval, histCount);
   cacheGetSet.set({ key, result });
   return result;
 }
-function smBuildWeeklySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval){
-  return _smBuildPeriodSetupsCached({ get:()=>_smWeeklyCache, set:v=>_smWeeklyCache=v }, candles, wtWeekKey, lookback, mode, anchorHour, anchorMin, barInterval);
+function smBuildWeeklySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
+  return _smBuildPeriodSetupsCached({ get:()=>_smWeeklyCache, set:v=>_smWeeklyCache=v }, candles, wtWeekKey, lookback, mode, anchorHour, anchorMin, barInterval, histCount);
 }
-function smBuildMonthlySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval){
-  return _smBuildPeriodSetupsCached({ get:()=>_smMonthlyCache, set:v=>_smMonthlyCache=v }, candles, smMonthKey, lookback, mode, anchorHour, anchorMin, barInterval);
+function smBuildMonthlySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
+  return _smBuildPeriodSetupsCached({ get:()=>_smMonthlyCache, set:v=>_smMonthlyCache=v }, candles, smMonthKey, lookback, mode, anchorHour, anchorMin, barInterval, histCount);
 }
 
 function renderStatMap(){
@@ -11662,18 +11766,26 @@ function renderStatMap(){
   const lastTime = candles[candles.length-1].time;
   const labelSide = sm.labelSide === 'left' ? 'left' : 'right';
 
+  // Toggles de nivel + sombreado: compartidos entre diario/semanal/mensual
+  // a propósito (ver el comentario grande arriba de STAT_MAP_DEFAULTS) —
+  // lo que cambia por período es el historial (histCount) y los colores.
+  const levelOpts = {
+    showManip: sm.showManip, showDist: sm.showDist, showMedian: sm.showMedian,
+    showAvgHL: sm.showAvgHL, showShading: sm.showShading,
+    showLabels: sm.showLabels, labelSide,
+  };
+
   if (sm.showDaily !== false){
-    const dailySetups = smBuildDailySetupsCached(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount, barInterval);
-    dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, {
-      lineColor: sm.lineColor, midColor: sm.midColor, lineWidth: sm.lineWidth, dash: smDash(sm.lineStyle),
-      zoneColor: sm.zoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
-      showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
-      labelColor: sm.labelColor, midLblColor: sm.midLblColor, labelPrefix: '',
-    }));
+    const dailySetups = smBuildDailySetupsCached(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount, barInterval, sm.histCount);
+    dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, Object.assign({
+      openColor: sm.openColor, openWidth: sm.openWidth, openStyle: sm.openStyle, lineWidth: sm.lineWidth,
+      manipColor: sm.manipColor, distColor: sm.distColor, avgHlColor: sm.avgHlColor,
+      zoneColor: sm.zoneColor, labelPrefix: '',
+    }, levelOpts)));
   }
 
   if (sm.showWeekly){
-    const weeklySetups = smBuildWeeklySetupsCached(candles, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin, barInterval);
+    const weeklySetups = smBuildWeeklySetupsCached(candles, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin, barInterval, sm.wHistCount);
     // Infinity, NO 118*3600 (la aproximación "~5 días hábiles" del Pine
     // original) como techo: ese techo fijo es lo que generaba el hueco de
     // varios días reportado por el usuario — acá solo sirve de techo
@@ -11681,26 +11793,24 @@ function renderStatMap(){
     // grande de smDrawSetup); el setup más reciente (sin próximo todavía)
     // simplemente sigue creciendo en vivo hasta que lo reemplace el
     // próximo lunes real, sin cortar antes por una duración aproximada.
-    weeklySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, {
-      lineColor: sm.wLineColor, midColor: sm.wMidColor, lineWidth: sm.wLineWidth, dash: smDash(sm.wLineStyle),
-      zoneColor: sm.wZoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
-      showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
-      labelColor: sm.wLineColor, midLblColor: sm.wMidColor, labelPrefix: 'W ',
-    }));
+    weeklySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, Object.assign({
+      openColor: sm.wLineColor, openWidth: sm.wLineWidth, openStyle: sm.wLineStyle, lineWidth: sm.wLineWidth,
+      manipColor: sm.wManipColor, distColor: sm.wDistColor, avgHlColor: sm.wAvgHlColor,
+      zoneColor: sm.wZoneColor, labelPrefix: 'W ',
+    }, levelOpts)));
   }
 
   if (sm.showMonthly){
-    const monthlySetups = smBuildMonthlySetupsCached(candles, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin, barInterval);
+    const monthlySetups = smBuildMonthlySetupsCached(candles, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin, barInterval, sm.mHistCount);
     // Ver el comentario igual arriba, semanal — mismo motivo exacto (acá
     // es el que el usuario reportó: "los niveles mensuales duran 21 días",
     // que era el techo fijo 483*3600 ("~21 días hábiles" del Pine
     // original) cortando antes de que arrancara el mes real siguiente.
-    monthlySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, {
-      lineColor: sm.mLineColor, midColor: sm.mMidColor, lineWidth: sm.mLineWidth, dash: smDash(sm.mLineStyle),
-      zoneColor: sm.mZoneColor, zoneSize: sm.zoneSize, zoneSizeOuter: sm.zoneSizeOuter,
-      showInner: sm.showInner, showLabels: sm.showLabels, labelSide,
-      labelColor: sm.mLineColor, midLblColor: sm.mMidColor, labelPrefix: 'M ',
-    }));
+    monthlySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, Object.assign({
+      openColor: sm.mLineColor, openWidth: sm.mLineWidth, openStyle: sm.mLineStyle, lineWidth: sm.mLineWidth,
+      manipColor: sm.mManipColor, distColor: sm.mDistColor, avgHlColor: sm.mAvgHlColor,
+      zoneColor: sm.mZoneColor, labelPrefix: 'M ',
+    }, levelOpts)));
   }
 }
 
