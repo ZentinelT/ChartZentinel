@@ -4331,12 +4331,6 @@ const STAT_MAP_2_DEFAULTS = {
   tf3ManipColor:'rgba(170,0,255,1)', tf3DistColor:'rgba(41,121,255,1)',
   tf3AvgHlColor:'rgba(76,175,80,1)', tf3LineWidth:1,
   tf3ZoneManipColor:'rgba(170,0,255,0.10)', tf3ZoneDistColor:'rgba(41,121,255,0.10)',
-  // TF4
-  tf4:'None', tf4HistCount:60, tf4Lookback:1,
-  tf4OpenColor:'rgba(208,208,208,1)', tf4OpenWidth:1, tf4OpenStyle:'dotted',
-  tf4ManipColor:'rgba(170,0,255,1)', tf4DistColor:'rgba(41,121,255,1)',
-  tf4AvgHlColor:'rgba(76,175,80,1)', tf4LineWidth:1,
-  tf4ZoneManipColor:'rgba(170,0,255,0.10)', tf4ZoneDistColor:'rgba(41,121,255,0.10)',
   // Niveles (aplica a todos los TFs)
   showManip:true, showDist:true, showMedian:true, showAvgHL:true, showShading:true,
   // Cuantiles
@@ -9077,7 +9071,7 @@ function openIndicatorSettings(name) {
     const qc=snParseRgba(s2.quantileColor);
     body.innerHTML = `
       <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sm2-behind" ${s2.behindCandles?'checked':''}></label>
-      ${sm2tfBlock(1)}${sm2tfBlock(2)}${sm2tfBlock(3)}${sm2tfBlock(4)}
+      ${sm2tfBlock(1)}${sm2tfBlock(2)}${sm2tfBlock(3)}
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Levels</div>
       <label class="wt-set-row"><span>Show Manipulation</span><input type="checkbox" id="sm2-show-manip" ${s2.showManip?'checked':''}></label>
       <label class="wt-set-row"><span>Show Distribution</span><input type="checkbox" id="sm2-show-dist" ${s2.showDist?'checked':''}></label>
@@ -9373,7 +9367,7 @@ function applyIndSettingsForm() {
     const g = id => document.getElementById(id);
     const s2 = STATE.statMap2;
     s2.behindCandles = g('sm2-behind').checked;
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 3; n++) {
       s2[`tf${n}`] = g(`sm2-tf${n}`).value;
       s2[`tf${n}HistCount`] = Math.max(2, Math.min(500, Number(g(`sm2-tf${n}-hist`).value)||60));
       s2[`tf${n}Lookback`] = Math.max(1, Math.min(20, Number(g(`sm2-tf${n}-lb`).value)||1));
@@ -12041,7 +12035,7 @@ function sm2BuildTfSetups(candles, tfStr, histCount, lookback) {
   return setups;
 }
 
-let _sm2Cache = [null, null, null, null];
+let _sm2Cache = [null, null, null];
 function sm2BuildTfSetupsCached(candles, tfStr, histCount, lookback, slot) {
   const key = _candlesFingerprint(candles) + '|' + tfStr + '|' + histCount + '|' + lookback;
   if (_sm2Cache[slot] && _sm2Cache[slot].key === key) return _sm2Cache[slot].result;
@@ -12055,8 +12049,7 @@ function sm2Line(svg, t1, t2, y, color, width, dash) {
   let x1 = chart.timeScale().timeToCoordinate(t1);
   let x2 = chart.timeScale().timeToCoordinate(t2);
   const yy = candleSeries.priceToCoordinate(y);
-  if (x1 === null || yy === null) return;
-  if (x2 === null) x2 = wtPlotRight();
+  if (x1 === null || x2 === null || yy === null) return;
   const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   el.setAttribute('x1', x1); el.setAttribute('x2', x2);
   el.setAttribute('y1', yy); el.setAttribute('y2', yy);
@@ -12066,14 +12059,12 @@ function sm2Line(svg, t1, t2, y, color, width, dash) {
   svg.appendChild(el);
 }
 
-// Variante de wtRect que soporta t2 futuro.
 function sm2Rect(svg, t1, t2, top, bottom, fill) {
   let x1 = chart.timeScale().timeToCoordinate(t1);
   let x2 = chart.timeScale().timeToCoordinate(t2);
   const y1 = candleSeries.priceToCoordinate(top);
   const y2 = candleSeries.priceToCoordinate(bottom);
-  if (x1 === null || y1 === null || y2 === null) return;
-  if (x2 === null) x2 = wtPlotRight();
+  if (x1 === null || x2 === null || y1 === null || y2 === null) return;
   const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   el.setAttribute('x', Math.min(x1, x2)); el.setAttribute('y', Math.min(y1, y2));
   el.setAttribute('width', Math.max(1, Math.abs(x2 - x1))); el.setAttribute('height', Math.max(1, Math.abs(y2 - y1)));
