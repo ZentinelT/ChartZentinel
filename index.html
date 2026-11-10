@@ -2297,7 +2297,8 @@
   <div class="modal" style="max-width:360px;">
     <h2 id="save-as-title">Save as…</h2>
     <div id="save-as-existing" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:none;"></div>
-    <input type="text" id="save-as-input" class="topbar-input" style="width:100%;margin-bottom:16px;" placeholder="Name" autocomplete="off">
+    <input type="text" id="save-as-input" class="topbar-input" style="width:100%;margin-bottom:16px;" placeholder="Name" autocomplete="off" list="save-as-datalist">
+    <datalist id="save-as-datalist"></datalist>
     <div class="modal-btns">
       <button class="btn-ghost" onclick="closeModal('modal-save-as')">Cancel</button>
       <button class="btn-primary" id="save-as-confirm-btn">Save</button>
@@ -12581,6 +12582,9 @@ function promptSaveAsName(title, existingNames, onConfirm){
   } else {
     existingEl.style.display = 'none';
   }
+  // Poblar datalist para autocomplete nativo
+  const dl = document.getElementById('save-as-datalist');
+  dl.innerHTML = (existingNames || []).map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
   const input = document.getElementById('save-as-input');
   input.value = '';
   const btn = document.getElementById('save-as-confirm-btn');
