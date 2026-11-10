@@ -4308,6 +4308,46 @@ const STAT_MAP_DEFAULTS = {
   // Etiquetas
   showLabels:true, labelSide:'right',
 };
+// Puerto fiel del Pine "OHLC StatMap (Multi-Timeframe)" — 4 slots de TF
+// configurables, proyección de barras fija, con cuantiles opcionales.
+// Cada slot tiene sus propios colores; los toggles de nivel son globales.
+const STAT_MAP_2_DEFAULTS = {
+  enabled:false, behindCandles:false,
+  projectionBars:24,
+  // TF1
+  tf1:'4H', tf1HistCount:60, tf1Lookback:1,
+  tf1OpenColor:'rgba(208,208,208,1)', tf1OpenWidth:1, tf1OpenStyle:'dotted',
+  tf1ManipColor:'rgba(170,0,255,1)', tf1DistColor:'rgba(41,121,255,1)',
+  tf1AvgHlColor:'rgba(76,175,80,1)', tf1LineWidth:1,
+  tf1ZoneManipColor:'rgba(170,0,255,0.10)', tf1ZoneDistColor:'rgba(41,121,255,0.10)',
+  // TF2
+  tf2:'None', tf2HistCount:60, tf2Lookback:1,
+  tf2OpenColor:'rgba(208,208,208,1)', tf2OpenWidth:1, tf2OpenStyle:'dotted',
+  tf2ManipColor:'rgba(170,0,255,1)', tf2DistColor:'rgba(41,121,255,1)',
+  tf2AvgHlColor:'rgba(76,175,80,1)', tf2LineWidth:1,
+  tf2ZoneManipColor:'rgba(170,0,255,0.10)', tf2ZoneDistColor:'rgba(41,121,255,0.10)',
+  // TF3
+  tf3:'None', tf3HistCount:60, tf3Lookback:1,
+  tf3OpenColor:'rgba(208,208,208,1)', tf3OpenWidth:1, tf3OpenStyle:'dotted',
+  tf3ManipColor:'rgba(170,0,255,1)', tf3DistColor:'rgba(41,121,255,1)',
+  tf3AvgHlColor:'rgba(76,175,80,1)', tf3LineWidth:1,
+  tf3ZoneManipColor:'rgba(170,0,255,0.10)', tf3ZoneDistColor:'rgba(41,121,255,0.10)',
+  // TF4
+  tf4:'None', tf4HistCount:60, tf4Lookback:1,
+  tf4OpenColor:'rgba(208,208,208,1)', tf4OpenWidth:1, tf4OpenStyle:'dotted',
+  tf4ManipColor:'rgba(170,0,255,1)', tf4DistColor:'rgba(41,121,255,1)',
+  tf4AvgHlColor:'rgba(76,175,80,1)', tf4LineWidth:1,
+  tf4ZoneManipColor:'rgba(170,0,255,0.10)', tf4ZoneDistColor:'rgba(41,121,255,0.10)',
+  // Niveles (aplica a todos los TFs)
+  showManip:true, showDist:true, showMedian:true, showAvgHL:true, showShading:true,
+  // Cuantiles
+  useQuantiles:false,
+  quantileManipLow:25, quantileManipHigh:75,
+  quantileDistLow:25, quantileDistHigh:75,
+  quantileColor:'rgba(128,128,128,1)', quantileStyle:'dashed', quantileWidth:1,
+  // Etiquetas
+  showLabels:true, labelSide:'right',
+};
 const STATE = {
   dataSource: lsGet(lsKey('td_datasource')) || 'binance', // 'mt5' | 'binance'
   symbol:     lsGet(lsKey('td_symbol')) || 'BTCUSDT',
@@ -4340,6 +4380,7 @@ const STATE = {
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   fractalModel: Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(lsGet(lsKey('td_fractal_model')) || '{}')),
   statMap: Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(lsGet(lsKey('td_stat_map')) || '{}')),
+  statMap2: Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(lsGet(lsKey('td_stat_map2')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
   // Templates NOMBRADOS por indicador — {nombreIndicador: {nombreTemplate:
@@ -4372,11 +4413,13 @@ STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
 STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
+STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
 function saveFractalModelState(){ lsSet(lsKey('td_fractal_model'), JSON.stringify(STATE.fractalModel)); }
 function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
 function saveStatMapState(){ lsSet(lsKey('td_stat_map'), JSON.stringify(STATE.statMap)); }
+function saveStatMap2State(){ lsSet(lsKey('td_stat_map2'), JSON.stringify(STATE.statMap2)); }
 function saveHiddenIndicatorsState(){ lsSet(lsKey('td_ind_hidden'), JSON.stringify(STATE.hiddenIndicators)); }
 function isIndicatorHidden(name){ return STATE.hiddenIndicators.includes(name); }
 function toggleIndicatorVisibility(name){
@@ -4389,6 +4432,7 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map') renderStatMap();
+  else if (name === 'Stat Map 2') renderStatMap2();
   else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
 }
@@ -4424,6 +4468,7 @@ function getIndSettingsObject(name){
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
   if (name === 'Stat Map') return STATE.statMap;
+  if (name === 'Stat Map 2') return STATE.statMap2;
   if (name === 'RSI') return getRsiSettings();
   const def = INDICATOR_DEFS.find(d => d.name === name);
   return getIndicatorStyle(name, def || {});
@@ -4445,6 +4490,9 @@ function setIndSettingsObject(name, obj){
   } else if (name === 'Stat Map') {
     STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, obj, { enabled: STATE.statMap.enabled });
     saveStatMapState(); renderStatMap();
+  } else if (name === 'Stat Map 2') {
+    STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, obj, { enabled: STATE.statMap2.enabled });
+    saveStatMap2State(); renderStatMap2();
   } else if (name === 'RSI') {
     STATE.indicatorStyles['RSI'] = obj;
     saveIndicatorStylesState();
@@ -6427,7 +6475,7 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMapSvg, window._drawingLayerSvg]
+  [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMapSvg, window._statMap2Svg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
 function initWatchtowerLayer() {
@@ -6557,6 +6605,9 @@ class ZentinelBehindDrawingsPrimitive {
             });
             if (STATE.statMap && STATE.statMap.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._statMapSvg);
+            }
+            if (STATE.statMap2 && STATE.statMap2.behindCandles) {
+              paintSvgLayerBehindCandles(ctx, window._statMap2Svg);
             }
             if (STATE.watchtower && STATE.watchtower.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._watchtowerSvg);
@@ -7039,9 +7090,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); renderStatMap2(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -7059,6 +7110,7 @@ function initChart() {
   initSweepsLayer();
   initFractalModelLayer();
   initStatMapLayer();
+  initStatMap2Layer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
   // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
@@ -8489,6 +8541,7 @@ const INDICATOR_DEFS = [
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
   { name:'Stat Map', desc:'Niveles proyectados desde apertura de sesión/semana/mes (Stat Map NY Levels)', color:'#d0d0d0', custom:true },
+  { name:'Stat Map 2', desc:'Port del OHLC StatMap Multi-Timeframe — 4 TFs configurables con niveles Manip/Dist/AvgHL', color:'#aa44ff', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -8516,6 +8569,7 @@ function applyIndicators() {
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
       else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); }
+      else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); }
       else if(name==='RSI'){ destroyRsiChart(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
@@ -8540,6 +8594,7 @@ function addIndicatorSeries(name) {
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map'){ STATE.statMap.enabled=true; saveStatMapState(); renderStatMap(); }
+    else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); renderStatMap2(); }
     else if(name==='RSI'){ renderRsi(); }
     return;
   }
@@ -8996,6 +9051,50 @@ function openIndicatorSettings(name) {
           <option value="right" ${sm.labelSide==='right'?'selected':''}>Right</option>
         </select>
       </div>`;
+  } else if (name === 'Stat Map 2') {
+    const s2 = STATE.statMap2;
+    const tfOpts = (sel) => ['None','1H','4H','1D','1W','1M'].map(v=>`<option value="${v}" ${sel===v?'selected':''}>${v}</option>`).join('');
+    const styleOpts2 = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
+    function sm2tfBlock(n){
+      const tf=s2[`tf${n}`], hc=s2[`tf${n}HistCount`], lb=s2[`tf${n}Lookback`];
+      const oc=snParseRgba(s2[`tf${n}OpenColor`]), mc=snParseRgba(s2[`tf${n}ManipColor`]);
+      const dc=snParseRgba(s2[`tf${n}DistColor`]), ac=snParseRgba(s2[`tf${n}AvgHlColor`]);
+      const zm=snParseRgba(s2[`tf${n}ZoneManipColor`]), zd=snParseRgba(s2[`tf${n}ZoneDistColor`]);
+      const lw=s2[`tf${n}LineWidth`], ow=s2[`tf${n}OpenWidth`], os=s2[`tf${n}OpenStyle`];
+      return `
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">TF${n}</div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Timeframe</span><select id="sm2-tf${n}" class="dtb-select" style="flex:1;">${tfOpts(tf)}</select></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Historical periods</span><input type="number" id="sm2-tf${n}-hist" min="2" max="500" step="1" value="${hc}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Setups to show</span><input type="number" id="sm2-tf${n}-lb" min="1" max="20" step="1" value="${lb}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open: width / style</span><input type="number" id="sm2-tf${n}-ow" min="1" max="5" step="1" value="${ow}" style="width:48px"><select id="sm2-tf${n}-os" class="dtb-select" style="flex:1;">${styleOpts2(os)}</select></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm2-tf${n}-oc" value="${oc.hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm2-tf${n}-mc" value="${mc.hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm2-tf${n}-dc" value="${dc.hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm2-tf${n}-ac" value="${ac.hex}"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Lines width (bandas)</span><input type="number" id="sm2-tf${n}-lw" min="1" max="5" step="1" value="${lw}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manip zone color</span><input type="color" id="sm2-tf${n}-zm" value="${zm.hex}"><input type="number" id="sm2-tf${n}-zmt" min="0" max="100" step="1" value="${zm.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Dist zone color</span><input type="color" id="sm2-tf${n}-zd" value="${zd.hex}"><input type="number" id="sm2-tf${n}-zdt" min="0" max="100" step="1" value="${zd.transparency}" style="width:48px" title="Transparency %"></div>`;
+    }
+    const qc=snParseRgba(s2.quantileColor);
+    body.innerHTML = `
+      <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sm2-behind" ${s2.behindCandles?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Projection bars</span><input type="number" id="sm2-proj" min="1" max="500" step="1" value="${s2.projectionBars}" style="width:56px"></div>
+      ${sm2tfBlock(1)}${sm2tfBlock(2)}${sm2tfBlock(3)}${sm2tfBlock(4)}
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Levels</div>
+      <label class="wt-set-row"><span>Show Manipulation</span><input type="checkbox" id="sm2-show-manip" ${s2.showManip?'checked':''}></label>
+      <label class="wt-set-row"><span>Show Distribution</span><input type="checkbox" id="sm2-show-dist" ${s2.showDist?'checked':''}></label>
+      <label class="wt-set-row"><span>Show Median</span><input type="checkbox" id="sm2-show-median" ${s2.showMedian?'checked':''}></label>
+      <label class="wt-set-row"><span>Show Avg High/Low</span><input type="checkbox" id="sm2-show-avg-hl" ${s2.showAvgHL?'checked':''}></label>
+      <label class="wt-set-row"><span>Show shading (avg↔median)</span><input type="checkbox" id="sm2-show-shading" ${s2.showShading?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Quantiles</div>
+      <label class="wt-set-row"><span>Use quantile levels</span><input type="checkbox" id="sm2-use-quant" ${s2.useQuantiles?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manip low/high quantile (%)</span><input type="number" id="sm2-qml" min="0" max="99" step="5" value="${s2.quantileManipLow}" style="width:48px"><input type="number" id="sm2-qmh" min="1" max="100" step="5" value="${s2.quantileManipHigh}" style="width:48px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Dist low/high quantile (%)</span><input type="number" id="sm2-qdl" min="0" max="99" step="5" value="${s2.quantileDistLow}" style="width:48px"><input type="number" id="sm2-qdh" min="1" max="100" step="5" value="${s2.quantileDistHigh}" style="width:48px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Quantile color / width</span><input type="color" id="sm2-qcolor" value="${qc.hex}"><input type="number" id="sm2-qwidth" min="1" max="4" step="1" value="${s2.quantileWidth}" style="width:48px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Quantile line style</span><select id="sm2-qstyle" class="dtb-select" style="flex:1;">${styleOpts2(s2.quantileStyle)}</select></div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Labels</div>
+      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="sm2-show-labels" ${s2.showLabels?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Side</span><select id="sm2-label-side" class="dtb-select" style="flex:1;"><option value="left" ${s2.labelSide==='left'?'selected':''}>Left</option><option value="right" ${s2.labelSide==='right'?'selected':''}>Right</option></select></div>`;
   } else if (name === 'RSI') {
     const s = getRsiSettings();
     body.innerHTML = `
@@ -9272,6 +9371,42 @@ function applyIndSettingsForm() {
 
     saveStatMapState();
     renderStatMap();
+  } else if (_indSettingsTarget === 'Stat Map 2') {
+    const g = id => document.getElementById(id);
+    const s2 = STATE.statMap2;
+    s2.behindCandles = g('sm2-behind').checked;
+    s2.projectionBars = Math.max(1, Math.min(500, Number(g('sm2-proj').value)||24));
+    for (let n = 1; n <= 4; n++) {
+      s2[`tf${n}`] = g(`sm2-tf${n}`).value;
+      s2[`tf${n}HistCount`] = Math.max(2, Math.min(500, Number(g(`sm2-tf${n}-hist`).value)||60));
+      s2[`tf${n}Lookback`] = Math.max(1, Math.min(20, Number(g(`sm2-tf${n}-lb`).value)||1));
+      s2[`tf${n}OpenWidth`] = Math.max(1, Math.min(5, Number(g(`sm2-tf${n}-ow`).value)||1));
+      s2[`tf${n}OpenStyle`] = g(`sm2-tf${n}-os`).value;
+      s2[`tf${n}OpenColor`] = snRgba(g(`sm2-tf${n}-oc`).value, 0);
+      s2[`tf${n}ManipColor`] = snRgba(g(`sm2-tf${n}-mc`).value, 0);
+      s2[`tf${n}DistColor`] = snRgba(g(`sm2-tf${n}-dc`).value, 0);
+      s2[`tf${n}AvgHlColor`] = snRgba(g(`sm2-tf${n}-ac`).value, 0);
+      s2[`tf${n}LineWidth`] = Math.max(1, Math.min(5, Number(g(`sm2-tf${n}-lw`).value)||1));
+      s2[`tf${n}ZoneManipColor`] = snRgba(g(`sm2-tf${n}-zm`).value, Number(g(`sm2-tf${n}-zmt`).value)||0);
+      s2[`tf${n}ZoneDistColor`] = snRgba(g(`sm2-tf${n}-zd`).value, Number(g(`sm2-tf${n}-zdt`).value)||0);
+    }
+    s2.showManip = g('sm2-show-manip').checked;
+    s2.showDist = g('sm2-show-dist').checked;
+    s2.showMedian = g('sm2-show-median').checked;
+    s2.showAvgHL = g('sm2-show-avg-hl').checked;
+    s2.showShading = g('sm2-show-shading').checked;
+    s2.useQuantiles = g('sm2-use-quant').checked;
+    s2.quantileManipLow = Math.max(0, Math.min(99, Number(g('sm2-qml').value)||25));
+    s2.quantileManipHigh = Math.max(1, Math.min(100, Number(g('sm2-qmh').value)||75));
+    s2.quantileDistLow = Math.max(0, Math.min(99, Number(g('sm2-qdl').value)||25));
+    s2.quantileDistHigh = Math.max(1, Math.min(100, Number(g('sm2-qdh').value)||75));
+    s2.quantileColor = snRgba(g('sm2-qcolor').value, 0);
+    s2.quantileWidth = Math.max(1, Math.min(4, Number(g('sm2-qwidth').value)||1));
+    s2.quantileStyle = g('sm2-qstyle').value;
+    s2.showLabels = g('sm2-show-labels').checked;
+    s2.labelSide = g('sm2-label-side').value;
+    saveStatMap2State();
+    renderStatMap2();
   } else if (_indSettingsTarget === 'RSI') {
     const g = id => document.getElementById(id);
     const obLevel = Math.max(51, Math.min(100, Number(g('rsi-ob-level').value)||70));
@@ -9312,6 +9447,7 @@ function removeIndicator(name){
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); renderStatMap(); }
+    else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); renderStatMap2(); }
     else if(name==='RSI'){ destroyRsiChart(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
@@ -11422,15 +11558,22 @@ function smMedian(arr){
 // NUEVO con esos valores ya actualizados).
 function smPushAndSnapshot(period, hist, histCount){
   const highDist = period.high - period.open, lowDist = period.open - period.low;
-  smPushStat(hist.high, highDist, histCount);
-  smPushStat(hist.low, lowDist, histCount);
   // Direccional (igual que el Pine): alcista -> manip fue el swing hacia
   // abajo antes de subir (open-low), dist fue la extensión hacia arriba
-  // (high-open); bajista, al revés. Doji (close===open) no aporta nada —
-  // mismo criterio que el Pine original (si no entra en ninguna rama, no
-  // empuja nada a los arrays de manip/dist).
-  if (period.close > period.open){ smPushStat(hist.manip, lowDist, histCount); smPushStat(hist.dist, highDist, histCount); }
-  else if (period.close < period.open){ smPushStat(hist.manip, highDist, histCount); smPushStat(hist.dist, lowDist, histCount); }
+  // (high-open); bajista, al revés. Doji (close===open, period.close ni
+  // mayor ni menor que period.open) NO empuja nada a NINGUNO de los 4
+  // arrays — ni siquiera a high/low — mismo criterio exacto que el Pine
+  // original (los 4 push están adentro de un único "if not na(manip)":
+  // si manip queda na por ser doji, no se empuja nada ese período).  Antes
+  // acá se empujaba high/low SIEMPRE, doji o no — divergía del Pine en el
+  // caso (raro pero real) de un período con close===open exacto.
+  if (period.close > period.open){
+    smPushStat(hist.manip, lowDist, histCount); smPushStat(hist.dist, highDist, histCount);
+    smPushStat(hist.high, highDist, histCount); smPushStat(hist.low, lowDist, histCount);
+  } else if (period.close < period.open){
+    smPushStat(hist.manip, highDist, histCount); smPushStat(hist.dist, lowDist, histCount);
+    smPushStat(hist.high, highDist, histCount); smPushStat(hist.low, lowDist, histCount);
+  }
   return {
     avgManip: smAvg(hist.manip), avgDist: smAvg(hist.dist),
     medManip: smMedian(hist.manip), medDist: smMedian(hist.dist),
@@ -11810,6 +11953,228 @@ function renderStatMap(){
       openColor: sm.mLineColor, openWidth: sm.mLineWidth, openStyle: sm.mLineStyle, lineWidth: sm.mLineWidth,
       manipColor: sm.mManipColor, distColor: sm.mDistColor, avgHlColor: sm.mAvgHlColor,
       zoneColor: sm.mZoneColor, labelPrefix: 'M ',
+    }, levelOpts)));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  STAT MAP 2 — Port del Pine "OHLC StatMap (Multi-Timeframe)"
+//  4 TFs configurables, proyección de N barras fija, cuantiles opcionales.
+// ══════════════════════════════════════════════════════════
+
+function initStatMap2Layer() {
+  const container = document.getElementById('chart-container');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;overflow:hidden;';
+  container.appendChild(svg);
+  window._statMap2Svg = svg;
+  function syncSize(){ syncOverlaySvgSize(svg, container); }
+  new ResizeObserver(syncSize).observe(container);
+  syncSize();
+}
+
+// Calcula la clave de bucket para un timestamp dado el TF seleccionado.
+// Para 1H/4H usa UTC fijo; 1D usa smDayKey (UTC midnight); 1W usa wtWeekKey;
+// 1M usa smMonthKey.
+function sm2BucketKey(t, tfStr) {
+  if (tfStr === '1H') return Math.floor(t / 3600) * 3600;
+  if (tfStr === '4H') return Math.floor(t / 14400) * 14400;
+  if (tfStr === '1D') return smDayKey(t);
+  if (tfStr === '1W') return wtWeekKey(t);
+  if (tfStr === '1M') return smMonthKey(t);
+  return null;
+}
+
+// Cuantil sobre array — igual que el Pine:
+// index = round((q/100) * (n-1)), toma ese elemento del array ordenado.
+function sm2Quantile(arr, q) {
+  if (!arr.length) return 0;
+  const sorted = arr.slice().sort((a, b) => a - b);
+  const index = Math.round((q / 100) * (sorted.length - 1));
+  return sorted[index];
+}
+
+// Recorre las velas cargadas y construye los "setups" para un TF concreto.
+// Cada setup = { openPrice, startTime, avgManip, avgDist, medManip, medDist,
+//                avgHigh, avgLow, histManip, histDist } donde histManip/Dist
+// son copias del historial al momento del setup (para cuantiles).
+// Solo genera un setup cuando ya hay al menos 1 período cerrado en el
+// historial — igual que el Pine (que chequea not na(tf1_open[1])).
+function sm2BuildTfSetups(candles, tfStr, histCount, lookback) {
+  const setups = [];
+  const hist = { manip:[], dist:[], high:[], low:[] };
+  let lastStats = null;
+  let cur = null;
+  for (let i = 0; i < candles.length; i++) {
+    const c = candles[i];
+    const k = sm2BucketKey(c.time, tfStr);
+    if (cur === null || cur.key !== k) {
+      if (cur !== null) {
+        // Período cerrado: pushear al historial (igual que smPushAndSnapshot
+        // pero guardando copias del hist para cuantiles)
+        const hd = cur.high - cur.open, ld = cur.open - cur.low;
+        if (cur.close > cur.open) {
+          smPushStat(hist.manip, ld, histCount); smPushStat(hist.dist, hd, histCount);
+          smPushStat(hist.high, hd, histCount);  smPushStat(hist.low, ld, histCount);
+        } else if (cur.close < cur.open) {
+          smPushStat(hist.manip, hd, histCount); smPushStat(hist.dist, ld, histCount);
+          smPushStat(hist.high, hd, histCount);  smPushStat(hist.low, ld, histCount);
+        }
+        if (hist.manip.length > 0) {
+          lastStats = {
+            avgManip: smAvg(hist.manip), avgDist: smAvg(hist.dist),
+            medManip: smMedian(hist.manip), medDist: smMedian(hist.dist),
+            avgHigh: smAvg(hist.high), avgLow: smAvg(hist.low),
+            histManip: hist.manip.slice(), histDist: hist.dist.slice(),
+          };
+        }
+      }
+      // Nuevo período: crear setup con stats del historial actual
+      if (lastStats !== null) {
+        setups.push(Object.assign({ openPrice: c.open, startTime: c.time }, lastStats));
+      }
+      cur = { key: k, open: c.open, high: c.high, low: c.low, close: c.close };
+    } else {
+      if (c.high > cur.high) cur.high = c.high;
+      if (c.low < cur.low)   cur.low  = c.low;
+      cur.close = c.close;
+    }
+  }
+  while (setups.length > lookback) setups.shift();
+  return setups;
+}
+
+let _sm2Cache = [null, null, null, null];
+function sm2BuildTfSetupsCached(candles, tfStr, histCount, lookback, slot) {
+  const key = _candlesFingerprint(candles) + '|' + tfStr + '|' + histCount + '|' + lookback;
+  if (_sm2Cache[slot] && _sm2Cache[slot].key === key) return _sm2Cache[slot].result;
+  const result = sm2BuildTfSetups(candles, tfStr, histCount, lookback);
+  _sm2Cache[slot] = { key, result };
+  return result;
+}
+
+// Variante de wtLine que soporta t2 futuro (sin coordenada): extiende hasta el borde derecho del chart.
+function sm2Line(svg, t1, t2, y, color, width, dash) {
+  let x1 = chart.timeScale().timeToCoordinate(t1);
+  let x2 = chart.timeScale().timeToCoordinate(t2);
+  const yy = candleSeries.priceToCoordinate(y);
+  if (x1 === null || yy === null) return;
+  if (x2 === null) x2 = wtPlotRight();
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  el.setAttribute('x1', x1); el.setAttribute('x2', x2);
+  el.setAttribute('y1', yy); el.setAttribute('y2', yy);
+  el.setAttribute('stroke', color); el.setAttribute('stroke-width', width || 1);
+  if (dash) el.setAttribute('stroke-dasharray', dash);
+  tagIndicatorEl(el, 'Stat Map 2');
+  svg.appendChild(el);
+}
+
+// Variante de wtRect que soporta t2 futuro.
+function sm2Rect(svg, t1, t2, top, bottom, fill) {
+  let x1 = chart.timeScale().timeToCoordinate(t1);
+  let x2 = chart.timeScale().timeToCoordinate(t2);
+  const y1 = candleSeries.priceToCoordinate(top);
+  const y2 = candleSeries.priceToCoordinate(bottom);
+  if (x1 === null || y1 === null || y2 === null) return;
+  if (x2 === null) x2 = wtPlotRight();
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  el.setAttribute('x', Math.min(x1, x2)); el.setAttribute('y', Math.min(y1, y2));
+  el.setAttribute('width', Math.max(1, Math.abs(x2 - x1))); el.setAttribute('height', Math.max(1, Math.abs(y2 - y1)));
+  el.setAttribute('fill', fill); el.setAttribute('stroke', 'none');
+  tagIndicatorEl(el, 'Stat Map 2');
+  svg.appendChild(el);
+}
+
+// Dibuja los niveles de un setup. t2 = lastTime + projectionBars * barInterval.
+function sm2DrawSetup(svg, setup, lastTime, barInterval, projectionBars, opts) {
+  const t1 = safeLineTime(setup.startTime);
+  const t2 = safeLineTime(lastTime + projectionBars * barInterval);
+  const open = setup.openPrice;
+  const lblX = opts.labelSide === 'left' ? t1 : t2;
+
+  sm2Line(svg, t1, t2, open, opts.openColor, opts.openWidth, smDash(opts.openStyle));
+  if (opts.showLabels) wtLabel(svg, lblX, open, opts.labelPrefix + 'Open', opts.openColor, 'Stat Map 2');
+
+  function level(show, value, color, name, dash) {
+    if (!show) return;
+    sm2Line(svg, t1, t2, value, color, opts.lineWidth, dash);
+    if (opts.showLabels) wtLabel(svg, lblX, value, opts.labelPrefix + name, color, 'Stat Map 2');
+  }
+  level(opts.showManip,  open + setup.avgManip, opts.manipColor, '+M', null);
+  level(opts.showManip,  open - setup.avgManip, opts.manipColor, '-M', null);
+  level(opts.showDist,   open + setup.avgDist,  opts.distColor,  '+D', null);
+  level(opts.showDist,   open - setup.avgDist,  opts.distColor,  '-D', null);
+  level(opts.showManip && opts.showMedian, open + setup.medManip, opts.manipColor, '+M (Med)', '4,3');
+  level(opts.showManip && opts.showMedian, open - setup.medManip, opts.manipColor, '-M (Med)', '4,3');
+  level(opts.showDist  && opts.showMedian, open + setup.medDist,  opts.distColor,  '+D (Med)', '4,3');
+  level(opts.showDist  && opts.showMedian, open - setup.medDist,  opts.distColor,  '-D (Med)', '4,3');
+  level(opts.showAvgHL, open + setup.avgHigh, opts.avgHlColor, 'Avg H', '6,4');
+  level(opts.showAvgHL, open - setup.avgLow,  opts.avgHlColor, 'Avg L', '6,4');
+
+  // Cuantiles
+  if (opts.useQuantiles && setup.histManip && setup.histDist) {
+    const qManipLo = sm2Quantile(setup.histManip, opts.qManipLow);
+    const qManipHi = sm2Quantile(setup.histManip, opts.qManipHigh);
+    const qDistLo  = sm2Quantile(setup.histDist,  opts.qDistLow);
+    const qDistHi  = sm2Quantile(setup.histDist,  opts.qDistHigh);
+    const qdash = smDash(opts.qStyle);
+    level(true, open + qManipHi, opts.qColor, `+Q${opts.qManipHigh}M`, qdash);
+    level(true, open - qManipLo, opts.qColor, `-Q${opts.qManipLow}M`,  qdash);
+    level(true, open + qDistHi,  opts.qColor, `+Q${opts.qDistHigh}D`,  qdash);
+    level(true, open - qDistLo,  opts.qColor, `-Q${opts.qDistLow}D`,   qdash);
+  }
+
+  // Sombreado entre promedio y mediana
+  if (opts.showShading) {
+    if (opts.showManip && opts.showMedian) {
+      sm2Rect(svg, t1, t2, open + Math.max(setup.avgManip, setup.medManip), open + Math.min(setup.avgManip, setup.medManip), opts.zoneManipColor);
+      sm2Rect(svg, t1, t2, open - Math.min(setup.avgManip, setup.medManip), open - Math.max(setup.avgManip, setup.medManip), opts.zoneManipColor);
+    }
+    if (opts.showDist && opts.showMedian) {
+      sm2Rect(svg, t1, t2, open + Math.max(setup.avgDist, setup.medDist), open + Math.min(setup.avgDist, setup.medDist), opts.zoneDistColor);
+      sm2Rect(svg, t1, t2, open - Math.min(setup.avgDist, setup.medDist), open - Math.max(setup.avgDist, setup.medDist), opts.zoneDistColor);
+    }
+  }
+}
+
+function renderStatMap2() {
+  if (!window._statMap2Svg) return;
+  if (window._lastCandles && window._lastCandles.length) {
+    const lastT = window._lastCandles[window._lastCandles.length - 1].time;
+    if (chart.timeScale().timeToCoordinate(lastT) === null) return;
+  }
+  const svg = window._statMap2Svg;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions || []).filter(r => r.name !== 'Stat Map 2');
+  svg.style.visibility = STATE.statMap2.behindCandles ? 'hidden' : '';
+  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
+  if (!STATE.statMap2.enabled || isIndicatorHidden('Stat Map 2')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 2) return;
+  const s2 = STATE.statMap2;
+  const barInterval = candles[1].time - candles[0].time;
+  const lastTime = candles[candles.length - 1].time;
+  const labelSide = s2.labelSide === 'left' ? 'left' : 'right';
+
+  const levelOpts = {
+    showManip: s2.showManip, showDist: s2.showDist, showMedian: s2.showMedian,
+    showAvgHL: s2.showAvgHL, showShading: s2.showShading, showLabels: s2.showLabels, labelSide,
+    useQuantiles: s2.useQuantiles,
+    qManipLow: s2.quantileManipLow, qManipHigh: s2.quantileManipHigh,
+    qDistLow: s2.quantileDistLow, qDistHigh: s2.quantileDistHigh,
+    qColor: s2.quantileColor, qStyle: s2.quantileStyle, qWidth: s2.quantileWidth,
+  };
+
+  for (let n = 1; n <= 4; n++) {
+    const tfStr = s2[`tf${n}`];
+    if (!tfStr || tfStr === 'None') continue;
+    const setups = sm2BuildTfSetupsCached(candles, tfStr, s2[`tf${n}HistCount`], s2[`tf${n}Lookback`], n - 1);
+    setups.forEach(setup => sm2DrawSetup(svg, setup, lastTime, barInterval, s2.projectionBars, Object.assign({
+      openColor: s2[`tf${n}OpenColor`], openWidth: s2[`tf${n}OpenWidth`], openStyle: s2[`tf${n}OpenStyle`],
+      manipColor: s2[`tf${n}ManipColor`], distColor: s2[`tf${n}DistColor`],
+      avgHlColor: s2[`tf${n}AvgHlColor`], lineWidth: s2[`tf${n}LineWidth`],
+      zoneManipColor: s2[`tf${n}ZoneManipColor`], zoneDistColor: s2[`tf${n}ZoneDistColor`],
+      labelPrefix: tfStr + ' ',
     }, levelOpts)));
   }
 }
@@ -12648,6 +13013,7 @@ function captureWorkspace(){
     sweeps: JSON.parse(JSON.stringify(STATE.sweeps)),
     fractalModel: JSON.parse(JSON.stringify(STATE.fractalModel)),
     statMap: JSON.parse(JSON.stringify(STATE.statMap)),
+    statMap2: JSON.parse(JSON.stringify(STATE.statMap2)),
     toolDefaults: { ...toolDefaults },
     // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
     // tal cual quedan en pantalla, con sus horarios/precios crudos — igual
@@ -12758,7 +13124,7 @@ function captureAppState(){
   return JSON.parse(JSON.stringify({
     chartSettings: STATE.chartSettings, indicators: STATE.indicators, indicatorStyles: STATE.indicatorStyles,
     watchtower: STATE.watchtower, sniper: STATE.sniper, sweeps: STATE.sweeps,
-    fractalModel: STATE.fractalModel, statMap: STATE.statMap, toolDefaults: toolDefaults,
+    fractalModel: STATE.fractalModel, statMap: STATE.statMap, statMap2: STATE.statMap2, toolDefaults: toolDefaults,
   }));
 }
 // Mitad "Theme" de restoreAppState — también la usa applyPreset solo,
@@ -12779,12 +13145,14 @@ function restoreIndicatorsAndTools(s){
   STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(s.sweeps || {})));
   STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(s.fractalModel || {})));
   STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(JSON.stringify(s.statMap || {})));
+  STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(JSON.stringify(s.statMap2 || {})));
   STATE.indicators = [...(s.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
   STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
+  STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
   if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
   saveIndicatorStylesState();
@@ -12804,6 +13172,7 @@ function restoreIndicatorsAndTools(s){
   renderSweeps();
   renderFractalModel();
   renderStatMap();
+  renderStatMap2();
   renderRsi();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
@@ -13386,6 +13755,7 @@ function renderSeries(timeframe){
   renderSweeps();
   renderFractalModel();
   renderStatMap();
+  renderStatMap2();
   renderTradeMarkers();
 }
 
@@ -13410,6 +13780,7 @@ function updateFormingCandleLive(bar){
   renderSweeps();
   renderFractalModel();
   renderStatMap();
+  renderStatMap2();
   renderTradeMarkers();
 }
 
@@ -14113,6 +14484,7 @@ function _resyncChartLayout(){
   renderSweeps();
   renderFractalModel();
   renderStatMap();
+  renderStatMap2();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
