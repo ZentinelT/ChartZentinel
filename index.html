@@ -11418,10 +11418,11 @@ function sm2Rect(svg, t1, t2, top, bottom, fill) {
   registerIndicatorHit('Stat Map 2', {kind:'rect', x1: Math.min(x1,x2), y1: Math.min(y1,y2), x2: Math.max(x1,x2), y2: Math.max(y1,y2), tol: 3});
 }
 
-// Dibuja los niveles de un setup. t2 = lastTime + LEVEL_EXTEND_BARS * barInterval (igual que Watchtower).
-function sm2DrawSetup(svg, setup, lastTime, barInterval, opts) {
+// Dibuja los niveles de un setup. endTime: para el período en curso = lastTime + LEVEL_EXTEND_BARS * barInterval;
+// para períodos pasados = startTime del siguiente período (el setup termina donde empieza el siguiente).
+function sm2DrawSetup(svg, setup, endTime, opts) {
   const t1 = safeLineTime(setup.startTime);
-  const t2 = safeLineTime(lastTime + LEVEL_EXTEND_BARS * barInterval);
+  const t2 = safeLineTime(endTime);
   const open = setup.openPrice;
   const lblX = opts.labelSide === 'left' ? t1 : t2;
 
@@ -11502,13 +11503,17 @@ function renderStatMap2() {
     const tfStr = s2[`tf${n}`];
     if (!tfStr || tfStr === 'None') continue;
     const setups = sm2BuildTfSetupsCached(candles, tfStr, s2[`tf${n}HistCount`], s2[`tf${n}Lookback`], n - 1);
-    setups.forEach(setup => sm2DrawSetup(svg, setup, lastTime, barInterval, Object.assign({
-      openColor: s2[`tf${n}OpenColor`], openWidth: s2[`tf${n}OpenWidth`], openStyle: s2[`tf${n}OpenStyle`],
-      manipColor: s2[`tf${n}ManipColor`], distColor: s2[`tf${n}DistColor`],
-      avgHlColor: s2[`tf${n}AvgHlColor`], lineWidth: s2[`tf${n}LineWidth`],
-      zoneManipColor: s2[`tf${n}ZoneManipColor`], zoneDistColor: s2[`tf${n}ZoneDistColor`],
-      labelPrefix: tfStr + ' ',
-    }, levelOpts)));
+    const currentEndTime = lastTime + LEVEL_EXTEND_BARS * barInterval;
+    setups.forEach((setup, i) => {
+      const endTime = i < setups.length - 1 ? setups[i + 1].startTime : currentEndTime;
+      sm2DrawSetup(svg, setup, endTime, Object.assign({
+        openColor: s2[`tf${n}OpenColor`], openWidth: s2[`tf${n}OpenWidth`], openStyle: s2[`tf${n}OpenStyle`],
+        manipColor: s2[`tf${n}ManipColor`], distColor: s2[`tf${n}DistColor`],
+        avgHlColor: s2[`tf${n}AvgHlColor`], lineWidth: s2[`tf${n}LineWidth`],
+        zoneManipColor: s2[`tf${n}ZoneManipColor`], zoneDistColor: s2[`tf${n}ZoneDistColor`],
+        labelPrefix: tfStr + ' ',
+      }, levelOpts));
+    });
   }
 }
 
