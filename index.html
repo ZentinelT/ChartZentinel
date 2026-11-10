@@ -4256,59 +4256,6 @@ const FRACTAL_MODEL_DEFAULTS = {
   showTSpot:true, tSpotBullColor:'rgba(165,214,167,0.18)', tSpotBearColor:'rgba(144,144,144,0.18)',
   showLabels:true,
 };
-// Puerto de "Stat Map – NY Levels" (Pine v6, pegado por el usuario) — niveles
-// proyectados desde la apertura de sesión/semana/mes ± fracciones del rango
-// del período anterior. Reescrito con un replay determinístico sobre las
-// velas cargadas (mismo patrón que Sniper/Fractal Model) en vez de portar
-// el array-shift + line.set_x2 incremental del Pine — ESO evitaba 2 bugs
-// reales encontrados al revisar el Pine original:
-//  1) isNewWeekNY exigía una vela exacta en domingo 18:00:00 NY — en la
-//     mayoría de los TF no hay vela justo ahí, así que la apertura semanal
-//     casi nunca disparaba de nuevo (confirmado por el usuario: al probarlo
-//     en TV, "los niveles semanales" terminaban siendo un único nivel viejo
-//     estancado). Acá se usa wtWeekKey (ya probado para PWH/PWL de
-//     Watchtower) para detectar el PRIMER candle de cada semana NY, sin
-//     depender de que exista una vela en un minuto exacto.
-//  2) Al nacer un setup nuevo, el Pine dibujaba la línea/caja/etiqueta de
-//     una con el largo COMPLETO (hasta el final del período) y recién en la
-//     vela siguiente la "encogía" de vuelta al presente — un parpadeo de
-//     ida y vuelta en cada apertura. Acá cada nivel se dibuja siempre
-//     clampeado a "dónde estamos ahora" (mismo criterio que el resto de los
-//     niveles vigentes de la app, ver LEVEL_EXTEND_BARS), así que nunca
-//     salta a futuro y nunca necesita "encogerse" — crece solo, de a poco.
-// line/zoneColor en gris claro (no negro, como venía el Pine) — un fondo
-// oscuro como el de ChartZentinel vuelve invisible una línea negra.
-// Niveles: ver el comentario grande arriba de smBuildDailySetups — en vez
-// de fracciones fijas del rango anterior (versión vieja), ahora replica la
-// lógica del indicador "OHLC StatMap" de referencia (Pine) que el usuario
-// pidió portar: Manipulation/Distribution son DIRECCIONALES (dependen de
-// si el período anterior cerró alcista o bajista) y se promedian/median-an
-// sobre un historial rodante de histCount períodos, en vez de tomar un
-// único período anterior. Sin cuantiles (pedido explícito del usuario).
-const STAT_MAP_DEFAULTS = {
-  enabled:false, behindCandles:false,
-  // Sesión diaria
-  showDaily:true, anchorHour:0, anchorMin:0, anchorStep:24, lookbackCount:1,
-  histCount:60,
-  openColor:'rgba(208,208,208,1)', openWidth:1, openStyle:'solid',
-  manipColor:'rgba(255,152,0,1)', distColor:'rgba(41,121,255,1)', avgHlColor:'rgba(76,175,80,1)',
-  lineWidth:1,
-  // Apertura semanal
-  showWeekly:false, wAnchorMode:'open', wAnchorHour:0, wAnchorMin:0,
-  wLineColor:'rgba(0,150,150,1)', wLineWidth:1, wLineStyle:'dashed',
-  wZoneColor:'rgba(0,150,150,0.10)', wLookback:1, wHistCount:12,
-  wManipColor:'rgba(255,152,0,1)', wDistColor:'rgba(41,121,255,1)', wAvgHlColor:'rgba(76,175,80,1)',
-  // Apertura mensual
-  showMonthly:false, mAnchorMode:'open', mAnchorHour:0, mAnchorMin:0,
-  mLineColor:'rgba(170,0,170,1)', mLineWidth:1, mLineStyle:'dashed',
-  mZoneColor:'rgba(170,0,170,0.10)', mLookback:1, mHistCount:12,
-  mManipColor:'rgba(255,152,0,1)', mDistColor:'rgba(41,121,255,1)', mAvgHlColor:'rgba(76,175,80,1)',
-  // Niveles a mostrar (aplica a diario/semanal/mensual) + sombreado entre
-  // el nivel promedio y el de mediana de cada banda (Manipulation/Distribution)
-  showManip:true, showDist:true, showMedian:true, showAvgHL:true, showShading:true,
-  // Etiquetas
-  showLabels:true, labelSide:'right',
-};
 // Puerto fiel del Pine "OHLC StatMap (Multi-Timeframe)" — 4 slots de TF
 // configurables, proyección de barras fija, con cuantiles opcionales.
 // Cada slot tiene sus propios colores; los toggles de nivel son globales.
@@ -4373,7 +4320,6 @@ const STATE = {
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   fractalModel: Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(lsGet(lsKey('td_fractal_model')) || '{}')),
-  statMap: Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(lsGet(lsKey('td_stat_map')) || '{}')),
   statMap2: Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(lsGet(lsKey('td_stat_map2')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
@@ -4406,13 +4352,11 @@ STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
-STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
 STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
 function saveFractalModelState(){ lsSet(lsKey('td_fractal_model'), JSON.stringify(STATE.fractalModel)); }
 function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
-function saveStatMapState(){ lsSet(lsKey('td_stat_map'), JSON.stringify(STATE.statMap)); }
 function saveStatMap2State(){ lsSet(lsKey('td_stat_map2'), JSON.stringify(STATE.statMap2)); }
 function saveHiddenIndicatorsState(){ lsSet(lsKey('td_ind_hidden'), JSON.stringify(STATE.hiddenIndicators)); }
 function isIndicatorHidden(name){ return STATE.hiddenIndicators.includes(name); }
@@ -4425,7 +4369,6 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
-  else if (name === 'Stat Map') renderStatMap();
   else if (name === 'Stat Map 2') renderStatMap2();
   else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
@@ -4461,7 +4404,6 @@ function getIndSettingsObject(name){
   if (name === 'Sniper') return STATE.sniper;
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
-  if (name === 'Stat Map') return STATE.statMap;
   if (name === 'Stat Map 2') return STATE.statMap2;
   if (name === 'RSI') return getRsiSettings();
   const def = INDICATOR_DEFS.find(d => d.name === name);
@@ -4481,9 +4423,6 @@ function setIndSettingsObject(name, obj){
   } else if (name === 'Fractal Model') {
     STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, obj, { enabled: STATE.fractalModel.enabled });
     saveFractalModelState(); renderFractalModel();
-  } else if (name === 'Stat Map') {
-    STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, obj, { enabled: STATE.statMap.enabled });
-    saveStatMapState(); renderStatMap();
   } else if (name === 'Stat Map 2') {
     STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, obj, { enabled: STATE.statMap2.enabled });
     saveStatMap2State(); renderStatMap2();
@@ -6469,7 +6408,7 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMapSvg, window._statMap2Svg, window._drawingLayerSvg]
+  [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMap2Svg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
 function initWatchtowerLayer() {
@@ -6597,9 +6536,6 @@ class ZentinelBehindDrawingsPrimitive {
               drawBehindDrawingSvgParts(ctx, d);
               drawBehindDrawingText(ctx, d);
             });
-            if (STATE.statMap && STATE.statMap.behindCandles) {
-              paintSvgLayerBehindCandles(ctx, window._statMapSvg);
-            }
             if (STATE.statMap2 && STATE.statMap2.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._statMap2Svg);
             }
@@ -7035,7 +6971,6 @@ function initChart() {
     renderSniper();
     renderSweeps();
     renderFractalModel();
-    renderStatMap();
     syncOverlayPositions();
   }
   new ResizeObserver(_forceFullRedraw).observe(container);
@@ -7066,7 +7001,6 @@ function initChart() {
     renderSniper();
     renderSweeps();
     renderFractalModel();
-    renderStatMap();
     syncOverlayPositions();
   });
 
@@ -7084,9 +7018,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap(); renderStatMap2(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -7103,7 +7037,6 @@ function initChart() {
   initSniperLayer();
   initSweepsLayer();
   initFractalModelLayer();
-  initStatMapLayer();
   initStatMap2Layer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
@@ -8534,7 +8467,6 @@ const INDICATOR_DEFS = [
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
-  { name:'Stat Map', desc:'Niveles proyectados desde apertura de sesión/semana/mes (Stat Map NY Levels)', color:'#d0d0d0', custom:true },
   { name:'Stat Map 2', desc:'Port del OHLC StatMap Multi-Timeframe — 4 TFs configurables con niveles Manip/Dist/AvgHL', color:'#aa44ff', custom:true },
 ];
 
@@ -8562,7 +8494,6 @@ function applyIndicators() {
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
-      else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); }
       else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); }
       else if(name==='RSI'){ destroyRsiChart(); }
     }
@@ -8587,7 +8518,6 @@ function addIndicatorSeries(name) {
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
-    else if(name==='Stat Map'){ STATE.statMap.enabled=true; saveStatMapState(); renderStatMap(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); renderStatMap2(); }
     else if(name==='RSI'){ renderRsi(); }
     return;
@@ -8927,124 +8857,6 @@ function openIndicatorSettings(name) {
         <input type="color" id="fm-tspot-bear-color" value="${snParseRgba(fm.tSpotBearColor).hex}">
         <input type="number" id="fm-tspot-bear-tr" min="0" max="100" step="1" value="${snParseRgba(fm.tSpotBearColor).transparency}" style="width:48px" title="Transparency %">
       </div>`;
-  } else if (name === 'Stat Map') {
-    const sm = STATE.statMap;
-    const wzc = snParseRgba(sm.wZoneColor), mzc = snParseRgba(sm.mZoneColor), zc = snParseRgba(sm.zoneColor);
-    const styleOpts = (sel) => `<option value="solid" ${sel==='solid'?'selected':''}>Solid</option><option value="dashed" ${sel==='dashed'?'selected':''}>Dashed</option><option value="dotted" ${sel==='dotted'?'selected':''}>Dotted</option>`;
-    body.innerHTML = `
-      <label class="wt-set-row"><span>Draw behind candles</span><input type="checkbox" id="sm-behind-candles" ${sm.behindCandles?'checked':''}></label>
-      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">Daily Session</div>
-      <label class="wt-set-row"><span>Show daily levels</span><input type="checkbox" id="sm-show-daily" ${sm.showDaily!==false?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">NY open (hour:min)</span>
-        <input type="number" id="sm-anchor-hour" min="0" max="23" step="1" value="${sm.anchorHour}" style="width:48px">
-        <input type="number" id="sm-anchor-min" min="0" max="59" step="1" value="${sm.anchorMin}" style="width:48px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Duration (h)</span>
-        <input type="number" id="sm-anchor-step" min="1" max="24" step="1" value="${sm.anchorStep}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Setups to show</span>
-        <input type="number" id="sm-lookback" min="1" max="20" step="1" value="${sm.lookbackCount}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Historical periods</span>
-        <input type="number" id="sm-hist-count" min="2" max="500" step="1" value="${sm.histCount}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Open: width / style</span>
-        <input type="number" id="sm-open-width" min="1" max="5" step="1" value="${sm.openWidth}" style="width:48px">
-        <select id="sm-open-style" class="dtb-select" style="flex:1;">${styleOpts(sm.openStyle)}</select>
-      </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm-open-color" value="${snParseRgba(sm.openColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm-manip-color" value="${snParseRgba(sm.manipColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm-dist-color" value="${snParseRgba(sm.distColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm-avg-hl-color" value="${snParseRgba(sm.avgHlColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Lines width (bandas)</span>
-        <input type="number" id="sm-line-width" min="1" max="5" step="1" value="${sm.lineWidth}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Weekly Open</div>
-      <label class="wt-set-row"><span>Show weekly levels</span><input type="checkbox" id="sm-show-weekly" ${sm.showWeekly?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Anchor at</span>
-        <select id="sm-w-anchor-mode" class="dtb-select" style="flex:1;">
-          <option value="open" ${sm.wAnchorMode==='open'?'selected':''}>Opening candle</option>
-          <option value="custom" ${sm.wAnchorMode==='custom'?'selected':''}>Custom time</option>
-        </select>
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">NY time (if custom)</span>
-        <input type="number" id="sm-w-anchor-hour" min="0" max="23" step="1" value="${sm.wAnchorHour}" style="width:48px">
-        <input type="number" id="sm-w-anchor-min" min="0" max="59" step="1" value="${sm.wAnchorMin}" style="width:48px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Open: width / style</span>
-        <input type="number" id="sm-w-line-width" min="1" max="5" step="1" value="${sm.wLineWidth}" style="width:48px">
-        <select id="sm-w-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.wLineStyle)}</select>
-      </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm-w-line-color" value="${snParseRgba(sm.wLineColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm-w-manip-color" value="${snParseRgba(sm.wManipColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm-w-dist-color" value="${snParseRgba(sm.wDistColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm-w-avg-hl-color" value="${snParseRgba(sm.wAvgHlColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-w-zone-color" value="${wzc.hex}"><input type="number" id="sm-w-zone-tr" min="0" max="100" step="1" value="${wzc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Weeks to show</span>
-        <input type="number" id="sm-w-lookback" min="1" max="8" step="1" value="${sm.wLookback}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Historical periods</span>
-        <input type="number" id="sm-w-hist-count" min="2" max="200" step="1" value="${sm.wHistCount}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Monthly Open</div>
-      <label class="wt-set-row"><span>Show monthly levels</span><input type="checkbox" id="sm-show-monthly" ${sm.showMonthly?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Anchor at</span>
-        <select id="sm-m-anchor-mode" class="dtb-select" style="flex:1;">
-          <option value="open" ${sm.mAnchorMode==='open'?'selected':''}>Opening candle</option>
-          <option value="custom" ${sm.mAnchorMode==='custom'?'selected':''}>Custom time</option>
-        </select>
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">NY time (if custom)</span>
-        <input type="number" id="sm-m-anchor-hour" min="0" max="23" step="1" value="${sm.mAnchorHour}" style="width:48px">
-        <input type="number" id="sm-m-anchor-min" min="0" max="59" step="1" value="${sm.mAnchorMin}" style="width:48px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Open: width / style</span>
-        <input type="number" id="sm-m-line-width" min="1" max="5" step="1" value="${sm.mLineWidth}" style="width:48px">
-        <select id="sm-m-line-style" class="dtb-select" style="flex:1;">${styleOpts(sm.mLineStyle)}</select>
-      </div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Open color</span><input type="color" id="sm-m-line-color" value="${snParseRgba(sm.mLineColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Manipulation color</span><input type="color" id="sm-m-manip-color" value="${snParseRgba(sm.mManipColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Distribution color</span><input type="color" id="sm-m-dist-color" value="${snParseRgba(sm.mDistColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Avg High/Low color</span><input type="color" id="sm-m-avg-hl-color" value="${snParseRgba(sm.mAvgHlColor).hex}"></div>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color zona</span><input type="color" id="sm-m-zone-color" value="${mzc.hex}"><input type="number" id="sm-m-zone-tr" min="0" max="100" step="1" value="${mzc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Months to show</span>
-        <input type="number" id="sm-m-lookback" min="1" max="6" step="1" value="${sm.mLookback}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Historical periods</span>
-        <input type="number" id="sm-m-hist-count" min="2" max="120" step="1" value="${sm.mHistCount}" style="width:56px">
-      </div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Levels</div>
-      <label class="wt-set-row"><span>Show Manipulation</span><input type="checkbox" id="sm-show-manip" ${sm.showManip?'checked':''}></label>
-      <label class="wt-set-row"><span>Show Distribution</span><input type="checkbox" id="sm-show-dist" ${sm.showDist?'checked':''}></label>
-      <label class="wt-set-row"><span>Show Median</span><input type="checkbox" id="sm-show-median" ${sm.showMedian?'checked':''}></label>
-      <label class="wt-set-row"><span>Show Avg High/Low</span><input type="checkbox" id="sm-show-avg-hl" ${sm.showAvgHL?'checked':''}></label>
-      <label class="wt-set-row"><span>Show shading (avg↔median)</span><input type="checkbox" id="sm-show-shading" ${sm.showShading?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Shading color (diario)</span><input type="color" id="sm-zone-color" value="${zc.hex}"><input type="number" id="sm-zone-tr" min="0" max="100" step="1" value="${zc.transparency}" style="width:48px" title="Transparency %"></div>
-      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Labels</div>
-      <label class="wt-set-row"><span>Show</span><input type="checkbox" id="sm-show-labels" ${sm.showLabels?'checked':''}></label>
-      <div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">Side</span>
-        <select id="sm-label-side" class="dtb-select" style="flex:1;">
-          <option value="left" ${sm.labelSide==='left'?'selected':''}>Left</option>
-          <option value="right" ${sm.labelSide==='right'?'selected':''}>Right</option>
-        </select>
-      </div>`;
   } else if (name === 'Stat Map 2') {
     const s2 = STATE.statMap2;
     const tfOpts = (sel) => ['None','1H','4H','1D','1W','1M'].map(v=>`<option value="${v}" ${sel===v?'selected':''}>${v}</option>`).join('');
@@ -9306,64 +9118,6 @@ function applyIndSettingsForm() {
     STATE.fractalModel.tSpotBearColor = snRgba(g('fm-tspot-bear-color').value, Number(g('fm-tspot-bear-tr').value)||0);
     saveFractalModelState();
     renderFractalModel();
-  } else if (_indSettingsTarget === 'Stat Map') {
-    const g = id => document.getElementById(id);
-    const sm = STATE.statMap;
-    sm.behindCandles = g('sm-behind-candles').checked;
-    sm.showDaily = g('sm-show-daily').checked;
-    sm.anchorHour = Math.max(0, Math.min(23, Number(g('sm-anchor-hour').value)||0));
-    sm.anchorMin  = Math.max(0, Math.min(59, Number(g('sm-anchor-min').value)||0));
-    sm.anchorStep = Math.max(1, Math.min(24, Number(g('sm-anchor-step').value)||24));
-    sm.lookbackCount = Math.max(1, Math.min(20, Number(g('sm-lookback').value)||1));
-    sm.histCount = Math.max(2, Math.min(500, Number(g('sm-hist-count').value)||60));
-    sm.openWidth = Math.max(1, Math.min(5, Number(g('sm-open-width').value)||1));
-    sm.openStyle = g('sm-open-style').value;
-    sm.openColor = snRgba(g('sm-open-color').value, 0);
-    sm.manipColor = snRgba(g('sm-manip-color').value, 0);
-    sm.distColor = snRgba(g('sm-dist-color').value, 0);
-    sm.avgHlColor = snRgba(g('sm-avg-hl-color').value, 0);
-    sm.lineWidth = Math.max(1, Math.min(5, Number(g('sm-line-width').value)||1));
-
-    sm.showWeekly = g('sm-show-weekly').checked;
-    sm.wAnchorMode = g('sm-w-anchor-mode').value;
-    sm.wAnchorHour = Math.max(0, Math.min(23, Number(g('sm-w-anchor-hour').value)||0));
-    sm.wAnchorMin  = Math.max(0, Math.min(59, Number(g('sm-w-anchor-min').value)||0));
-    sm.wLineColor = snRgba(g('sm-w-line-color').value, 0);
-    sm.wLineWidth = Math.max(1, Math.min(5, Number(g('sm-w-line-width').value)||1));
-    sm.wLineStyle = g('sm-w-line-style').value;
-    sm.wManipColor = snRgba(g('sm-w-manip-color').value, 0);
-    sm.wDistColor = snRgba(g('sm-w-dist-color').value, 0);
-    sm.wAvgHlColor = snRgba(g('sm-w-avg-hl-color').value, 0);
-    sm.wZoneColor = snRgba(g('sm-w-zone-color').value, Number(g('sm-w-zone-tr').value)||0);
-    sm.wLookback  = Math.max(1, Math.min(8, Number(g('sm-w-lookback').value)||1));
-    sm.wHistCount = Math.max(2, Math.min(200, Number(g('sm-w-hist-count').value)||12));
-
-    sm.showMonthly = g('sm-show-monthly').checked;
-    sm.mAnchorMode = g('sm-m-anchor-mode').value;
-    sm.mAnchorHour = Math.max(0, Math.min(23, Number(g('sm-m-anchor-hour').value)||0));
-    sm.mAnchorMin  = Math.max(0, Math.min(59, Number(g('sm-m-anchor-min').value)||0));
-    sm.mLineColor = snRgba(g('sm-m-line-color').value, 0);
-    sm.mLineWidth = Math.max(1, Math.min(5, Number(g('sm-m-line-width').value)||1));
-    sm.mLineStyle = g('sm-m-line-style').value;
-    sm.mManipColor = snRgba(g('sm-m-manip-color').value, 0);
-    sm.mDistColor = snRgba(g('sm-m-dist-color').value, 0);
-    sm.mAvgHlColor = snRgba(g('sm-m-avg-hl-color').value, 0);
-    sm.mZoneColor = snRgba(g('sm-m-zone-color').value, Number(g('sm-m-zone-tr').value)||0);
-    sm.mLookback  = Math.max(1, Math.min(6, Number(g('sm-m-lookback').value)||1));
-    sm.mHistCount = Math.max(2, Math.min(120, Number(g('sm-m-hist-count').value)||12));
-
-    sm.showManip = g('sm-show-manip').checked;
-    sm.showDist = g('sm-show-dist').checked;
-    sm.showMedian = g('sm-show-median').checked;
-    sm.showAvgHL = g('sm-show-avg-hl').checked;
-    sm.showShading = g('sm-show-shading').checked;
-    sm.zoneColor = snRgba(g('sm-zone-color').value, Number(g('sm-zone-tr').value)||0);
-
-    sm.showLabels = g('sm-show-labels').checked;
-    sm.labelSide = g('sm-label-side').value;
-
-    saveStatMapState();
-    renderStatMap();
   } else if (_indSettingsTarget === 'Stat Map 2') {
     const g = id => document.getElementById(id);
     const s2 = STATE.statMap2;
@@ -9438,7 +9192,6 @@ function removeIndicator(name){
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
-    else if(name==='Stat Map'){ STATE.statMap.enabled=false; saveStatMapState(); renderStatMap(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); renderStatMap2(); }
     else if(name==='RSI'){ destroyRsiChart(); }
   }
@@ -11185,17 +10938,6 @@ function initFractalModelLayer() {
   syncSize();
 }
 
-function initStatMapLayer() {
-  const container = document.getElementById('chart-container');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:19;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-  window._statMapSvg = svg;
-  function syncSize(){ syncOverlaySvgSize(svg, container); }
-  new ResizeObserver(syncSize).observe(container);
-  syncSize();
-}
-
 // Agrupa las velas cargadas en períodos HTF igual que snBuildHtfRunning,
 // pero además rastrea el ÍNDICE de vela (no solo el precio) del high/low
 // corrido de CADA período — el Pine original necesita ese índice para
@@ -11521,12 +11263,6 @@ function renderFractalModel(){
   bearSetups.forEach(drawSetup);
 }
 
-// ══════════════════════════════════════════════════════════
-//  STAT MAP — ver el comentario grande arriba de STAT_MAP_DEFAULTS para
-//  los 2 bugs del Pine original que este replay determinístico evita de
-//  raíz (apertura semanal que casi nunca disparaba + parpadeo al nacer
-//  un setup nuevo).
-// ══════════════════════════════════════════════════════════
 function smDash(styleStr){ return styleStr === 'dashed' ? '6,4' : styleStr === 'dotted' ? '2,2' : null; }
 
 // Historial rodante (tamaño histCount) de distancias Manipulation/Distribution/
@@ -11543,36 +11279,6 @@ function smMedian(arr){
   const mid = Math.floor(s.length/2);
   return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
 }
-// Empuja al historial las distancias del período que ACABA de cerrar y
-// devuelve una foto de los stats resultantes (avg/mediana) — se llama justo
-// antes de abrir el setup siguiente, igual que el Pine original (que
-// recalcula avg/median apenas push-ea tf1[1] al array, y dibuja el setup
-// NUEVO con esos valores ya actualizados).
-function smPushAndSnapshot(period, hist, histCount){
-  const highDist = period.high - period.open, lowDist = period.open - period.low;
-  // Direccional (igual que el Pine): alcista -> manip fue el swing hacia
-  // abajo antes de subir (open-low), dist fue la extensión hacia arriba
-  // (high-open); bajista, al revés. Doji (close===open, period.close ni
-  // mayor ni menor que period.open) NO empuja nada a NINGUNO de los 4
-  // arrays — ni siquiera a high/low — mismo criterio exacto que el Pine
-  // original (los 4 push están adentro de un único "if not na(manip)":
-  // si manip queda na por ser doji, no se empuja nada ese período).  Antes
-  // acá se empujaba high/low SIEMPRE, doji o no — divergía del Pine en el
-  // caso (raro pero real) de un período con close===open exacto.
-  if (period.close > period.open){
-    smPushStat(hist.manip, lowDist, histCount); smPushStat(hist.dist, highDist, histCount);
-    smPushStat(hist.high, highDist, histCount); smPushStat(hist.low, lowDist, histCount);
-  } else if (period.close < period.open){
-    smPushStat(hist.manip, highDist, histCount); smPushStat(hist.dist, lowDist, histCount);
-    smPushStat(hist.high, highDist, histCount); smPushStat(hist.low, lowDist, histCount);
-  }
-  return {
-    avgManip: smAvg(hist.manip), avgDist: smAvg(hist.dist),
-    medManip: smMedian(hist.manip), medDist: smMedian(hist.dist),
-    avgHigh: smAvg(hist.high), avgLow: smAvg(hist.low),
-  };
-}
-
 // "Día" calendario NY medianoche-a-medianoche — DISTINTO de wtDayKey (que
 // usa el rollover 18:00 del D1 de MT5, para PDH/PDL de Watchtower): el
 // Stat Map original ancla en dayofmonth()/month() de Pine, calendario puro.
@@ -11583,370 +11289,6 @@ function smDayKey(t){
 function smMonthKey(t){
   const d = new Date(t*1000);
   return d.getUTCFullYear()*12 + d.getUTCMonth();
-}
-
-// Devuelve, para el candle c, si su hora:min NY cae DENTRO de un bar de
-// distancia del horario buscado (targetSec, en segundos desde las 00:00) —
-// ni un match exacto (se rompe en TF sintéticos sin vela justo ahí, ver
-// abajo) ni un simple ">=" (se rompe cuando el período/día empieza bastante
-// DESPUÉS del horario buscado — ej. la semana arranca domingo ~21:00 NY y
-// el horario personalizado es 13:00: 21:00 también es ">= 13:00", así que
-// sin esta tolerancia la primera vela del domingo "dispara" igual, un día
-// entero antes de lo que el usuario pidió. barIntervalSec acota la
-// tolerancia al ancho de UNA vela de este panel: alcanza para saltar el
-// offset propio de los TF sintéticos (ver el bug de H4 más abajo), pero no
-// para aceptar una vela que en realidad está horas después porque todavía
-// no llegó el horario pedido ese día).
-function smHourHit(c, targetSec, barIntervalSec){
-  const d = new Date(c.time*1000);
-  const sec = d.getUTCHours()*3600 + d.getUTCMinutes()*60;
-  const gap = sec - targetSec;
-  return gap >= 0 && gap < barIntervalSec;
-}
-
-// Vela real más cercana a targetTime en TODO el historial cargado (a
-// diferencia de smHourHit, que solo busca HACIA ADELANTE desde que
-// arranca el período) — hace falta para el horario personalizado >=18hs
-// de semanal/mensual, ver el comentario grande de smBuildPeriodSetups: el
-// horario buscado puede caer en el día calendario ANTERIOR a donde
-// arranca el período (keyFn), así que escanear solo adelante nunca lo iba
-// a encontrar.
-function smNearestCandle(candles, targetTime){
-  let best = candles[0], bestDiff = Math.abs(candles[0].time - targetTime);
-  for (const c of candles){
-    const diff = Math.abs(c.time - targetTime);
-    if (diff < bestDiff){ bestDiff = diff; best = c; }
-  }
-  return best;
-}
-
-// Setups de la sesión diaria: ancla en la PRIMERA vela de cada día
-// calendario NY que cae dentro de un bar de anchorHour:anchorMin (ver
-// smHourHit) — NO un match exacto. Bug encontrado al probar en H4: el
-// bridge arma sus velas de TF "sintéticos" (2H/3H/4H/6H/8H/12H/D) con un
-// offset propio (confirmado a mano: H4 solo tiene velas en NY 01/05/09/
-// 13/17/21, nunca en 00:00 — ningún TF por encima de 1H tiene una vela
-// exacta a medianoche) — con el match exacto de antes, el anchor por
-// defecto (00:00) nunca disparaba en NINGÚN TF mayor a 1H, no solo en H4.
-// Gateado una vez por día (pending), igual que semanal/mensual más abajo —
-// si no, CUALQUIER vela del día que siga estando después del horario
-// también dispararía.
-// "Rango anterior" = el día calendario NY completo inmediatamente previo
-// (mismo criterio que prevDayHigh/prevDayLow del Pine).
-// Manipulation/Distribution/Avg High/Avg Low — portados del indicador
-// "OHLC StatMap" (Pine) que el usuario pidió usar como referencia: en vez
-// de un único período anterior (versión vieja de este archivo), acá se
-// mantiene un historial rodante de histCount períodos ya cerrados y se
-// dibuja cada setup con el promedio/mediana de ESE historial (igual que el
-// Pine, que recalcula avg/median cada vez que cierra una vela de su TF).
-// Direccional: en una vela alcista, "Manipulation" es el swing en contra
-// (open-low) que barrió liquidez antes de subir, y "Distribution" es la
-// extensión en la dirección del movimiento (high-open); en una bajista se
-// invierte. Sin cuantiles (pedido explícito del usuario, a diferencia del
-// Pine original que sí los tiene).
-function smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval, histCount){
-  const setups = [];
-  let cur = null, prevCompleted = null, pendingTarget = null;
-  const hist = { manip:[], dist:[], high:[], low:[] };
-  let lastStats = { avgManip:0, avgDist:0, medManip:0, medDist:0, avgHigh:0, avgLow:0 };
-  for (let i=0;i<candles.length;i++){
-    const c = candles[i];
-    const k = smDayKey(c.time);
-    if (!cur || cur.key !== k){
-      if (cur){ lastStats = smPushAndSnapshot(cur, hist, histCount); prevCompleted = cur; }
-      cur = { key:k, open:c.open, high:c.high, low:c.low, close:c.close };
-      // Horario pedido de ESTE día — recién se resuelve a una vela más
-      // abajo, cuando el día YA llegó a esa hora (ver el chequeo
-      // "c.time >= pendingTarget"), no acá. Si el día todavía no tiene
-      // ninguna vela en o después de ese horario, todavía no se conoce
-      // cuál es la vela más cercana REAL — calcularlo antes (como hacía
-      // esta función hasta hace poco) tomaba "la más cercana HASTA
-      // AHORA", que se iba corriendo vela a vela según llegaban velas
-      // nuevas más próximas al horario pedido — el nivel Open (y todo lo
-      // que se arma a partir de él) se movía y se volvía a dibujar en
-      // cada vela nueva hasta que por fin llegaba la vela real del
-      // horario, en vez de quedarse fijo como el resto del día.
-      pendingTarget = prevCompleted ? (k/1000 + anchorHour*3600 + anchorMin*60) : null;
-    } else {
-      if (c.high>cur.high) cur.high=c.high;
-      if (c.low<cur.low) cur.low=c.low;
-      cur.close = c.close;
-    }
-    if (pendingTarget !== null && c.time >= pendingTarget){
-      // Recién acá, con el horario ya alcanzado, smNearestCandle tiene
-      // velas de los dos lados del target y da una respuesta final — NO
-      // la primera que smHourHit encontraba escaneando hacia adelante. Un
-      // TF que nunca tiene una vela justo en anchorHour (H4: NY 01/05/
-      // 09/13/17/21, nunca a una hora exacta como anchorHour=9 — ver el
-      // comentario grande de más arriba) podía terminar agarrando una
-      // vela varias horas DESPUÉS del horario real (la siguiente que
-      // cayera dentro de la tolerancia), así que el nivel Open quedaba
-      // desplazado respecto a lo que mostraba un TF más chico para el
-      // MISMO horario — reportado por el usuario comparando H1 contra H4.
-      const startCandle = smNearestCandle(candles, pendingTarget);
-      if (Math.abs(startCandle.time - pendingTarget) <= Math.max(barInterval, 4*3600)){
-        setups.push(Object.assign({ openPrice:startCandle.open, startTime:startCandle.time }, lastStats));
-      }
-      pendingTarget = null;
-    }
-  }
-  while (setups.length>lookback) setups.shift();
-  return setups;
-}
-
-// Setups semanales/mensuales: anclan en el PRIMER candle del período (modo
-// 'open') o en el primer candle del período que cae dentro de un bar de
-// anchorHour:anchorMin (modo 'custom', ver smHourHit — mismo motivo que el
-// diario de arriba, PERO acá importa todavía más: el período en sí puede
-// arrancar bien entrada la hora del día — la semana arranca domingo a la
-// noche NY — así que un simple ">=" contra el horario pedido disparaba de
-// una en la primera vela del período aunque el horario elegido todavía no
-// hubiese llegado) — "pending" se resetea en cada período nuevo, así que
-// si ese horario no llega a aparecer antes de que termine el período, ese
-// período simplemente no genera setup (igual que el Pine, sin el bug: acá
-// "período nuevo" lo decide keyFn, robusto — wtWeekKey ya probado para
-// PWH/PWL de Watchtower, no un match de horario exacto como tenía el Pine
-// original para la semanal).
-//
-// Caso especial, horario personalizado >=18:00 (pedido por el usuario):
-// la vela real de "día 1" de un mes/semana NO es la de las 18hs de ESE
-// mismo día calendario — es la de las 18hs del día calendario ANTERIOR
-// (si el 1° del mes cae lunes, día 1 es domingo 18hs; si cae martes, es
-// lunes 18hs — mismo criterio que la vela diaria D1 de MT5, que ya usa
-// wtDayKey para PDH/PDL de Watchtower). Escanear hacia ADELANTE desde que
-// arranca el período (como hace smHourHit para el resto de los horarios)
-// nunca iba a encontrarla, porque queda ATRÁS, en el período anterior —
-// por eso "no lo tomaba". Acá en cambio, apenas se detecta el período
-// nuevo, se calcula ese horario exacto con wtDayKey y se busca la vela
-// real más cercana en TODO el historial cargado (smNearestCandle), sin
-// restricción de "hacia adelante".
-function smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
-  const setups = [];
-  let cur = null, prevCompleted = null, pending = false;
-  const targetSec = anchorHour*3600 + anchorMin*60;
-  const hist = { manip:[], dist:[], high:[], low:[] };
-  let lastStats = { avgManip:0, avgDist:0, medManip:0, medDist:0, avgHigh:0, avgLow:0 };
-  for (let i=0;i<candles.length;i++){
-    const c = candles[i];
-    const k = keyFn(c.time);
-    const isNewPeriod = !cur || cur.key !== k;
-    if (isNewPeriod){
-      if (cur){ lastStats = smPushAndSnapshot(cur, hist, histCount); prevCompleted = cur; }
-      cur = { key:k, open:c.open, high:c.high, low:c.low, close:c.close };
-      pending = true;
-      if (mode === 'custom' && anchorHour >= 18){
-        const target = wtDayKey(c.time) + (anchorHour-18)*3600 + anchorMin*60;
-        const startCandle = smNearestCandle(candles, target);
-        pending = false;
-        // Si la vela más cercana queda a más de 4h del horario real
-        // buscado, el historial cargado no alcanza hacia atrás como para
-        // tener esa vela (típicamente el PRIMER período del historial
-        // cargado) — mejor no generar un setup mal anclado que uno
-        // silenciosamente desplazado varias horas.
-        if (prevCompleted && Math.abs(startCandle.time - target) <= 4*3600){
-          setups.push(Object.assign({ openPrice:startCandle.open, startTime:startCandle.time }, lastStats));
-        }
-        continue;
-      }
-    } else {
-      if (c.high>cur.high) cur.high=c.high;
-      if (c.low<cur.low) cur.low=c.low;
-      cur.close = c.close;
-    }
-    if (pending){
-      const hit = mode === 'open' ? isNewPeriod : smHourHit(c, targetSec, barInterval);
-      if (hit){
-        pending = false;
-        if (prevCompleted) setups.push(Object.assign({ openPrice:c.open, startTime:c.time }, lastStats));
-      }
-    }
-  }
-  while (setups.length>lookback) setups.shift();
-  return setups;
-}
-
-// Dibuja los 7 niveles de UN setup (diario/semanal/mensual comparten esta
-// misma geometría, solo cambian estilo/prefijo/duración) — t2 siempre
-// clampeado a "dónde estamos ahora" (LEVEL_EXTEND_BARS, mismo criterio que
-// cualquier otro nivel vigente de la app) en vez de saltar al largo
-// completo de una, que era el bug #2 del Pine original.
-//
-// nextStart (el startTime del PRÓXIMO setup ya conocido, o null si este es
-// el más reciente) manda sobre durationSec cuando existe: el Pine original
-// congela cada nivel en una duración fija aproximada ("~21 días hábiles"
-// para el mensual, son 483h) y lo deja ahí quieto hasta que arranca el
-// siguiente — entre el final de esos ~21 días y el próximo mes real (~30
-// días) quedaba una ventana de varios días sin ningún nivel mensual
-// dibujado (reportado por el usuario: "los niveles mensuales duran 21
-// días"). Acá, para cualquier setup que YA tiene uno siguiente conocido
-// (todos menos el más reciente del lookback), el nivel se extiende hasta
-// ahí de verdad — sin hueco — en vez de cortar en una duración aproximada.
-// durationSec queda solo como techo para el setup MÁS RECIENTE (el que
-// todavía no tiene "próximo"): sigue creciendo en vivo (LEVEL_EXTEND_BARS)
-// hasta esa aproximación, que es lo mejor que se puede hacer sin saber
-// todavía cuándo va a arrancar el siguiente período real.
-function smDrawSetup(svg, setup, nextStart, durationSec, lastTime, barInterval, opts){
-  const naturalEnd = nextStart != null ? nextStart : setup.startTime + durationSec;
-  const liveEnd = Math.min(naturalEnd, lastTime + LEVEL_EXTEND_BARS*barInterval);
-  // naturalEnd (startTime + duración en segundos) casi nunca cae justo en
-  // el horario de una vela/whitespace real de ESTE panel — probado a mano:
-  // un setup mensual (483h) vencido en H4 tenía t2 un rato después de la
-  // última vela cargada, pero NI AHÍ coincidía con el grid de H4 (que no
-  // es cada hora, es cada 4h con su propio offset), y timeToCoordinate()
-  // devolvía null → el setup entero no dibujaba nada, en silencio. Mismo
-  // motivo documentado junto a safeLineTime (hline/trendline/fib) — acá
-  // hace falta el mismo redondeo.
-  const t2 = safeLineTime(lastTime < naturalEnd ? liveEnd : naturalEnd);
-  const t1 = safeLineTime(setup.startTime);
-  const open = setup.openPrice;
-  const lblX = opts.labelSide==='left' ? t1 : t2;
-
-  wtLine(svg, t1, t2, open, opts.openColor, opts.openWidth, smDash(opts.openStyle), 'Stat Map');
-  if (opts.showLabels) wtLabel(svg, lblX, open, opts.labelPrefix+'Open', opts.openColor, 'Stat Map');
-
-  function level(show, value, color, name, dash){
-    if (!show) return;
-    wtLine(svg, t1, t2, value, color, opts.lineWidth, dash, 'Stat Map');
-    if (opts.showLabels) wtLabel(svg, lblX, value, opts.labelPrefix+name, color, 'Stat Map');
-  }
-  level(opts.showManip, open+setup.avgManip, opts.manipColor, '+M', null);
-  level(opts.showManip, open-setup.avgManip, opts.manipColor, '-M', null);
-  level(opts.showDist,  open+setup.avgDist,  opts.distColor,  '+D', null);
-  level(opts.showDist,  open-setup.avgDist,  opts.distColor,  '-D', null);
-  level(opts.showManip && opts.showMedian, open+setup.medManip, opts.manipColor, '+M (Med)', '4,3');
-  level(opts.showManip && opts.showMedian, open-setup.medManip, opts.manipColor, '-M (Med)', '4,3');
-  level(opts.showDist  && opts.showMedian, open+setup.medDist,  opts.distColor,  '+D (Med)', '4,3');
-  level(opts.showDist  && opts.showMedian, open-setup.medDist,  opts.distColor,  '-D (Med)', '4,3');
-  level(opts.showAvgHL, open+setup.avgHigh, opts.avgHlColor, 'Avg High', '6,4');
-  level(opts.showAvgHL, open-setup.avgLow,  opts.avgHlColor, 'Avg Low',  '6,4');
-
-  // Franja sombreada entre el nivel promedio y el de mediana de cada banda
-  // (Manipulation/Distribution, igual que el Pine original) — solo tiene
-  // sentido con ambos niveles visibles a la vez.
-  if (opts.showShading){
-    if (opts.showManip && opts.showMedian){
-      wtRect(svg, t1, t2, open+Math.max(setup.avgManip,setup.medManip), open+Math.min(setup.avgManip,setup.medManip), opts.zoneColor, 1, 'none', 'Stat Map');
-      wtRect(svg, t1, t2, open-Math.min(setup.avgManip,setup.medManip), open-Math.max(setup.avgManip,setup.medManip), opts.zoneColor, 1, 'none', 'Stat Map');
-    }
-    if (opts.showDist && opts.showMedian){
-      wtRect(svg, t1, t2, open+Math.max(setup.avgDist,setup.medDist), open+Math.min(setup.avgDist,setup.medDist), opts.zoneColor, 1, 'none', 'Stat Map');
-      wtRect(svg, t1, t2, open-Math.min(setup.avgDist,setup.medDist), open-Math.max(setup.avgDist,setup.medDist), opts.zoneColor, 1, 'none', 'Stat Map');
-    }
-  }
-}
-
-// Cachea smBuildDailySetups/smBuildPeriodSetups — mismo motivo/mismo
-// patrón que snReplayCached (Sniper) y wtGroupByDayCached (Watchtower):
-// recorrer TODAS las velas cargadas, hasta 3 veces (diario+semanal+
-// mensual), se repetía en CADA frame del loop de 60fps del drag/zoom
-// vertical de precio — se sentía como que las cajas/líneas de Stat Map
-// iban "atrasadas" respecto a las velas mientras se arrastraba (mismo
-// reporte del usuario que con Watchtower; Sniper no lo sufre porque ya
-// tenía su propio cache desde antes).
-let _smDailyCache = null, _smWeeklyCache = null, _smMonthlyCache = null;
-function smBuildDailySetupsCached(candles, anchorHour, anchorMin, lookback, barInterval, histCount){
-  const key = _candlesFingerprint(candles) + '|' + anchorHour + '|' + anchorMin + '|' + lookback + '|' + histCount;
-  if (_smDailyCache && _smDailyCache.key === key) return _smDailyCache.result;
-  const result = smBuildDailySetups(candles, anchorHour, anchorMin, lookback, barInterval, histCount);
-  _smDailyCache = { key, result };
-  return result;
-}
-function _smBuildPeriodSetupsCached(cacheGetSet, candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
-  const key = _candlesFingerprint(candles) + '|' + lookback + '|' + mode + '|' + anchorHour + '|' + anchorMin + '|' + histCount;
-  const cached = cacheGetSet.get();
-  if (cached && cached.key === key) return cached.result;
-  const result = smBuildPeriodSetups(candles, keyFn, lookback, mode, anchorHour, anchorMin, barInterval, histCount);
-  cacheGetSet.set({ key, result });
-  return result;
-}
-function smBuildWeeklySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
-  return _smBuildPeriodSetupsCached({ get:()=>_smWeeklyCache, set:v=>_smWeeklyCache=v }, candles, wtWeekKey, lookback, mode, anchorHour, anchorMin, barInterval, histCount);
-}
-function smBuildMonthlySetupsCached(candles, lookback, mode, anchorHour, anchorMin, barInterval, histCount){
-  return _smBuildPeriodSetupsCached({ get:()=>_smMonthlyCache, set:v=>_smMonthlyCache=v }, candles, smMonthKey, lookback, mode, anchorHour, anchorMin, barInterval, histCount);
-}
-
-function renderStatMap(){
-  if (!window._statMapSvg) return;
-  // renderSeries()/loadChart llaman a esto JUSTO después de
-  // candleSeries.setData() con datos nuevos (símbolo/TF cambiado) — la
-  // librería no siempre terminó de recalcular su rango de tiempo interno
-  // para ESE dato nuevo en el mismo tick síncrono, así que
-  // timeToCoordinate() de la última vela puede devolver null por un
-  // instante. Si acá ya borrábamos el SVG antes de darnos cuenta, el
-  // resultado era 0 elementos (nada que dibujar, todas las coordenadas
-  // null) — un parpadeo a vacío reportado por el usuario ("primero
-  // muestra los niveles y se desaparecen") hasta el próximo render real
-  // (_resyncChartLayout, disparado un par de frames después). Chequear
-  // ANTES de tocar el SVG evita el parpadeo: si todavía no está listo,
-  // no hacemos nada — el próximo render (ya con el timeScale al día) deja
-  // todo bien, sin pasar por un frame en blanco.
-  if (window._lastCandles && window._lastCandles.length) {
-    const lastT = window._lastCandles[window._lastCandles.length-1].time;
-    if (chart.timeScale().timeToCoordinate(lastT) === null) return;
-  }
-  const svg = window._statMapSvg;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Stat Map');
-  // Con behindCandles activo, el primitive de arriba (ZentinelBehindDrawingsPrimitive)
-  // repinta estos mismos elementos a mano DETRÁS de las velas — la capa SVG
-  // real se oculta para no verla duplicada por encima.
-  svg.style.visibility = STATE.statMap.behindCandles ? 'hidden' : '';
-  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
-  if (!STATE.statMap.enabled || isIndicatorHidden('Stat Map')) return;
-  const candles = window._lastCandles||[];
-  if (candles.length<2) return;
-  const sm = STATE.statMap;
-  const barInterval = candles[1].time - candles[0].time;
-  const lastTime = candles[candles.length-1].time;
-  const labelSide = sm.labelSide === 'left' ? 'left' : 'right';
-
-  // Toggles de nivel + sombreado: compartidos entre diario/semanal/mensual
-  // a propósito (ver el comentario grande arriba de STAT_MAP_DEFAULTS) —
-  // lo que cambia por período es el historial (histCount) y los colores.
-  const levelOpts = {
-    showManip: sm.showManip, showDist: sm.showDist, showMedian: sm.showMedian,
-    showAvgHL: sm.showAvgHL, showShading: sm.showShading,
-    showLabels: sm.showLabels, labelSide,
-  };
-
-  if (sm.showDaily !== false){
-    const dailySetups = smBuildDailySetupsCached(candles, sm.anchorHour, sm.anchorMin, sm.lookbackCount, barInterval, sm.histCount);
-    dailySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, sm.anchorStep*3600, lastTime, barInterval, Object.assign({
-      openColor: sm.openColor, openWidth: sm.openWidth, openStyle: sm.openStyle, lineWidth: sm.lineWidth,
-      manipColor: sm.manipColor, distColor: sm.distColor, avgHlColor: sm.avgHlColor,
-      zoneColor: sm.zoneColor, labelPrefix: '',
-    }, levelOpts)));
-  }
-
-  if (sm.showWeekly){
-    const weeklySetups = smBuildWeeklySetupsCached(candles, sm.wLookback, sm.wAnchorMode==='open'?'open':'custom', sm.wAnchorHour, sm.wAnchorMin, barInterval, sm.wHistCount);
-    // Infinity, NO 118*3600 (la aproximación "~5 días hábiles" del Pine
-    // original) como techo: ese techo fijo es lo que generaba el hueco de
-    // varios días reportado por el usuario — acá solo sirve de techo
-    // cuando YA hay un próximo setup real (nextStart, ver el comentario
-    // grande de smDrawSetup); el setup más reciente (sin próximo todavía)
-    // simplemente sigue creciendo en vivo hasta que lo reemplace el
-    // próximo lunes real, sin cortar antes por una duración aproximada.
-    weeklySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, Object.assign({
-      openColor: sm.wLineColor, openWidth: sm.wLineWidth, openStyle: sm.wLineStyle, lineWidth: sm.wLineWidth,
-      manipColor: sm.wManipColor, distColor: sm.wDistColor, avgHlColor: sm.wAvgHlColor,
-      zoneColor: sm.wZoneColor, labelPrefix: 'W ',
-    }, levelOpts)));
-  }
-
-  if (sm.showMonthly){
-    const monthlySetups = smBuildMonthlySetupsCached(candles, sm.mLookback, sm.mAnchorMode==='open'?'open':'custom', sm.mAnchorHour, sm.mAnchorMin, barInterval, sm.mHistCount);
-    // Ver el comentario igual arriba, semanal — mismo motivo exacto (acá
-    // es el que el usuario reportó: "los niveles mensuales duran 21 días",
-    // que era el techo fijo 483*3600 ("~21 días hábiles" del Pine
-    // original) cortando antes de que arrancara el mes real siguiente.
-    monthlySetups.forEach((s,idx,arr) => smDrawSetup(svg, s, idx<arr.length-1?arr[idx+1].startTime:null, Infinity, lastTime, barInterval, Object.assign({
-      openColor: sm.mLineColor, openWidth: sm.mLineWidth, openStyle: sm.mLineStyle, lineWidth: sm.mLineWidth,
-      manipColor: sm.mManipColor, distColor: sm.mDistColor, avgHlColor: sm.mAvgHlColor,
-      zoneColor: sm.mZoneColor, labelPrefix: 'M ',
-    }, levelOpts)));
-  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -13004,7 +12346,6 @@ function captureWorkspace(){
     sniper: JSON.parse(JSON.stringify(STATE.sniper)),
     sweeps: JSON.parse(JSON.stringify(STATE.sweeps)),
     fractalModel: JSON.parse(JSON.stringify(STATE.fractalModel)),
-    statMap: JSON.parse(JSON.stringify(STATE.statMap)),
     statMap2: JSON.parse(JSON.stringify(STATE.statMap2)),
     toolDefaults: { ...toolDefaults },
     // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
@@ -13116,7 +12457,7 @@ function captureAppState(){
   return JSON.parse(JSON.stringify({
     chartSettings: STATE.chartSettings, indicators: STATE.indicators, indicatorStyles: STATE.indicatorStyles,
     watchtower: STATE.watchtower, sniper: STATE.sniper, sweeps: STATE.sweeps,
-    fractalModel: STATE.fractalModel, statMap: STATE.statMap, statMap2: STATE.statMap2, toolDefaults: toolDefaults,
+    fractalModel: STATE.fractalModel, statMap2: STATE.statMap2, toolDefaults: toolDefaults,
   }));
 }
 // Mitad "Theme" de restoreAppState — también la usa applyPreset solo,
@@ -13136,14 +12477,12 @@ function restoreIndicatorsAndTools(s){
   STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, JSON.parse(JSON.stringify(s.sniper || {})));
   STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(s.sweeps || {})));
   STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(s.fractalModel || {})));
-  STATE.statMap = Object.assign({}, STAT_MAP_DEFAULTS, JSON.parse(JSON.stringify(s.statMap || {})));
   STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(JSON.stringify(s.statMap2 || {})));
   STATE.indicators = [...(s.indicators || [])];
   STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
-  STATE.statMap.enabled = STATE.indicators.includes('Stat Map');
   STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
   if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
@@ -13163,7 +12502,6 @@ function restoreIndicatorsAndTools(s){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap();
   renderStatMap2();
   renderRsi();
 }
@@ -13746,7 +13084,6 @@ function renderSeries(timeframe){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap();
   renderStatMap2();
   renderTradeMarkers();
 }
@@ -13771,7 +13108,6 @@ function updateFormingCandleLive(bar){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap();
   renderStatMap2();
   renderTradeMarkers();
 }
@@ -14475,7 +13811,6 @@ function _resyncChartLayout(){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap();
   renderStatMap2();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
