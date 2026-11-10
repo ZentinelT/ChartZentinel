@@ -11979,7 +11979,7 @@ function initStatMap2Layer() {
 function sm2BucketKey(t, tfStr) {
   if (tfStr === '1H') return Math.floor(t / 3600) * 3600;
   if (tfStr === '4H') return Math.floor(t / 14400) * 14400;
-  if (tfStr === '1D') return smDayKey(t);
+  if (tfStr === '1D') return wtDayKey(t);  // rollover 17:00 UTC (= 18 hs ART)
   if (tfStr === '1W') return wtWeekKey(t);
   if (tfStr === '1M') return smMonthKey(t);
   return null;
