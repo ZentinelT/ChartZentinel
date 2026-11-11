@@ -839,14 +839,21 @@
   .wl-item.active { background: var(--bg-active); border-left: 2px solid var(--gold); }
   .wl-item.active .wl-sym { color: var(--gold); }
 
-  .wl-sym { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); letter-spacing: .5px; flex: 1; }
-  .wl-price { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
-  .wl-chg { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 3px; min-width: 46px; text-align: right; }
+  /* El símbolo es el ÚNICO que cede ancho (ellipsis): con precios largos
+     tipo "28,561.38" + chip de %, la suma pasaba los 220px del sidebar y
+     el chip quedaba cortado atrás del chart (reportado por el usuario con
+     NAS100.fs / US500); "AAVE-USD" además se partía en dos líneas. */
+  .wl-sym { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); letter-spacing: .5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wl-price { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); white-space: nowrap; flex-shrink: 0; }
+  .wl-chg { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 3px; min-width: 46px; text-align: right; white-space: nowrap; flex-shrink: 0; }
   .wl-chg.up { color: var(--green); background: var(--green-dim); }
   .wl-chg.dn { color: var(--red); background: var(--red-dim); }
 
-  .wl-remove { background: none; border: none; color: transparent; cursor: pointer; font-size: 13px; line-height: 1; transition: color .15s; padding: 0 2px; }
-  .wl-item:hover .wl-remove { color: var(--text-dim); }
+  /* Fuera del flujo (absolute): en flow robaba ~15px fijos de ancho por
+     fila aunque solo se ve en hover. Flota sobre el borde derecho con
+     fondo propio para taparse legible encima del chip. */
+  .wl-remove { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: none; background: var(--bg-hover); border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+  .wl-item:hover .wl-remove { display: block; }
   .wl-item:hover .wl-remove:hover { color: var(--red); }
 
   .sidebar-indicators { border-top: 1px solid var(--border); }
