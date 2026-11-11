@@ -3232,6 +3232,7 @@ function renderLayoutGrid(n){
     STATE.watchlist.forEach(sym => {
       const rowEl = document.createElement('div');
       rowEl.className = 'wl-item' + (sym===activeSym ? ' active' : '');
+      rowEl.dataset.sym = sym; // lo usa _wlApplyQuote para ubicar la fila
       rowEl.innerHTML = `
         <div class="wl-sym">${sym}</div>
         <div class="wl-price">—</div>
@@ -3241,6 +3242,10 @@ function renderLayoutGrid(n){
       el.appendChild(rowEl);
     });
     lsSet('td_watchlist', JSON.stringify(STATE.watchlist));
+    // Mismo patrón que renderWatchlist: repintar desde cache y asegurar el
+    // poller de quotes (acá corre en el documento del shell).
+    applyWlQuoteCache();
+    ensureWlQuotesPolling();
   }
   window.shellSelectSymbol = function(sym){
     const f = iframeEls[activePane-1];
@@ -3255,6 +3260,7 @@ function renderLayoutGrid(n){
     if (!sym || STATE.watchlist.includes(sym)) return;
     STATE.watchlist.push(sym);
     renderShellWatchlist();
+    refreshWatchlistQuotes(true); // mismo motivo que en addSymbol
   };
   wireSymbolSearch(shellSidebar.querySelector('#add-sym-inp'), shellSidebar.querySelector('#add-sym-suggestions'), shellAddSymbol);
   window.shellRemoveSymbol = function(sym, e){
@@ -8026,13 +8032,116 @@ function renderWatchlist() {
     el.appendChild(row);
   });
   saveState();
+  // Re-render borra las filas → re-pintar precio/% desde el cache para que
+  // no "parpadeen" a — hasta el próximo poll, y arrancar el poller (no-op
+  // si ya corre o si esto es un pane embed).
+  applyWlQuoteCache();
+  ensureWlQuotesPolling();
 }
 
 function selectSymbol(sym) { STATE.symbol=sym; document.getElementById('symbol-input').value=sym; renderWatchlist(); loadChart(sym,STATE.timeframe); }
-function addSymbol() { const inp=document.getElementById('add-sym-inp'); const sym=inp.value.trim(); if(!sym||STATE.watchlist.includes(sym)){inp.value='';return;} STATE.watchlist.push(sym); inp.value=''; document.getElementById('add-sym-form').classList.remove('open'); renderWatchlist(); }
+function addSymbol() { const inp=document.getElementById('add-sym-inp'); const sym=inp.value.trim(); if(!sym||STATE.watchlist.includes(sym)){inp.value='';return;} STATE.watchlist.push(sym); inp.value=''; document.getElementById('add-sym-form').classList.remove('open'); renderWatchlist(); refreshWatchlistQuotes(true); /* que el recién agregado no quede en "—" hasta el próximo poll */ }
 function removeSymbol(sym,e) { e.stopPropagation(); STATE.watchlist=STATE.watchlist.filter(s=>s!==sym); if(STATE.symbol===sym&&STATE.watchlist.length)selectSymbol(STATE.watchlist[0]); else renderWatchlist(); }
 function toggleAddSym() { const f=document.getElementById('add-sym-form'); f.classList.toggle('open'); if(f.classList.contains('open'))document.getElementById('add-sym-inp').focus(); }
 function updateWLPrice(sym,price) { const key=sym.replace(/[^a-z0-9]/gi,'_'); const el=document.getElementById('wlp-'+key); if(el)el.textContent=fmt(price); }
+
+// ─── Quotes del watchlist (precio + % del día de TODOS los símbolos) ───
+// El usuario reportó que las columnas de precio y % existían en el diseño
+// pero quedaban en "—" para siempre: el % no lo escribía nadie, y el precio
+// solo se actualizaba para el símbolo ACTIVO (updateWLPrice en los ticks).
+// Acá un poller liviano pide 2 velas DIARIAS por símbolo — misma vía
+// (/ohlcv, klines) que ya usa el chart, sirve igual para MT5/Binance/Bybit
+// sin endpoints nuevos — y calcula: precio = close de hoy (vela en curso),
+// % = contra el close del día anterior (semántica "cambio del día", como TV).
+// Corre en la página de 1 gráfico y en el shell de la grilla (el sidebar
+// vive ahí), NUNCA en los panes embed (sidebar oculto, sería tráfico x4).
+// MT5 va secuencial y con intervalo más largo: cada pedido pasa por el
+// archivo request.txt del EA (un solo slot — pedidos simultáneos se pisan).
+const _wlQuoteCache = {};   // sym -> {price, pct}
+let _wlQuotesBusy = false, _wlQuotesTimer = null, _wlQuotesLastRun = 0;
+
+function _wlQuoteSource(){
+  // En la grilla cada panel puede tener su propia fuente; se usa la del
+  // panel activo (es el criterio que ya usa el resto del shell, ver
+  // updateApiBadge en renderLayoutGrid).
+  if (isGridShell() && window._gridActiveFrame && window._gridPaneEval){
+    const f = window._gridActiveFrame();
+    const ds = f && window._gridPaneEval(f, 'STATE.dataSource');
+    if (ds) return ds;
+  }
+  return STATE.dataSource;
+}
+
+async function _wlFetchDaily(sym, source){
+  if (source === 'binance') return fetchOhlcvBinance(sym, '1day', 2);
+  if (source === 'bybit')   return fetchOhlcvBybit(sym, '1day', 2);
+  const res = await fetch(`${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(sym)}&interval=1day&bars=2`);
+  return res.json();
+}
+
+function _wlApplyQuote(sym){
+  const q = _wlQuoteCache[sym];
+  if (!q) return;
+  // Por data-sym y no por id: las filas del shell de la grilla no tienen
+  // ids wlp-/wlc-, y así una misma función sirve en los dos documentos.
+  document.querySelectorAll('.wl-item').forEach(row => {
+    if (row.dataset.sym !== sym) return;
+    const p = row.querySelector('.wl-price'), c = row.querySelector('.wl-chg');
+    if (p && q.price != null) p.textContent = fmt(q.price);
+    if (c && q.pct != null) {
+      c.textContent = (q.pct >= 0 ? '+' : '') + q.pct.toFixed(2) + '%';
+      c.classList.toggle('up', q.pct >= 0);
+      c.classList.toggle('dn', q.pct < 0);
+    }
+  });
+}
+
+function applyWlQuoteCache(){ Object.keys(_wlQuoteCache).forEach(_wlApplyQuote); }
+
+async function refreshWatchlistQuotes(force){
+  // Con el tab oculto no se pollea (tráfico inútil) — pero el fill INICIAL
+  // (force) corre igual: sin esto, abrir la app en un tab de fondo dejaba
+  // todo en "—" hasta el primer poll después de volver al tab.
+  if (_wlQuotesBusy || (!force && document.hidden) || !STATE.watchlist.length) return;
+  _wlQuotesBusy = true;
+  try {
+    const source = _wlQuoteSource();
+    // Secuencial a propósito (ver comentario del bloque): con MT5 dos
+    // pedidos en vuelo se pisan el request.txt; con Binance/Bybit igual es
+    // rápido (2 velas por símbolo) y evita ráfagas de N requests.
+    for (const sym of [...STATE.watchlist]) {
+      if (!STATE.watchlist.includes(sym)) continue; // lo sacaron mid-loop
+      try {
+        const data = await _wlFetchDaily(sym, source);
+        const bars = (data && data.bars) || [];
+        if (!bars.length) continue;
+        const last = bars[bars.length-1], prev = bars.length > 1 ? bars[bars.length-2] : null;
+        _wlQuoteCache[sym] = {
+          price: last.close,
+          pct: prev && prev.close ? (last.close - prev.close) / prev.close * 100 : null
+        };
+        _wlApplyQuote(sym);
+      } catch(e){ /* símbolo inválido para esta fuente, o fuente caída — la fila queda como está */ }
+    }
+    _wlQuotesLastRun = Date.now();
+  } finally { _wlQuotesBusy = false; }
+}
+
+function ensureWlQuotesPolling(){
+  if (EMBED_MODE || _wlQuotesTimer) return;
+  _wlQuotesTimer = setInterval(() => {
+    // MT5 más espaciado: cada refresh son N viajes por el file-bridge del
+    // EA y no hace falta pelearle el slot al chart a cada rato.
+    const gap = _wlQuoteSource() === 'mt5' ? 30000 : 10000;
+    if (Date.now() - _wlQuotesLastRun >= gap) refreshWatchlistQuotes();
+  }, 5000);
+  // Al volver al tab, refrescar enseguida si lo que hay quedó viejo (el
+  // intervalo de arriba no corre mientras el tab está oculto).
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - _wlQuotesLastRun >= 10000) refreshWatchlistQuotes();
+  });
+  refreshWatchlistQuotes(true);
+}
 // Enter lo maneja wireSymbolSearch (ver su comentario) — acá solo Escape.
 document.getElementById('add-sym-inp').addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('add-sym-form').classList.remove('open');});
 
@@ -12889,7 +12998,7 @@ function saveState(){lsSet(lsKey('td_datasource'),STATE.dataSource);lsSet(lsKey(
 function applySymbolInputValue(){
   const inp = document.getElementById('symbol-input');
   const sym = inp.value.trim(); if(!sym) return;
-  if(!STATE.watchlist.includes(sym))STATE.watchlist.push(sym);
+  if(!STATE.watchlist.includes(sym)){STATE.watchlist.push(sym);refreshWatchlistQuotes(true);} // ídem addSymbol
   STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
 }
 const _dataSourceSelect = document.getElementById('data-source-select');
@@ -12904,9 +13013,13 @@ _dataSourceSelect.addEventListener('change', () => {
   STATE.dataSource = _dataSourceSelect.value;
   _brokerSymbolsCache = null; // la lista de símbolos válidos cambia con la fuente
   STATE.symbol = _lastSymbolBySource[STATE.dataSource];
+  // Los quotes del watchlist también son de la fuente anterior — sin esto
+  // quedaban precios de Binance mostrados mientras mirás MT5 (o al revés).
+  Object.keys(_wlQuoteCache).forEach(k=>delete _wlQuoteCache[k]);
   saveState();
   updateApiBadge(document.getElementById('api-badge'), STATE.dataSource);
   loadChart(STATE.symbol, STATE.timeframe);
+  refreshWatchlistQuotes(true);
 });
 // Enter lo maneja wireSymbolSearch (ver su comentario).
 wireSymbolSearch(document.getElementById('symbol-input'), document.getElementById('symbol-input-suggestions'), applySymbolInputValue);
