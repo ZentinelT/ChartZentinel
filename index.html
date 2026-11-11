@@ -1427,6 +1427,27 @@
   .toast.warn    { border-left-color: var(--gold); }
   .toast.error   { border-left-color: var(--red); }
 
+  /* ─── SELECTOR DE TIPO DE GRÁFICO (botón + popup de iconitos) ───
+     Un <select> nativo no puede mostrar SVG en sus options — pedido del
+     usuario: figuritas en vez de palabras. El trigger es un .topbar-btn
+     más; el popup es una tira horizontal de íconos con tooltip nativo. */
+  .ct-wrap { position: relative; display: flex; align-items: center; }
+  .ct-popup {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 700;
+    background: var(--bg-panel); border: 1px solid var(--border-light);
+    border-radius: 6px; padding: 4px; display: none; gap: 2px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  }
+  .ct-popup.open { display: flex; }
+  .ct-opt {
+    background: none; border: none; border-radius: 5px;
+    width: 30px; height: 28px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-secondary); padding: 0;
+  }
+  .ct-opt:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .ct-opt.active { color: var(--gold); background: var(--gold-glow); }
+  .ct-opt svg { width: 18px; height: 18px; }
+
   .ind-picker-list { max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; margin-bottom: 14px; }
   .ind-pick-row { display: flex; align-items: center; padding: 8px 10px; border-radius: 5px; cursor: pointer; gap: 10px; transition: background .12s; }
   .ind-pick-row:hover { background: var(--bg-hover); }
@@ -1623,14 +1644,10 @@
   </select>
   <div class="tf-sep"></div>
 
-  <select id="chart-type-select" class="topbar-input" title="Chart type">
-    <option value="candles">Candles</option>
-    <option value="hollow">Hollow</option>
-    <option value="bars">Bars</option>
-    <option value="line">Line</option>
-    <option value="area">Area</option>
-    <option value="heikin">Heikin Ashi</option>
-  </select>
+  <div class="ct-wrap" id="chart-type-wrap">
+    <button class="topbar-btn ct-trigger" title="Chart type"></button>
+    <div class="ct-popup"></div>
+  </div>
   <div class="tf-sep"></div>
 
   <div id="symbol-search-wrap">
@@ -3020,14 +3037,10 @@ function renderLayoutGrid(n){
       ${SHARED_ICON.datasourceOptions}
     </select>
     <div class="tf-sep"></div>
-    <select id="gc-charttype" class="topbar-input" title="Chart type — applies to the Active panel or to All, depending on the selector above">
-      <option value="candles">Candles</option>
-      <option value="hollow">Hollow</option>
-      <option value="bars">Bars</option>
-      <option value="line">Line</option>
-      <option value="area">Area</option>
-      <option value="heikin">Heikin Ashi</option>
-    </select>
+    <div class="ct-wrap" id="gc-charttype-wrap">
+      <button class="topbar-btn ct-trigger" title="Chart type — applies to the Active panel or to All, depending on the selector above"></button>
+      <div class="ct-popup"></div>
+    </div>
     <div class="tf-sep"></div>
     <div id="gc-scope" style="display:flex;gap:2px;"></div>
     <input id="gc-symbol" class="topbar-input" type="text" placeholder="Symbol…" autocomplete="off" title="Symbol for the active panel or all — Enter to apply" style="width:76px;">
@@ -3504,9 +3517,9 @@ function renderLayoutGrid(n){
     const ds = paneEval(f, 'STATE.dataSource');
     if (dsSel && ds) dsSel.value = ds;
     if (ds) updateApiBadge(document.getElementById('api-badge'), ds);
-    const ctSel = document.getElementById('gc-charttype');
+    const ctWrap = document.getElementById('gc-charttype-wrap');
     const ct = paneEval(f, 'STATE.chartType');
-    if (ctSel && ct) ctSel.value = ct;
+    if (ctWrap && ctWrap._setCurrent && ct) ctWrap._setCurrent(ct);
     syncShellTfActiveClass();
     closeTfFavPopupShell();
   }
@@ -3743,10 +3756,12 @@ function renderLayoutGrid(n){
   // Tipo de gráfico — mismo criterio que la fuente de datos de arriba:
   // respeta Activo/Todos y delega en el setChartType() de cada panel (que
   // ya se encarga de recrear la serie, los overlays y persistir).
-  gbar.querySelector('#gc-charttype').addEventListener('change', (e) => {
-    const val = e.target.value;
+  wireChartTypePicker(gbar.querySelector('#gc-charttype-wrap'), (val) => {
     targetFrames().forEach(f => paneEval(f, `setChartType(${JSON.stringify(val)})`));
   });
+  // Ícono inicial del trigger — syncShellControls lo pisa enseguida con el
+  // tipo real del panel activo, esto es solo para que no arranque vacío.
+  gbar.querySelector('#gc-charttype-wrap')._setCurrent('candles');
 
   // Operaciones (paper trading) — el journal es GLOBAL (localStorage sin
   // sufijo de panel, comparte origen con todos los panes). Mismo criterio
@@ -4186,6 +4201,47 @@ const _wtKz = {};
 Object.keys(WT_KZ_DEFAULTS).forEach(k => {
   _wtKz[k] = Object.assign({}, WT_KZ_DEFAULTS[k], (_wtSaved.kz && _wtSaved.kz[k]) || {});
 });
+
+// Tipos de gráfico de la serie principal — ver "TIPOS DE GRÁFICO" junto a
+// renderSeries. Definido ACÁ arriba (y no allá) porque el picker del
+// topbar single se cablea en código top-level que corre antes de que el
+// parser llegue a esa zona del archivo (TDZ de const). Los íconos son
+// SVG inline (stroke currentColor) para el botón/popup del selector —
+// pedido del usuario: figuritas en vez de palabras.
+const CHART_TYPES = [
+  { id:'candles', label:'Candles', icon:'<line x1="7.5" y1="2.5" x2="7.5" y2="21.5"/><rect x="4.5" y="7" width="6" height="8" rx="1" fill="currentColor" stroke="none"/><line x1="16.5" y1="2.5" x2="16.5" y2="21.5"/><rect x="13.5" y="9" width="6" height="8" rx="1" fill="currentColor" stroke="none"/>' },
+  { id:'hollow',  label:'Hollow candles', icon:'<line x1="7.5" y1="2.5" x2="7.5" y2="7"/><line x1="7.5" y1="15" x2="7.5" y2="21.5"/><rect x="4.5" y="7" width="6" height="8" rx="1" fill="none"/><line x1="16.5" y1="2.5" x2="16.5" y2="9"/><line x1="16.5" y1="17" x2="16.5" y2="21.5"/><rect x="13.5" y="9" width="6" height="8" rx="1" fill="none"/>' },
+  { id:'bars',    label:'Bars', icon:'<line x1="7" y1="3" x2="7" y2="19"/><line x1="7" y1="6.5" x2="3.5" y2="6.5"/><line x1="7" y1="14" x2="10.5" y2="14"/><line x1="17" y1="5" x2="17" y2="21"/><line x1="17" y1="9" x2="13.5" y2="9"/><line x1="17" y1="17.5" x2="20.5" y2="17.5"/>' },
+  { id:'line',    label:'Line', icon:'<polyline points="3 17 9.5 9.5 13.5 13 21 4.5" fill="none"/>' },
+  { id:'area',    label:'Area', icon:'<path d="M3 17 L9.5 9.5 L13.5 13 L21 4.5 L21 21 L3 21 Z" fill="currentColor" fill-opacity=".25" stroke="none"/><polyline points="3 17 9.5 9.5 13.5 13 21 4.5" fill="none"/>' },
+  { id:'heikin',  label:'Heikin Ashi', icon:'<line x1="7.5" y1="4" x2="7.5" y2="20"/><rect x="4.5" y="8" width="6" height="8" rx="3" fill="currentColor" stroke="none"/><line x1="16.5" y1="4" x2="16.5" y2="20"/><rect x="13.5" y="8" width="6" height="8" rx="3" fill="none"/>' },
+];
+
+// Botón + popup de iconitos del selector de tipo de gráfico (el <select>
+// nativo no puede mostrar SVG en sus options). Se usa igual en el topbar
+// single y en la barra de la grilla — wrap debe tener un .ct-trigger y un
+// .ct-popup adentro; onPick recibe el id elegido. wrap._setCurrent(type)
+// pinta el ícono del botón y resalta la opción activa.
+function wireChartTypePicker(wrap, onPick){
+  const trigger = wrap.querySelector('.ct-trigger');
+  const popup = wrap.querySelector('.ct-popup');
+  popup.innerHTML = CHART_TYPES.map(ct =>
+    `<button class="ct-opt" data-ct="${ct.id}" title="${ct.label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">${ct.icon}</svg></button>`
+  ).join('');
+  trigger.addEventListener('click', (e) => { e.stopPropagation(); popup.classList.toggle('open'); });
+  popup.addEventListener('click', (e) => {
+    const b = e.target.closest('.ct-opt'); if (!b) return;
+    popup.classList.remove('open');
+    wrap._setCurrent(b.dataset.ct);
+    onPick(b.dataset.ct);
+  });
+  document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) popup.classList.remove('open'); });
+  wrap._setCurrent = (type) => {
+    const def = CHART_TYPES.find(c => c.id === type) || CHART_TYPES[0];
+    trigger.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">${def.icon}</svg>`;
+    popup.querySelectorAll('.ct-opt').forEach(b => b.classList.toggle('active', b.dataset.ct === def.id));
+  };
+}
 
 const ALL_TIMEFRAMES = [
   { tf:'1min',  label:'1m',  group:'m' }, { tf:'2min',  label:'2m',  group:'m' },
@@ -13152,10 +13208,10 @@ function applySymbolInputValue(){
   STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
 }
 // Selector de tipo de gráfico (velas/huecas/barras/línea/área/Heikin) —
-// mismo patrón que el de fuente de datos de abajo.
-const _chartTypeSelect = document.getElementById('chart-type-select');
-_chartTypeSelect.value = STATE.chartType || 'candles';
-_chartTypeSelect.addEventListener('change', () => setChartType(_chartTypeSelect.value));
+// botón con popup de iconitos, ver wireChartTypePicker junto a CHART_TYPES.
+const _chartTypeWrap = document.getElementById('chart-type-wrap');
+wireChartTypePicker(_chartTypeWrap, setChartType);
+_chartTypeWrap._setCurrent(STATE.chartType || 'candles');
 
 const _dataSourceSelect = document.getElementById('data-source-select');
 _dataSourceSelect.value = STATE.dataSource;
@@ -13340,15 +13396,6 @@ async function fetchOhlcvData(symbol, interval, bars, before){
 //  lightweight-charts. Lo único que cambia es cómo se crea y qué forma
 //  tienen sus puntos (mainSeriesData/mainSeriesBar).
 // ══════════════════════════════════════════════════════════
-const CHART_TYPES = [
-  { id:'candles', label:'Candles' },
-  { id:'hollow',  label:'Hollow candles' },
-  { id:'bars',    label:'Bars' },
-  { id:'line',    label:'Line' },
-  { id:'area',    label:'Area' },
-  { id:'heikin',  label:'Heikin Ashi' },
-];
-
 // Heikin Ashi clásico: haClose = (O+H+L+C)/4, haOpen = promedio del HA
 // anterior — por esa dependencia encadenada se transforma el array entero
 // de una (acá) y el tick en vivo solo recalcula la última vela contra el
@@ -13429,8 +13476,8 @@ function setChartType(type){
   if (type === (STATE.chartType || 'candles')) return;
   STATE.chartType = type;
   saveState();
-  const sel = document.getElementById('chart-type-select');
-  if (sel) sel.value = type;
+  const wrap = document.getElementById('chart-type-wrap');
+  if (wrap && wrap._setCurrent) wrap._setCurrent(type);
   if (!chart) return; // shell de la grilla: sin chart propio, los panes se encargan
   Object.keys(overlays).forEach(n => { try { chart.removeSeries(overlays[n]); } catch(e){} delete overlays[n]; });
   createMainSeries();
