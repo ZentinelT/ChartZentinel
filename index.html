@@ -1623,6 +1623,16 @@
   </select>
   <div class="tf-sep"></div>
 
+  <select id="chart-type-select" class="topbar-input" title="Chart type">
+    <option value="candles">Candles</option>
+    <option value="hollow">Hollow</option>
+    <option value="bars">Bars</option>
+    <option value="line">Line</option>
+    <option value="area">Area</option>
+    <option value="heikin">Heikin Ashi</option>
+  </select>
+  <div class="tf-sep"></div>
+
   <div id="symbol-search-wrap">
     <input id="symbol-input" class="topbar-input" type="text" value="BTCUSDT" placeholder="Symbol" autocomplete="off" title="Enter symbol and press Enter">
     <div id="symbol-input-suggestions" class="add-sym-suggestions"></div>
@@ -3010,6 +3020,15 @@ function renderLayoutGrid(n){
       ${SHARED_ICON.datasourceOptions}
     </select>
     <div class="tf-sep"></div>
+    <select id="gc-charttype" class="topbar-input" title="Chart type — applies to the Active panel or to All, depending on the selector above">
+      <option value="candles">Candles</option>
+      <option value="hollow">Hollow</option>
+      <option value="bars">Bars</option>
+      <option value="line">Line</option>
+      <option value="area">Area</option>
+      <option value="heikin">Heikin Ashi</option>
+    </select>
+    <div class="tf-sep"></div>
     <div id="gc-scope" style="display:flex;gap:2px;"></div>
     <input id="gc-symbol" class="topbar-input" type="text" placeholder="Symbol…" autocomplete="off" title="Symbol for the active panel or all — Enter to apply" style="width:76px;">
     <div id="gc-symbol-suggestions" class="add-sym-suggestions"></div>
@@ -3485,6 +3504,9 @@ function renderLayoutGrid(n){
     const ds = paneEval(f, 'STATE.dataSource');
     if (dsSel && ds) dsSel.value = ds;
     if (ds) updateApiBadge(document.getElementById('api-badge'), ds);
+    const ctSel = document.getElementById('gc-charttype');
+    const ct = paneEval(f, 'STATE.chartType');
+    if (ctSel && ct) ctSel.value = ct;
     syncShellTfActiveClass();
     closeTfFavPopupShell();
   }
@@ -3716,6 +3738,14 @@ function renderLayoutGrid(n){
       `document.getElementById('data-source-select').dispatchEvent(new Event('change'));`
     ));
     updateApiBadge(document.getElementById('api-badge'), val);
+  });
+
+  // Tipo de gráfico — mismo criterio que la fuente de datos de arriba:
+  // respeta Activo/Todos y delega en el setChartType() de cada panel (que
+  // ya se encarga de recrear la serie, los overlays y persistir).
+  gbar.querySelector('#gc-charttype').addEventListener('change', (e) => {
+    const val = e.target.value;
+    targetFrames().forEach(f => paneEval(f, `setChartType(${JSON.stringify(val)})`));
   });
 
   // Operaciones (paper trading) — el journal es GLOBAL (localStorage sin
@@ -4357,6 +4387,9 @@ const STAT_MAP_2_DEFAULTS = {
 };
 const STATE = {
   dataSource: lsGet(lsKey('td_datasource')) || 'binance', // 'mt5' | 'binance'
+  // Tipo de gráfico de la serie principal — 'candles' | 'hollow' | 'bars'
+  // | 'line' | 'area' | 'heikin'. Ver setChartType()/createMainSeries().
+  chartType: lsGet(lsKey('td_charttype')) || 'candles',
   symbol:     lsGet(lsKey('td_symbol')) || 'BTCUSDT',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
   watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '[]'),
@@ -6830,8 +6863,7 @@ function initChart() {
     watermark: { visible:false },
   });
 
-  candleSeries = chart.addCandlestickSeries({});
-  candleSeries.attachPrimitive(new ZentinelBehindDrawingsPrimitive());
+  createMainSeries(); // crea candleSeries según STATE.chartType (ver TIPOS DE GRÁFICO)
   applyChartSettings();
 
   // Serie invisible, aparte de candleSeries: solo lleva los puntos fantasma
@@ -6974,7 +7006,17 @@ function initChart() {
     const info = document.getElementById('crosshair-info');
     if (!param.time || !param.seriesData) { info.style.display='none'; }
     else {
-      const d = param.seriesData.get(candleSeries);
+      let d = param.seriesData.get(candleSeries);
+      // En modo línea/área la serie principal solo trae {value} — el OHLC
+      // del legend sale de la vela real. (Heikin sí trae OHLC propio y se
+      // muestra ese, como TV: el legend refleja lo que se ve dibujado.)
+      if (d && d.open === undefined) {
+        const cs = window._lastCandles || [];
+        // Búsqueda desde el final: el crosshair casi siempre anda cerca
+        // de las velas recientes, y esto corre 1 vez por frame como mucho.
+        for (let i = cs.length - 1; i >= 0; i--) { if (cs[i].time === param.time) { d = cs[i]; break; } if (cs[i].time < param.time) { d = null; break; } }
+        if (d && d.open === undefined) d = null;
+      }
       if (!d) { info.style.display='none'; }
       else {
         info.style.display='block';
@@ -12531,14 +12573,7 @@ function applyChartSettings(){
       rightOffset: cs.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars,
     },
   });
-  candleSeries.applyOptions({
-    upColor: cs.upColor, downColor: cs.downColor,
-    borderUpColor: cs.borderUpColor, borderDownColor: cs.borderDownColor,
-    wickUpColor: cs.wickUpColor, wickDownColor: cs.wickDownColor,
-    priceLineVisible: cs.priceLineVisible,
-    priceLineColor: cs.priceLineColor || undefined,
-    priceLineStyle: cs.priceLineStyle,
-  });
+  applyMainSeriesColors(); // colores de la serie principal según su tipo (velas/línea/área/...)
   renderTradeMarkers(); // el modo (flechas solas / + texto) puede haber cambiado
 }
 
@@ -13108,7 +13143,7 @@ function setStatus(cls,txt){
 function showOverlay(show){document.getElementById('loading-overlay').classList.toggle('hidden',!show);}
 function setLoaderMsg(msg){document.getElementById('loader-msg').textContent=msg;}
 function showLoader(msg){setLoaderMsg(msg);showOverlay(true);}
-function saveState(){lsSet(lsKey('td_datasource'),STATE.dataSource);lsSet(lsKey('td_symbol'),STATE.symbol);lsSet(lsKey('td_tf'),STATE.timeframe);lsSet(lsKey('td_watchlist'),JSON.stringify(STATE.watchlist));lsSet(lsKey('td_indicators'),JSON.stringify(STATE.indicators));}
+function saveState(){lsSet(lsKey('td_datasource'),STATE.dataSource);lsSet(lsKey('td_charttype'),STATE.chartType||'candles');lsSet(lsKey('td_symbol'),STATE.symbol);lsSet(lsKey('td_tf'),STATE.timeframe);lsSet(lsKey('td_watchlist'),JSON.stringify(STATE.watchlist));lsSet(lsKey('td_indicators'),JSON.stringify(STATE.indicators));}
 
 function applySymbolInputValue(){
   const inp = document.getElementById('symbol-input');
@@ -13116,6 +13151,12 @@ function applySymbolInputValue(){
   if(!STATE.watchlist.includes(sym)){STATE.watchlist.push(sym);refreshWatchlistQuotes(true);} // ídem addSymbol
   STATE.symbol=sym;renderWatchlist();loadChart(sym,STATE.timeframe);
 }
+// Selector de tipo de gráfico (velas/huecas/barras/línea/área/Heikin) —
+// mismo patrón que el de fuente de datos de abajo.
+const _chartTypeSelect = document.getElementById('chart-type-select');
+_chartTypeSelect.value = STATE.chartType || 'candles';
+_chartTypeSelect.addEventListener('change', () => setChartType(_chartTypeSelect.value));
+
 const _dataSourceSelect = document.getElementById('data-source-select');
 _dataSourceSelect.value = STATE.dataSource;
 // Último símbolo usado en cada fuente — cambiar de MT5 a Binance y volver no
@@ -13290,6 +13331,122 @@ async function fetchOhlcvData(symbol, interval, bars, before){
   return res.json();
 }
 
+// ══════════════════════════════════════════════════════════
+//  TIPOS DE GRÁFICO — la serie principal puede ser velas (default),
+//  velas huecas, barras OHLC, línea, área o Heikin Ashi. La variable
+//  sigue llamándose candleSeries a propósito: TODO el resto del código
+//  (priceToCoordinate, markers, price lines, legend...) la usa por ese
+//  nombre y esas APIs existen igual en cualquier tipo de serie de
+//  lightweight-charts. Lo único que cambia es cómo se crea y qué forma
+//  tienen sus puntos (mainSeriesData/mainSeriesBar).
+// ══════════════════════════════════════════════════════════
+const CHART_TYPES = [
+  { id:'candles', label:'Candles' },
+  { id:'hollow',  label:'Hollow candles' },
+  { id:'bars',    label:'Bars' },
+  { id:'line',    label:'Line' },
+  { id:'area',    label:'Area' },
+  { id:'heikin',  label:'Heikin Ashi' },
+];
+
+// Heikin Ashi clásico: haClose = (O+H+L+C)/4, haOpen = promedio del HA
+// anterior — por esa dependencia encadenada se transforma el array entero
+// de una (acá) y el tick en vivo solo recalcula la última vela contra el
+// HA ya fijo de la anterior (ver updateFormingCandleLive).
+function toHeikinAshi(candles){
+  const out = []; let prevO = null, prevC = null;
+  for (const c of candles){
+    const haC = (c.open + c.high + c.low + c.close) / 4;
+    const haO = prevO === null ? (c.open + c.close) / 2 : (prevO + prevC) / 2;
+    out.push({ time:c.time, open:haO, high:Math.max(c.high,haO,haC), low:Math.min(c.low,haO,haC), close:haC });
+    prevO = haO; prevC = haC;
+  }
+  return out;
+}
+let _haData = []; // HA alineado índice a índice con window._lastCandles (solo en modo heikin)
+
+function mainSeriesData(candles){
+  const t = STATE.chartType || 'candles';
+  if (t === 'line' || t === 'area') return candles.map(c => ({ time:c.time, value:c.close }));
+  if (t === 'heikin') { _haData = toHeikinAshi(candles); return _haData; }
+  return candles;
+}
+
+function createMainSeries(){
+  if (candleSeries) { try { chart.removeSeries(candleSeries); } catch(e){} }
+  const t = STATE.chartType || 'candles';
+  if (t === 'line')      candleSeries = chart.addLineSeries({ lineWidth: 2 });
+  else if (t === 'area') candleSeries = chart.addAreaSeries({ lineWidth: 2 });
+  else if (t === 'bars') candleSeries = chart.addBarSeries({ thinBars: false });
+  else                   candleSeries = chart.addCandlestickSeries({}); // candles | hollow | heikin
+  candleSeries.attachPrimitive(new ZentinelBehindDrawingsPrimitive());
+  applyMainSeriesColors();
+}
+
+// Colores de la serie principal según el tipo + chartSettings (reemplaza
+// el applyOptions fijo de velas que vivía en applyChartSettings) — las
+// opciones de una candlestick series no existen en una line/area series,
+// así que cada tipo arma las suyas a partir de los mismos colores del
+// theme. Hueca = velas alcistas sin relleno (fill transparente, queda el
+// borde), bajistas llenas — como TV.
+function applyMainSeriesColors(){
+  if (!candleSeries) return;
+  const cs = STATE.chartSettings;
+  const t = STATE.chartType || 'candles';
+  const common = {
+    priceLineVisible: cs.priceLineVisible,
+    priceLineColor: cs.priceLineColor || undefined,
+    priceLineStyle: cs.priceLineStyle,
+  };
+  if (t === 'line') {
+    candleSeries.applyOptions(Object.assign({ color: cs.upColor }, common));
+  } else if (t === 'area') {
+    candleSeries.applyOptions(Object.assign({
+      lineColor: cs.upColor,
+      topColor: cs.upColor + '55', bottomColor: cs.upColor + '08',
+    }, common));
+  } else if (t === 'bars') {
+    candleSeries.applyOptions(Object.assign({ upColor: cs.upColor, downColor: cs.downColor }, common));
+  } else {
+    candleSeries.applyOptions(Object.assign({
+      upColor: t === 'hollow' ? 'rgba(0,0,0,0)' : cs.upColor,
+      downColor: cs.downColor,
+      borderUpColor: t === 'hollow' ? cs.upColor : cs.borderUpColor,
+      borderDownColor: cs.borderDownColor,
+      wickUpColor: cs.wickUpColor, wickDownColor: cs.wickDownColor,
+    }, common));
+  }
+}
+
+// Cambiar de tipo recrea la serie principal — y como lightweight-charts
+// v4 pinta por orden de inserción, los overlays (EMAs/SMA/VWAP) viejos
+// quedarían ABAJO de la serie nueva: se tiran y se vuelven a agregar para
+// conservar el orden de siempre (serie principal atrás, overlays arriba).
+// Markers y price lines viven EN la serie vieja, renderSeries() los
+// reconstruye (renderTradeMarkers → renderOrderPriceLines).
+function setChartType(type){
+  if (!type || !CHART_TYPES.some(ct => ct.id === type)) return;
+  if (type === (STATE.chartType || 'candles')) return;
+  STATE.chartType = type;
+  saveState();
+  const sel = document.getElementById('chart-type-select');
+  if (sel) sel.value = type;
+  if (!chart) return; // shell de la grilla: sin chart propio, los panes se encargan
+  Object.keys(overlays).forEach(n => { try { chart.removeSeries(overlays[n]); } catch(e){} delete overlays[n]; });
+  createMainSeries();
+  const candles = window._lastCandles;
+  if (candles && candles.length) {
+    // Mismo priceFormat auto que decide loadChart (enteros para índices,
+    // 2 decimales para el resto) — la serie nueva arranca con el default.
+    const _lastClose = candles[candles.length-1].close;
+    candleSeries.applyOptions({ priceFormat: _lastClose >= 1000
+      ? { type:'price', precision:0, minMove:1 }
+      : { type:'price', precision:2, minMove:0.01 } });
+    renderSeries(STATE.timeframe);
+    STATE.indicators.forEach(n => addIndicatorSeries(n));
+  }
+}
+
 // Redibuja toda la serie (velas reales + puntos fantasma a futuro, en su
 // propia serie invisible — ver futureAxisSeries). Para cambios ESTRUCTURALES
 // del array (nuevo símbolo/TF, cerró una vela, se cargó más historial): cara
@@ -13299,7 +13456,7 @@ async function fetchOhlcvData(symbol, interval, bars, before){
 function renderSeries(timeframe){
   const candles=window._lastCandles;
   const last=candles[candles.length-1];
-  candleSeries.setData(candles);
+  candleSeries.setData(mainSeriesData(candles));
   // El whitespace de verdad (sin valor) sí se carga hasta DRAW_EXTEND_BARS
   // para que una línea extendida pueda resolver coordenada ahí — pero el
   // ANCLA (el único punto CON valor, más abajo) se queda chica, en 15 fijo:
@@ -13335,7 +13492,26 @@ function renderSeries(timeframe){
 // termina siempre en la vela real más nueva) — ver el comentario de
 // futureAxisSeries más arriba sobre por qué antes esto no funcionaba.
 function updateFormingCandleLive(bar){
-  candleSeries.update(bar);
+  // Mismo punto que recibiría setData según el tipo de gráfico activo —
+  // línea/área solo quieren el close; Heikin recalcula SOLO la vela en
+  // formación contra el HA ya fijo de la anterior (_haData, que armó
+  // mainSeriesData en el último renderSeries — los índices van alineados
+  // con _lastCandles, y este camino solo corre con bar.time === última
+  // vela, los cierres de vela pasan por renderSeries entero).
+  const _t = STATE.chartType || 'candles';
+  if (_t === 'line' || _t === 'area') {
+    candleSeries.update({ time: bar.time, value: bar.close });
+  } else if (_t === 'heikin') {
+    const n = window._lastCandles.length;
+    const prev = _haData[n-2];
+    const haC = (bar.open + bar.high + bar.low + bar.close) / 4;
+    const haO = prev ? (prev.open + prev.close) / 2 : (bar.open + bar.close) / 2;
+    const ha = { time: bar.time, open: haO, high: Math.max(bar.high, haO, haC), low: Math.min(bar.low, haO, haC), close: haC };
+    _haData[n-1] = ha;
+    candleSeries.update(ha);
+  } else {
+    candleSeries.update(bar);
+  }
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
   renderRsi();
