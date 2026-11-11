@@ -1391,6 +1391,42 @@
   }
   .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+  /* Botón de acción destructiva (Delete/Clear en el modal de confirmación)
+     — misma forma que .btn-primary pero en rojo, para que el ojo distinga
+     "esto borra" de "esto guarda". */
+  .btn-danger {
+    background: var(--red-dim); border: 1px solid var(--red); color: var(--red);
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600; padding: 7px 18px;
+    border-radius: 5px; cursor: pointer; letter-spacing: .5px; transition: background .15s;
+  }
+  .btn-danger:hover { background: rgba(240,96,96,.25); }
+
+  /* ─── TOASTS ──────────────────────────────────────────────
+     Reemplazan los alert() nativos del navegador (bloqueaban toda la
+     página y se veían como Chrome, no como la plataforma). Aviso chico
+     abajo a la derecha, se va solo, click para cerrarlo antes. El color
+     del borde izquierdo es la única señal de tipo — sin íconos, igual
+     que el resto de la UI. */
+  #toast-container {
+    position: fixed; right: 14px; bottom: 34px; z-index: 900;
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto; cursor: pointer;
+    background: var(--bg-panel); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--text-dim);
+    color: var(--text-primary); font-family: var(--font-ui); font-size: 12px;
+    line-height: 1.45; padding: 10px 14px; border-radius: 6px; max-width: 320px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.45);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .18s, transform .18s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-left-color: var(--green); }
+  .toast.warn    { border-left-color: var(--gold); }
+  .toast.error   { border-left-color: var(--red); }
+
   .ind-picker-list { max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; margin-bottom: 14px; }
   .ind-pick-row { display: flex; align-items: center; padding: 8px 10px; border-radius: 5px; cursor: pointer; gap: 10px; transition: background .12s; }
   .ind-pick-row:hover { background: var(--bg-hover); }
@@ -2327,6 +2363,23 @@
   </div>
 </div>
 
+<!-- Reemplaza confirm() nativo (mismo motivo que modal-save-as con
+     prompt(): banner del NAVEGADOR en vez de algo de la plataforma).
+     Genérico — lo abre zConfirm(), que devuelve una promesa; cualquier
+     forma de cerrarlo que no sea el botón OK resuelve false (ver el hook
+     en closeModal). z-index 650: puede abrirse ENCIMA de Settings o del
+     modal de Trades (borrar workspace/theme/historial). -->
+<div class="modal-overlay" id="modal-confirm" style="z-index:650;">
+  <div class="modal" style="max-width:380px;">
+    <h2 id="confirm-title">Confirm</h2>
+    <div id="confirm-msg" style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:18px;"></div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal('modal-confirm')">Cancel</button>
+      <button class="btn-primary" id="confirm-ok-btn">OK</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-fib-levels">
   <div class="modal">
     <h2>Fibonacci Levels</h2>
@@ -2711,7 +2764,7 @@ function renderLayoutGrid(n){
   // el shell, operando sobre el panel activo vía paneEval (ver
   // isGridShell()/_gridActiveFrame más abajo) — la grilla entera queda
   // tal cual está, nunca se toca.
-  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades']
+  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades','modal-confirm']
     .map(id => { const el = document.getElementById(id); return el ? el.outerHTML : ''; }).join('');
 
   document.body.innerHTML = '';
@@ -9105,11 +9158,11 @@ function saveCurrentAsIndTemplate(){
     document.getElementById('ind-settings-template-select').value = name;
   });
 }
-function deleteSelectedIndTemplate(){
+async function deleteSelectedIndTemplate(){
   const sel = document.getElementById('ind-settings-template-select');
   const name = sel.value;
   if (!name || !_indSettingsTarget) return;
-  if (!confirm(`Delete template "${name}"?`)) return;
+  if (!(await zConfirm(`Delete template "${name}"?`, { danger:true, confirmText:'Delete' }))) return;
   rereadIndicatorTemplates();
   delete STATE.indicatorTemplates[_indSettingsTarget][name];
   saveIndicatorTemplatesState();
@@ -12028,6 +12081,10 @@ function _exitFollowReplay(){
 function openModal(id){ if (window._modalDragResets && window._modalDragResets[id]) window._modalDragResets[id](); document.getElementById(id).classList.add('open'); }
 function closeModal(id){
   document.getElementById(id).classList.remove('open');
+  // zConfirm: si el modal de confirmación se cierra por una vía que no es
+  // su botón OK (Cancel, click en el backdrop), la promesa resuelve false
+  // acá — sin esto quedaba colgada para siempre.
+  if (id === 'modal-confirm' && _zConfirmResolve) { const r = _zConfirmResolve; _zConfirmResolve = null; r(false); }
   // Trades, en la grilla, necesita un poll mientras queda abierto (precio/
   // LIVE_TRADING del panel activo, ver _shellOnTradesToggle en
   // renderLayoutGrid) — cortarlo acá, no solo al abrir, así no sigue
@@ -12038,6 +12095,54 @@ function closeModal(id){
 // Reemplaza prompt() nativo para pedir un nombre (presets/templates) —
 // mismo modal para los 3 lugares que antes usaban prompt(): el Preset de
 // todo el chart, los templates de indicador y los de dibujo.
+// ─── Toasts + confirmación propia (reemplazan alert()/confirm() nativos,
+// que bloquean toda la página y se ven como el navegador, no como la app).
+// showToast: aviso no bloqueante abajo a la derecha. type: 'info' (borde
+// gris, default) | 'success' | 'warn' | 'error'. Se va solo (4s, errores
+// 6s), click para cerrarlo antes. El contenedor se crea lazy en el
+// document donde corre — así funciona igual en la página single, en el
+// shell de la grilla y adentro de un pane embed, sin HTML estático.
+function showToast(msg, type, ms){
+  let cont = document.getElementById('toast-container');
+  if (!cont) { cont = document.createElement('div'); cont.id = 'toast-container'; document.body.appendChild(cont); }
+  const t = document.createElement('div');
+  t.className = 'toast' + (type && type !== 'info' ? ' ' + type : '');
+  t.textContent = msg;
+  cont.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  const kill = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 200); };
+  const timer = setTimeout(kill, ms || (type === 'error' ? 6000 : 4000));
+  t.addEventListener('click', () => { clearTimeout(timer); kill(); });
+}
+
+// zConfirm: devuelve Promise<boolean>. Cerrar el modal por CUALQUIER vía
+// que no sea el botón OK (Cancel, click afuera) resuelve false — eso lo
+// garantiza el hook en closeModal, así la promesa nunca queda colgada.
+// opts: {title, confirmText, danger} — danger pinta el OK en rojo
+// (.btn-danger) para los borrados.
+let _zConfirmResolve = null;
+function zConfirm(message, opts){
+  opts = opts || {};
+  document.getElementById('confirm-title').textContent = opts.title || 'Confirm';
+  document.getElementById('confirm-msg').textContent = message;
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = opts.confirmText || 'OK';
+  btn.className = opts.danger ? 'btn-danger' : 'btn-primary';
+  return new Promise(resolve => {
+    _zConfirmResolve = resolve;
+    // onclick (no addEventListener): mismo criterio que promptSaveAsName —
+    // el modal se reusa, asignar pisa el handler de la apertura anterior.
+    btn.onclick = () => {
+      const r = _zConfirmResolve; _zConfirmResolve = null;
+      closeModal('modal-confirm');
+      if (r) r(true);
+    };
+    openModal('modal-confirm');
+    // Foco en OK: Enter confirma, Tab va a Cancel.
+    setTimeout(() => btn.focus(), 50);
+  });
+}
+
 function promptSaveAsName(title, existingNames, onConfirm){
   document.getElementById('save-as-title').textContent = title;
   const existingEl = document.getElementById('save-as-existing');
@@ -12172,7 +12277,7 @@ function setCustomLogo(dataUrl){
     if (dataUrl) localStorage.setItem(CUSTOM_LOGO_KEY, dataUrl);
     else localStorage.removeItem(CUSTOM_LOGO_KEY);
   } catch(e){
-    alert('No se pudo guardar el logo (¿imagen muy pesada?). Probá con un archivo más chico.');
+    showToast('No se pudo guardar el logo (¿imagen muy pesada?). Probá con un archivo más chico.', 'error');
     return;
   }
   applyCustomLogo();
@@ -12555,11 +12660,11 @@ function applySelectedWorkspace(){
   applyWorkspace(name);
 }
 
-function deleteSelectedWorkspace(){
+async function deleteSelectedWorkspace(){
   const sel = document.getElementById('cs-workspace-select');
   const name = sel.value;
   if (!name) return;
-  if (!confirm(`Delete workspace "${name}"?`)) return;
+  if (!(await zConfirm(`Delete workspace "${name}"?`, { danger:true, confirmText:'Delete' }))) return;
   delete STATE.workspaces[name];
   saveWorkspacesState();
   renderWorkspaceSelect();
@@ -12668,11 +12773,11 @@ function applyPreset(name){
   restoreTheme(p.chartSettings);
 }
 
-function deleteSelectedPreset(){
+async function deleteSelectedPreset(){
   const sel = document.getElementById('cs-preset-select');
   const name = sel.value;
   if (!name) return;
-  if (!confirm(`Delete theme "${name}"?`)) return;
+  if (!(await zConfirm(`Delete theme "${name}"?`, { danger:true, confirmText:'Delete' }))) return;
   delete STATE.presets[name];
   savePresetsState();
   renderPresetSelect();
@@ -12962,11 +13067,14 @@ function saveDtbTemplateAs(type){
     if (delEl) {
       e.stopPropagation();
       const name = delEl.dataset.tplDel;
-      if (confirm(`Delete template "${name}"?`)) {
+      // .then() y no await: el listener sigue siendo sync, el borrado
+      // simplemente ocurre cuando el usuario responde el modal.
+      zConfirm(`Delete template "${name}"?`, { danger:true, confirmText:'Delete' }).then(ok => {
+        if (!ok) return;
         delete DRAWING_TEMPLATES[type][name];
         saveDrawingTemplatesStore();
         renderDtbTemplatePopup();
-      }
+      });
       return;
     }
     if (e.target.id === 'dtb-template-save-row') {
@@ -14935,7 +15043,7 @@ async function syncRealTradeFromDrawing(d, t, newSl, newTp){
   try {
     result = await sendOrder({ action:'modify', ticket: t.ticket, sl: newSl, tp: newTp });
   } catch(e) {
-    alert('No se pudo modificar la operación real: ' + e.message);
+    showToast('No se pudo modificar la operación real: ' + e.message, 'error');
     d.p1.price = t.entry_price; d.p2.price = t.stop_loss; d.targetPrice = t.take_profit;
     if (!updateDrawingGeometry(d)) redrawDrawing(d);
     return;
@@ -15000,13 +15108,13 @@ function confirmTrade(){
   const d = getSelected();
   if (!d || (d.type !== 'long' && d.type !== 'short')) return;
   if (LIVE_TRADING) {
-    if (window._replay || window._replayFollow) { alert('No se puede mandar una orden real mientras estás en replay.'); return; }
+    if (window._replay || window._replayFollow) { showToast('No se puede mandar una orden real mientras estás en replay.', 'warn'); return; }
     confirmLiveTrade(d);
     return;
   }
   promptFields('Confirm trade', [{ id:'volume', label:'Volume (lots)', type:'number', value:'1', placeholder:'1' }], (vals) => {
     const volume = parseFloat(vals.volume);
-    if (!volume || volume <= 0) { alert('Invalid volume.'); return; }
+    if (!volume || volume <= 0) { showToast('Invalid volume.', 'warn'); return; }
     captureUndoSnapshot();
     // Confirmar ejecuta YA, al precio de mercado actual — como una orden a
     // mercado real, no al nivel exacto que se dibujó (ese era solo para
@@ -15059,7 +15167,7 @@ async function confirmLiveTrade(d){
     // con SymbolSelect, sufijo incluido).
     result = await sendOrder({ action:'open', symbol: STATE.symbol, side: d.type==='long'?'buy':'sell', sl, tp });
   } catch(e) {
-    alert('No se pudo abrir la operación real: ' + e.message);
+    showToast('No se pudo abrir la operación real: ' + e.message, 'error');
     return;
   }
   const p = result.position;
@@ -15105,7 +15213,7 @@ async function placeLiveMarketOrder(side, sl, tp){
   try {
     result = await sendOrder({ action:'open', symbol: STATE.symbol, side: side==='long'?'buy':'sell', sl, tp });
   } catch(e) {
-    alert('No se pudo abrir la operación real: ' + e.message);
+    showToast('No se pudo abrir la operación real: ' + e.message, 'error');
     return;
   }
   const p = result.position;
@@ -15457,7 +15565,7 @@ async function clearOrderLevel(kind, id, field){
           fresh.take_profit = p.tp > 0 ? p.tp : null;
           saveOpenTrades(getOpenTrades().map(x => x.id === fresh.id ? fresh : x));
         }
-      } catch(e) { alert('No se pudo modificar la operación real: ' + e.message); }
+      } catch(e) { showToast('No se pudo modificar la operación real: ' + e.message, 'error'); }
     } else {
       if (field === 'sl') t.stop_loss = null; else t.take_profit = null;
       saveOpenTrades(open);
@@ -15501,7 +15609,7 @@ async function commitOrderLineDrag(sess){
           saveOpenTrades(getOpenTrades().map(x => x.id === fresh.id ? fresh : x));
         }
       } catch(e) {
-        alert('No se pudo modificar la operación real: ' + e.message);
+        showToast('No se pudo modificar la operación real: ' + e.message, 'error');
       }
       // Vuelve a dibujar desde el storage pase lo que pase — si falló, esto
       // es lo que hace que la línea "rebote" de vuelta a donde estaba de
@@ -15674,7 +15782,7 @@ async function closeTradeById(id){
     // precio/hora/profit REALES del cierre (ver closedInfo). Acá solo se
     // dispara la orden.
     try { await sendOrder({ action:'close', ticket: t.ticket }); }
-    catch(e) { alert('No se pudo cerrar la operación real: ' + e.message); return; }
+    catch(e) { showToast('No se pudo cerrar la operación real: ' + e.message, 'error'); return; }
     pollLiveTrades();
     return;
   }
@@ -15729,7 +15837,7 @@ function _applyTradeEdit(id, slInput, tpInput){
   const newSl = slInput.trim() === '' ? null : parsePrice(slInput);
   const newTp = tpInput.trim() === '' ? null : parsePrice(tpInput);
   if ((slInput.trim() !== '' && !isFinite(newSl)) || (tpInput.trim() !== '' && !isFinite(newTp))) {
-    alert('Invalid price.');
+    showToast('Invalid price.', 'warn');
     return;
   }
   if (t.real) {
@@ -15750,7 +15858,7 @@ function _applyTradeEdit(id, slInput, tpInput){
       }
       renderTradesModalIfOpen();
       renderOrdersPanelIfOpen();
-    }).catch((e) => alert('No se pudo modificar la operación real: ' + e.message));
+    }).catch((e) => showToast('No se pudo modificar la operación real: ' + e.message, 'error'));
     return;
   }
   t.stop_loss = newSl;
@@ -15871,13 +15979,13 @@ function quickMarketOrder(side){
   onOrdersTypeChange();
   placeOrderFromPanel();
 }
-function placeOrderFromPanel(){
+async function placeOrderFromPanel(){ // async por el zConfirm del precio del lado "raro" (ver abajo)
   const type = document.getElementById('orders-type').value;
   const volume = parseFloat(document.getElementById('orders-volume').value);
-  if (!volume || volume <= 0) { alert('Tamaño de posición inválido.'); return; }
+  if (!volume || volume <= 0) { showToast('Tamaño de posición inválido.', 'warn'); return; }
   let sl = _ordersParsePrice(document.getElementById('orders-sl').value);
   let tp = _ordersParsePrice(document.getElementById('orders-tp').value);
-  if (Number.isNaN(sl) || Number.isNaN(tp)) { alert('Precio de SL/TP inválido.'); return; }
+  if (Number.isNaN(sl) || Number.isNaN(tp)) { showToast('Precio de SL/TP inválido.', 'warn'); return; }
   const side = _ordersSide;
   // Shell de la grilla (ver renderLayoutGrid): este mismo script corre
   // ahí también, pero sin chart propio — STATE.symbol/window._lastCandles
@@ -15888,14 +15996,14 @@ function placeOrderFromPanel(){
   const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
 
   if (type === 'market') {
-    if (!lastBar) { alert('Todavía no cargó el precio actual.'); return; }
+    if (!lastBar) { showToast('Todavía no cargó el precio actual.', 'warn'); return; }
     if (sl == null || tp == null) {
       const def = defaultOrderSlTp(lastBar.close, side);
       if (sl == null) sl = def.sl;
       if (tp == null) tp = def.tp;
     }
     if (LIVE_TRADING) {
-      if (window._replay || window._replayFollow) { alert('No se puede mandar una orden real mientras estás en replay.'); return; }
+      if (window._replay || window._replayFollow) { showToast('No se puede mandar una orden real mientras estás en replay.', 'warn'); return; }
       placeLiveMarketOrder(side, sl, tp);
       return;
     }
@@ -15920,7 +16028,7 @@ function placeOrderFromPanel(){
   }
 
   const price = _ordersParsePrice(document.getElementById('orders-price').value);
-  if (!price) { alert('Ingresá un precio para la orden ' + (type === 'limit' ? 'Limit' : 'Stop') + '.'); return; }
+  if (!price) { showToast('Ingresá un precio para la orden ' + (type === 'limit' ? 'Limit' : 'Stop') + '.', 'warn'); return; }
   // Mismo criterio que un bróker real: Limit entra a favor (más barato en
   // compra, más caro en venta), Stop entra en ruptura (más caro en compra,
   // más barato en venta). No bloquea si no se cumple — algunos quieren
@@ -15936,7 +16044,7 @@ function placeOrderFromPanel(){
       const hint = side === 'long'
         ? (type === 'limit' ? 'Buy Limit normalmente va por DEBAJO del precio actual.' : 'Buy Stop normalmente va por ARRIBA del precio actual.')
         : (type === 'limit' ? 'Sell Limit normalmente va por ARRIBA del precio actual.' : 'Sell Stop normalmente va por DEBAJO del precio actual.');
-      if (!confirm(hint + ' Precio actual: ' + fmt(cur) + '. ¿Colocarla igual?')) return;
+      if (!(await zConfirm(hint + ' Precio actual: ' + fmt(cur) + '.', { title:'Pending order', confirmText:'Colocarla igual' }))) return;
     }
   }
   if (sl == null || tp == null) {
@@ -15984,7 +16092,7 @@ function editPendingOrder(id){
     const sl = _ordersParsePrice(vals.sl);
     const tp = _ordersParsePrice(vals.tp);
     if (!price || Number.isNaN(price) || !volume || volume <= 0 || Number.isNaN(sl) || Number.isNaN(tp)) {
-      alert('Datos inválidos.');
+      showToast('Datos inválidos.', 'warn');
       return;
     }
     o.price = price; o.volume = volume; o.sl = sl; o.tp = tp;
@@ -16186,9 +16294,9 @@ function renderTradesModal(){
     }).join('');
   }
 }
-function clearClosedTrades(){
+async function clearClosedTrades(){
   if (!getClosedTrades().length) return;
-  if (!confirm('Clear the closed trades history? This can\'t be undone (if you haven\'t downloaded the CSV yet, they\'re lost).')) return;
+  if (!(await zConfirm('Clear the closed trades history? This can\'t be undone (if you haven\'t downloaded the CSV yet, they\'re lost).', { danger:true, confirmText:'Clear' }))) return;
   saveClosedTrades([]);
   renderTradesModal();
   renderTradeMarkers();
@@ -16225,7 +16333,7 @@ function csvRealUtcIso(rawEpochSeconds){
 // literal (no 'buy'/'sell') para que ese parser lo reconozca.
 function downloadTradesCsv(){
   const closed = getClosedTrades();
-  if (!closed.length) { alert('No closed trades to export.'); return; }
+  if (!closed.length) { showToast('No closed trades to export.'); return; }
   const header = ['entry_time','exit_time','account','contract','side','quantity','entry_price','exit_price','duration','gross_pnl','fees','commission','net_pnl','pnl_ticks','entry_time_utc','exit_time_utc'];
   const rows = closed.map(t => {
     const entryIso = csvRealUtcIso(t.open_time);
