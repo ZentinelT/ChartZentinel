@@ -765,16 +765,21 @@
      cambia, así que nunca se reacomoda: solo se ve "correr" hacia afuera
      de la vista a medida que el marco se achica, que es el efecto que se
      busca. */
+  /* A la DERECHA de la pantalla, como TV (pedido del usuario) — sin tocar
+     el DOM: flex `order` sobre los hijos de #main / del row del shell
+     (toolbar y chart quedan en order 0 = orden del DOM; el toggle y el
+     sidebar se van al final). Bordes y chevron espejados por lo mismo. */
   #sidebar {
+    order: 3;
     width: var(--sidebar-w);
     background: var(--bg-panel);
-    border-right: 1px solid var(--border);
+    border-left: 1px solid var(--border);
     flex-shrink: 0;
     overflow: hidden;
     transition: width .22s cubic-bezier(.4,0,.2,1);
     will-change: width;
   }
-  #sidebar.collapsed { width: 0; border-right: none; }
+  #sidebar.collapsed { width: 0; border-left: none; }
   .sidebar-inner {
     width: var(--sidebar-w);
     height: 100%;
@@ -783,11 +788,12 @@
   }
 
   #btn-sidebar-toggle {
+    order: 2; /* pegado al sidebar derecho, ver comentario de #sidebar */
     width: 14px;
     flex-shrink: 0;
     background: var(--bg-hover);
     border: none;
-    border-right: 1px solid var(--border-light);
+    border-left: 1px solid var(--border-light);
     color: var(--text-secondary);
     cursor: pointer;
     display: flex;
@@ -796,8 +802,10 @@
     padding: 0;
   }
   #btn-sidebar-toggle:hover { color: var(--gold); background: var(--bg-active); }
-  #btn-sidebar-toggle svg { width: 11px; height: 11px; transition: transform .15s; }
-  #btn-sidebar-toggle.collapsed svg { transform: rotate(180deg); }
+  /* Chevron espejado: abierto apunta a la derecha (hacia donde se pliega),
+     colapsado a la izquierda (hacia donde reaparece). */
+  #btn-sidebar-toggle svg { width: 11px; height: 11px; transition: transform .15s; transform: rotate(180deg); }
+  #btn-sidebar-toggle.collapsed svg { transform: rotate(0deg); }
 
   .sidebar-header {
     padding: 10px 12px 6px;
