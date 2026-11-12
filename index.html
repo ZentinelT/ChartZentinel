@@ -3109,7 +3109,7 @@ function renderLayoutGrid(n){
         <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
       </div>
       <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
-      <button class="topbar-btn" id="gc-snapshot" title="Snapshot del panel activo (PNG + clipboard)">
+      <button class="topbar-btn" id="gc-snapshot" title="Snapshot de todos los paneles (PNG + clipboard)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
       <button class="topbar-btn" id="gc-refresh" title="Refrescar">
@@ -3721,11 +3721,17 @@ function renderLayoutGrid(n){
   // acá (ver isGridShell()) y leer/escribir el panel activo vía paneEval
   // en vez de un chart propio — ningún iframe se toca.
   gbar.querySelector('#gc-settings').addEventListener('click', openChartSettingsModal);
-  // Snapshot: siempre del panel ACTIVO (una imagen por chart — capturar la
-  // grilla entera sería otra feature); el pane descarga/copia él mismo.
-  gbar.querySelector('#gc-snapshot').addEventListener('click', () => {
-    const f = iframeEls[activePane-1];
-    if (f) paneEval(f, 'snapshotChart()');
+  // Snapshot: la grilla ENTERA en una sola imagen (pedido del usuario —
+  // la primera versión capturaba solo el panel activo). Compone el canvas
+  // de cada pane en su posición real y descarga/copia desde el shell.
+  gbar.querySelector('#gc-snapshot').addEventListener('click', async () => {
+    try {
+      const frames = iframeEls.filter(Boolean);
+      const canvas = await snapshotGridCanvas(frames);
+      await deliverSnapshotCanvas(canvas, `chartzentinel_grid${LAYOUT_N}`);
+    } catch(e) {
+      showToast('No se pudo capturar la grilla: ' + e.message, 'error');
+    }
   });
 
   // Badge de estado: antes decía "MULTI" fijo (sin información real) y
@@ -13556,30 +13562,67 @@ async function buildChartSnapshotCanvas(){
   return out;
 }
 
+// Descarga + portapapeles de un canvas ya compuesto — compartido entre el
+// snapshot de 1 chart (snapshotChart) y el de la grilla entera
+// (snapshotGridCanvas, que corre en el documento del shell).
+async function deliverSnapshotCanvas(canvas, baseName){
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  if (!blob) throw new Error('no se pudo generar el PNG');
+  // Portapapeles: mejor esfuerzo — si el navegador lo rebota (foco en
+  // otro lado, permisos), la descarga de abajo va igual.
+  let copied = false;
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      copied = true;
+    }
+  } catch(e){}
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${baseName}_${new Date().toISOString().slice(0,10)}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  showToast(copied ? 'Snapshot descargado y copiado al portapapeles.' : 'Snapshot descargado.', 'success');
+}
+
 async function snapshotChart(){
   if (!chart) return;
   try {
     const canvas = await buildChartSnapshotCanvas();
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-    if (!blob) throw new Error('no se pudo generar el PNG');
-    // Portapapeles: mejor esfuerzo — si el navegador lo rebota (foco en
-    // otro lado, permisos), la descarga de abajo va igual.
-    let copied = false;
-    try {
-      if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        copied = true;
-      }
-    } catch(e){}
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `chartzentinel_${STATE.symbol}_${STATE.timeframe}_${new Date().toISOString().slice(0,10)}.png`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast(copied ? 'Snapshot descargado y copiado al portapapeles.' : 'Snapshot descargado.', 'success');
+    await deliverSnapshotCanvas(canvas, `chartzentinel_${STATE.symbol}_${STATE.timeframe}`);
   } catch(e) {
     showToast('No se pudo capturar el chart: ' + e.message, 'error');
   }
+}
+
+// Snapshot de la GRILLA entera: una sola imagen con todos los paneles,
+// cada uno en su posición real en pantalla (pedido del usuario: antes el
+// botón de la grilla capturaba solo el panel activo). Corre en el
+// documento del SHELL: le pide a cada pane su propio canvas compuesto
+// (buildChartSnapshotCanvas vía contentWindow.eval — mismo truco que
+// paneEval, y el await funciona porque la promesa de otro realm sigue
+// siendo thenable) y lo dibuja donde está su chart-container, con los
+// huecos entre paneles (divisores) pintados del fondo del shell.
+async function snapshotGridCanvas(frames){
+  const dpr = window.devicePixelRatio || 1;
+  const rects = frames.map(f => f.getBoundingClientRect());
+  const minX = Math.min(...rects.map(r => r.left)),  minY = Math.min(...rects.map(r => r.top));
+  const maxX = Math.max(...rects.map(r => r.right)), maxY = Math.max(...rects.map(r => r.bottom));
+  const out = document.createElement('canvas');
+  out.width = (maxX - minX) * dpr; out.height = (maxY - minY) * dpr;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#0a0a0f';
+  ctx.fillRect(0, 0, out.width, out.height);
+  for (const f of frames) {
+    try {
+      const c = await f.contentWindow.eval('buildChartSnapshotCanvas()');
+      if (!c) continue;
+      const inner = f.contentWindow.document.getElementById('chart-container').getBoundingClientRect();
+      const fr = f.getBoundingClientRect();
+      ctx.drawImage(c, (fr.left + inner.left - minX) * dpr, (fr.top + inner.top - minY) * dpr, inner.width * dpr, inner.height * dpr);
+    } catch(e){ /* un pane que no cargó no voltea la captura de los demás */ }
+  }
+  return out;
 }
 
 // Redibuja toda la serie (velas reales + puntos fantasma a futuro, en su
