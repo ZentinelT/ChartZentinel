@@ -1448,6 +1448,56 @@
   .ct-opt.active { color: var(--gold); background: var(--gold-glow); }
   .ct-opt svg { width: 18px; height: 18px; }
 
+  /* ─── ALERTAS DE PRECIO ────────────────────────────────── */
+  .alerts-wrap { position: relative; display: flex; align-items: center; }
+  .alerts-badge {
+    position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px;
+    border-radius: 7px; background: var(--gold); color: #141414;
+    font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+    line-height: 13px; text-align: center; padding: 0 2px; display: none;
+  }
+  .alerts-badge.on { display: block; }
+  #alerts-popup {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 700;
+    background: var(--bg-panel); border: 1px solid var(--border-light);
+    border-radius: 6px; padding: 10px; display: none; width: 250px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  }
+  #alerts-popup.open { display: block; }
+  .alerts-add-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .alerts-add-row .topbar-input { flex: 1; min-width: 0; }
+  #alerts-add-sym { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+  #alerts-list { max-height: 220px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; }
+  .alert-row {
+    display: flex; align-items: center; gap: 8px; padding: 5px 2px;
+    border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .alert-row:last-child { border-bottom: none; }
+  .alert-row.triggered { opacity: .45; }
+  .alert-row-sym { font-family: var(--font-mono); color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .alert-row-price { font-family: var(--font-mono); color: var(--gold); white-space: nowrap; }
+  .alert-row-status { font-size: 9px; color: var(--text-dim); }
+  .alert-row-del { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+  .alert-row-del:hover { color: var(--red); }
+  .alerts-empty { font-size: 11px; color: var(--text-dim); padding: 6px 2px; line-height: 1.5; }
+  .alerts-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
+  .alerts-foot label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .alerts-foot .link-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 11px; padding: 0; }
+  .alerts-foot .link-btn:hover { color: var(--red); }
+
+  #alert-ctx-menu {
+    position: fixed; z-index: 950; display: none;
+    background: var(--bg-panel); border: 1px solid var(--border-light);
+    border-radius: 6px; padding: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  }
+  #alert-ctx-menu.open { display: block; }
+  .alert-ctx-item {
+    background: none; border: none; display: block; width: 100%;
+    text-align: left; padding: 7px 12px; border-radius: 4px; cursor: pointer;
+    color: var(--text-primary); font-family: var(--font-ui); font-size: 12px;
+  }
+  .alert-ctx-item:hover { background: var(--bg-hover); color: var(--gold); }
+
   .ind-picker-list { max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; margin-bottom: 14px; }
   .ind-pick-row { display: flex; align-items: center; padding: 8px 10px; border-radius: 5px; cursor: pointer; gap: 10px; transition: background .12s; }
   .ind-pick-row:hover { background: var(--bg-hover); }
@@ -1672,6 +1722,25 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5" rx="0.5" fill="currentColor" stroke="none"/><rect x="12.5" y="9" width="3" height="9" rx="0.5" fill="currentColor" stroke="none"/><rect x="18" y="5" width="3" height="13" rx="0.5" fill="currentColor" stroke="none"/></svg>
     <span class="tb-label">Dashboard</span>
   </button>
+  <div class="alerts-wrap" id="alerts-wrap">
+    <button class="topbar-btn" id="btn-alerts" title="Alertas de precio" onclick="toggleAlertsPanel()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="alerts-badge"></span>
+    </button>
+    <div id="alerts-popup">
+      <div class="alerts-add-row">
+        <input id="alerts-price-inp" class="topbar-input" type="text" placeholder="Precio" autocomplete="off"
+               onkeydown="if(event.key==='Enter')addAlertFromPanel()">
+        <span id="alerts-add-sym"></span>
+        <button class="btn-primary" style="padding:5px 10px;" onclick="addAlertFromPanel()">Add</button>
+      </div>
+      <div id="alerts-list"></div>
+      <div class="alerts-foot">
+        <label><input type="checkbox" id="alerts-sound-chk" onchange="lsSet('td_alert_sound', this.checked?'1':'0')">Sonido</label>
+        <button class="link-btn" onclick="clearTriggeredAlerts()">Limpiar disparadas</button>
+      </div>
+    </div>
+  </div>
   <button class="topbar-btn" id="btn-snapshot" title="Snapshot: download chart as PNG (+ clipboard)" onclick="snapshotChart()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
   </button>
@@ -3109,6 +3178,25 @@ function renderLayoutGrid(n){
         <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
       </div>
       <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
+      <div class="alerts-wrap" id="gc-alerts-wrap">
+        <button class="topbar-btn" id="gc-alerts" title="Alertas de precio" onclick="toggleAlertsPanel()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="alerts-badge"></span>
+        </button>
+        <div id="alerts-popup">
+          <div class="alerts-add-row">
+            <input id="alerts-price-inp" class="topbar-input" type="text" placeholder="Precio" autocomplete="off"
+                   onkeydown="if(event.key==='Enter')addAlertFromPanel()">
+            <span id="alerts-add-sym"></span>
+            <button class="btn-primary" style="padding:5px 10px;" onclick="addAlertFromPanel()">Add</button>
+          </div>
+          <div id="alerts-list"></div>
+          <div class="alerts-foot">
+            <label><input type="checkbox" id="alerts-sound-chk" onchange="lsSet('td_alert_sound', this.checked?'1':'0')">Sonido</label>
+            <button class="link-btn" onclick="clearTriggeredAlerts()">Limpiar disparadas</button>
+          </div>
+        </div>
+      </div>
       <button class="topbar-btn" id="gc-snapshot" title="Snapshot de todos los paneles (PNG + clipboard)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
@@ -3733,6 +3821,7 @@ function renderLayoutGrid(n){
       showToast('No se pudo capturar la grilla: ' + e.message, 'error');
     }
   });
+  updateAlertBadge(); // contador de la campana del shell (store global)
 
   // Badge de estado: antes decía "MULTI" fijo (sin información real) y
   // después pegaba SIEMPRE al bridge de MT5 sin importar la fuente — con
@@ -6939,6 +7028,8 @@ function initChart() {
 
   createMainSeries(); // crea candleSeries según STATE.chartType (ver TIPOS DE GRÁFICO)
   applyChartSettings();
+  wireAlertContextMenu(); // click derecho → alerta de precio
+  updateAlertBadge();
 
   // Serie invisible, aparte de candleSeries: solo lleva los puntos fantasma
   // a futuro (futureWhitespace) que antes iban pegados a candleSeries. Están
@@ -13625,6 +13716,195 @@ async function snapshotGridCanvas(frames){
   return out;
 }
 
+// ══════════════════════════════════════════════════════════
+//  ALERTAS DE PRECIO — crear con click derecho sobre el chart ("Alert at
+//  <precio>") o desde el panel de la campana del topbar. Cada alerta
+//  activa dibuja una línea punteada dorada (createPriceLine) y dispara
+//  UNA vez cuando una vela toca su precio (o un gap lo saltea entero):
+//  toast + beep (WebAudio, apagable desde el panel). El store es GLOBAL
+//  (td_price_alerts sin sufijo de panel, como el journal de trades):
+//  todos los paneles ven las mismas alertas, cada pane chequea solo las
+//  de SU símbolo, y los demás documentos se enteran de los cambios por
+//  el evento 'storage' (mismo mecanismo que td_theme/td_watchlist).
+// ══════════════════════════════════════════════════════════
+function getPriceAlerts(){ try { return JSON.parse(lsGet('td_price_alerts') || '[]'); } catch(e){ return []; } }
+function savePriceAlerts(list){ lsSet('td_price_alerts', JSON.stringify(list)); }
+
+function addPriceAlert(price, symbol){
+  if (!isFinite(price) || price <= 0) { showToast('Precio de alerta inválido.', 'warn'); return; }
+  const list = getPriceAlerts();
+  list.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2,7), symbol: symbol || STATE.symbol, price, created: Date.now(), status: 'active' });
+  savePriceAlerts(list);
+  renderAlertLines(); updateAlertBadge(); renderAlertsPanelList();
+  showToast(`Alerta creada: ${symbol || STATE.symbol} en ${fmt(price)}`, 'success');
+}
+function deletePriceAlert(id){
+  savePriceAlerts(getPriceAlerts().filter(a => a.id !== id));
+  renderAlertLines(); updateAlertBadge(); renderAlertsPanelList();
+}
+function clearTriggeredAlerts(){
+  savePriceAlerts(getPriceAlerts().filter(a => a.status === 'active'));
+  renderAlertLines(); updateAlertBadge(); renderAlertsPanelList();
+}
+
+// Beep corto de dos tonos — WebAudio puro, sin assets. El contexto puede
+// arrancar suspendido hasta el primer gesto del usuario; el resume() es
+// mejor esfuerzo y si no suena, el toast avisa igual.
+let _alertAudioCtx = null;
+function alertSoundOn(){ return lsGet('td_alert_sound') !== '0'; }
+function alertBeep(){
+  try {
+    _alertAudioCtx = _alertAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _alertAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const t = ctx.currentTime;
+    [880, 1174.7].forEach((freq, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t + i*0.18);
+      g.gain.exponentialRampToValueAtTime(0.22, t + i*0.18 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i*0.18 + 0.16);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t + i*0.18); o.stop(t + i*0.18 + 0.2);
+    });
+  } catch(e){}
+}
+
+// Llamado en los dos caminos de datos EN VIVO (vela en formación cada 1s
+// y vela nueva de appendNewBar) — nunca en el scan de historial, que
+// dispararía alertas por velas viejas. "Tocó": el rango de la vela
+// incluye el precio; "gap": la vela anterior cerró de un lado y esta
+// quedó ENTERA del otro (el precio saltó el nivel sin tocarlo).
+function checkPriceAlertsAgainstBar(bar){
+  if (window._replay || window._replayFollow) return;
+  const list = getPriceAlerts();
+  let changed = false;
+  const n = window._lastCandles ? window._lastCandles.length : 0;
+  const prev = n > 1 ? window._lastCandles[n-2] : null;
+  for (const a of list){
+    if (a.status !== 'active' || a.symbol !== STATE.symbol) continue;
+    const touched = bar.high >= a.price && bar.low <= a.price;
+    const gapped = prev && ((prev.close < a.price && bar.low > a.price) || (prev.close > a.price && bar.high < a.price));
+    if (touched || gapped){
+      a.status = 'triggered'; a.triggered_at = Date.now(); changed = true;
+      showToast(`Alerta: ${a.symbol} tocó ${fmt(a.price)}`, 'warn', 10000);
+      if (alertSoundOn()) alertBeep();
+    }
+  }
+  if (changed){ savePriceAlerts(list); renderAlertLines(); updateAlertBadge(); renderAlertsPanelList(); }
+}
+
+// Líneas punteadas de las alertas activas del símbolo actual — mismo
+// patrón que _orderPriceLines: tirar y recrear. Se llama desde
+// renderSeries (así sobrevive a cambios de símbolo/TF/tipo de serie) y
+// tras cada mutación de alertas.
+let _alertPriceLines = [];
+function renderAlertLines(){
+  if (!candleSeries || !candleSeries.createPriceLine) return;
+  _alertPriceLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
+  _alertPriceLines = [];
+  getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol).forEach(a => {
+    _alertPriceLines.push(candleSeries.createPriceLine({
+      price: a.price, color: '#c9a84c', lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true, title: 'ALERT',
+    }));
+  });
+}
+
+function updateAlertBadge(){
+  const n = getPriceAlerts().filter(a => a.status === 'active').length;
+  document.querySelectorAll('.alerts-badge').forEach(el => { el.textContent = n || ''; el.classList.toggle('on', n > 0); });
+}
+
+// ─── Panel de la campana (dropdown del topbar; mismo widget en single y
+// en el shell de la grilla). En el shell no hay chart propio: el precio
+// "actual" para el input sale del panel activo vía _gridPaneEval. ───
+function toggleAlertsPanel(){
+  const popup = document.getElementById('alerts-popup');
+  if (!popup) return;
+  if (!window._alertsOutsideWired){
+    window._alertsOutsideWired = true;
+    document.addEventListener('click', (e) => {
+      const p = document.getElementById('alerts-popup');
+      if (p && p.classList.contains('open') && !e.target.closest('.alerts-wrap')) p.classList.remove('open');
+    });
+  }
+  const opening = !popup.classList.contains('open');
+  popup.classList.toggle('open');
+  if (opening){
+    const inp = document.getElementById('alerts-price-inp');
+    let last = null, sym = STATE.symbol;
+    if (isGridShell() && window._gridActiveFrame && window._gridPaneEval){
+      const f = window._gridActiveFrame();
+      last = f && window._gridPaneEval(f, '(window._lastCandles||[]).length ? window._lastCandles[window._lastCandles.length-1].close : null');
+      sym = (f && window._gridPaneEval(f, 'STATE.symbol')) || sym;
+    } else {
+      last = (window._lastCandles || []).length ? window._lastCandles[window._lastCandles.length-1].close : null;
+    }
+    popup.dataset.sym = sym;
+    document.getElementById('alerts-add-sym').textContent = sym;
+    if (inp && last != null) inp.value = last;
+    renderAlertsPanelList();
+  }
+}
+function addAlertFromPanel(){
+  const inp = document.getElementById('alerts-price-inp');
+  const popup = document.getElementById('alerts-popup');
+  addPriceAlert(parseFloat(inp.value), popup.dataset.sym || STATE.symbol);
+}
+function renderAlertsPanelList(){
+  const el = document.getElementById('alerts-list');
+  if (!el) return;
+  const list = getPriceAlerts().slice().sort((a,b) => (a.status === b.status ? b.created - a.created : (a.status === 'active' ? -1 : 1)));
+  el.innerHTML = list.length ? list.map(a => `
+    <div class="alert-row${a.status === 'triggered' ? ' triggered' : ''}">
+      <span class="alert-row-sym">${a.symbol}</span>
+      <span class="alert-row-price">${fmt(a.price)}</span>
+      <span class="alert-row-status">${a.status === 'triggered' ? 'disparada' : ''}</span>
+      <button class="alert-row-del" onclick="deletePriceAlert('${a.id}')" title="Borrar alerta">×</button>
+    </div>`).join('') : '<div class="alerts-empty">Sin alertas — click derecho en el chart o agregá una acá.</div>';
+  const sndChk = document.getElementById('alerts-sound-chk');
+  if (sndChk) sndChk.checked = alertSoundOn();
+}
+
+// ─── Menú contextual: click derecho sobre el chart → alerta en ese
+// precio. Un solo item por ahora; se crea lazy en el document del pane. ───
+function wireAlertContextMenu(){
+  const cont = document.getElementById('chart-container');
+  if (!cont) return;
+  let menu = null;
+  cont.addEventListener('contextmenu', (e) => {
+    if (!chart || !candleSeries) return;
+    e.preventDefault();
+    const rect = cont.getBoundingClientRect();
+    const price = candleSeries.coordinateToPrice(e.clientY - rect.top);
+    if (price == null || !isFinite(price)) return;
+    if (!menu){
+      menu = document.createElement('div');
+      menu.id = 'alert-ctx-menu';
+      document.body.appendChild(menu);
+      document.addEventListener('click', () => { menu.classList.remove('open'); });
+      document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') menu.classList.remove('open'); });
+    }
+    // minMove del símbolo para redondear el precio a algo prolijo
+    let minMove = 0.01; try { minMove = candleSeries.options().priceFormat.minMove || 0.01; } catch(err){}
+    const rounded = Math.round(price / minMove) * minMove;
+    menu.innerHTML = `<button class="alert-ctx-item">Alerta en ${fmt(rounded)}</button>`;
+    menu.querySelector('button').onclick = () => { menu.classList.remove('open'); addPriceAlert(rounded); };
+    menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - 50) + 'px';
+    menu.classList.add('open');
+  });
+}
+
+// Cambios hechos desde OTRO documento (el shell, u otro pane de la
+// grilla): refrescar líneas/badge/panel acá. El evento no se dispara en
+// el documento que escribió — ese ya se refrescó solo.
+window.addEventListener('storage', (e) => {
+  if (e.key === 'td_price_alerts'){ try { renderAlertLines(); updateAlertBadge(); renderAlertsPanelList(); } catch(err){} }
+});
+
 // Redibuja toda la serie (velas reales + puntos fantasma a futuro, en su
 // propia serie invisible — ver futureAxisSeries). Para cambios ESTRUCTURALES
 // del array (nuevo símbolo/TF, cerró una vela, se cargó más historial): cara
@@ -13656,6 +13936,7 @@ function renderSeries(timeframe){
   renderFractalModel();
   renderStatMap2();
   renderTradeMarkers();
+  renderAlertLines();
 }
 
 // Contraparte liviana de renderSeries(), para un tick de precio que solo
@@ -14300,6 +14581,7 @@ async function appendNewBar(symbol, timeframe){
       const isStillForming = i === json.bars.length - 1;
       checkOpenTradesAgainstBar(bar, isStillForming);
       checkPendingOrdersAgainstBar(bar, isStillForming);
+      checkPriceAlertsAgainstBar(bar);
     });
     renderSeries(timeframe);
     if (window._syncOverlayPositions) window._syncOverlayPositions(); // ver refreshFormingCandle — mismo motivo
@@ -14725,6 +15007,7 @@ async function refreshFormingCandle(symbol, timeframe){
     window._lastCandles[window._lastCandles.length-1]=bar;
     checkOpenTradesAgainstBar(bar, true);
     checkPendingOrdersAgainstBar(bar, true);
+    checkPriceAlertsAgainstBar(bar);
     updateFormingCandleLive(bar);
     // Si esta vela en formación hizo un máximo/mínimo nuevo, el autoescalado
     // de precio se mueve — las velas y las LÍNEAS del dibujo (series reales
