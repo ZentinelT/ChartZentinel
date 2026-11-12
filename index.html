@@ -4750,7 +4750,12 @@ const overlays = {};
 // desde que nacen: alcanza para la inmensa mayoría de símbolos reales
 // (forex/cripto/acciones), aunque un precio con muchísimos dígitos podría
 // en teoría volver a desalinearlos.
-const RIGHT_PRICE_SCALE_MIN_WIDTH = 78;
+// 60 y no 78: el 78 original estaba dimensionado para precios con ".00"
+// (28285.00) — al pasar los índices/cripto a enteros quedaba una franja
+// vacía a la derecha de los números (reporte del usuario). Medido en
+// vivo: el eje del RSI necesita exactamente 60 ("100.00") y un precio de
+// 5 dígitos ("73467") usa 54, así que 60 sigue alineando ambos paneles.
+const RIGHT_PRICE_SCALE_MIN_WIDTH = 60;
 
 // ══════════════════════════════════════════════════════════
 //  DRAWING SYSTEM
@@ -7084,8 +7089,13 @@ function initChart() {
     autoscaleInfoProvider: () => null,
   });
 
+  // precision 0: el label del volumen ("654.59") se dibuja sobre el MISMO
+  // eje derecho (las escalas overlay no tienen eje propio) y era la
+  // etiqueta más ancha de todas — lightweight-charts dimensiona el eje por
+  // la más ancha, así que esos ".59" dejaban una franja vacía a la derecha
+  // de los precios (reporte del usuario). El decimal del volumen no aporta.
   volumeSeries = chart.addHistogramSeries({
-    color:'#c9a84c22', priceFormat:{type:'volume'}, priceScaleId:'vol', visible:volumeVisible,
+    color:'#c9a84c22', priceFormat:{type:'volume', precision:0, minMove:1}, priceScaleId:'vol', visible:volumeVisible,
   });
   chart.priceScale('vol').applyOptions({ scaleMargins:{top:0.82,bottom:0} });
 
@@ -8922,7 +8932,8 @@ function addIndicatorSeries(name) {
   const rawData=window._lastCandles||[]; if(!rawData.length)return;
   const calcData=def.calc(rawData);
   const style=getIndicatorStyle(name, def);
-  const series=chart.addLineSeries({color:style.color,lineWidth:style.lineWidth,priceLineVisible:false,lastValueVisible:true,visible:!isIndicatorHidden(name)});
+  const series=chart.addLineSeries({color:style.color,lineWidth:style.lineWidth,priceLineVisible:false,lastValueVisible:true,visible:!isIndicatorHidden(name),
+    priceFormat:autoPriceFormatFor(rawData[rawData.length-1].close)}); // mismo formato que el resto del eje, ver applyAutoPriceFormat
   series.setData(calcData); overlays[name]=series;
 }
 
@@ -13614,10 +13625,7 @@ function setChartType(type){
   if (candles && candles.length) {
     // Mismo priceFormat auto que decide loadChart (enteros para índices,
     // 2 decimales para el resto) — la serie nueva arranca con el default.
-    const _lastClose = candles[candles.length-1].close;
-    candleSeries.applyOptions({ priceFormat: _lastClose >= 1000
-      ? { type:'price', precision:0, minMove:1 }
-      : { type:'price', precision:2, minMove:0.01 } });
+    applyAutoPriceFormat();
     renderSeries(STATE.timeframe);
     STATE.indicators.forEach(n => addIndicatorSeries(n));
   }
@@ -13747,6 +13755,22 @@ async function snapshotGridCanvas(frames){
 //  de SU símbolo, y los demás documentos se enteran de los cambios por
 //  el evento 'storage' (mismo mecanismo que td_theme/td_watchlist).
 // ══════════════════════════════════════════════════════════
+// El ANCHO de la escala de precios lo decide lightweight-charts según el
+// formato más "ancho" entre TODAS las series del eje — con el priceFormat
+// auto aplicado solo a candleSeries, las EMAs/series fantasma seguían en
+// precision 2 y el eje reservaba el lugar de ".00" aunque ya no se
+// mostrara (reporte del usuario). Un solo formato para todas, siempre.
+function autoPriceFormatFor(close){
+  return close >= 1000 ? { type:'price', precision:0, minMove:1 } : { type:'price', precision:2, minMove:0.01 };
+}
+function applyAutoPriceFormat(){
+  const c = window._lastCandles; if (!c || !c.length) return;
+  const fmt = autoPriceFormatFor(c[c.length-1].close);
+  [candleSeries, futureAxisSeries, futureAnchorSeries].concat(Object.values(overlays)).forEach(s => {
+    if (s) try { s.applyOptions({ priceFormat: fmt }); } catch(e){}
+  });
+}
+
 function getPriceAlerts(){ try { return JSON.parse(lsGet('td_price_alerts') || '[]'); } catch(e){ return []; } }
 function savePriceAlerts(list){ lsSet('td_price_alerts', JSON.stringify(list)); }
 
@@ -14813,10 +14837,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // chico (forex), donde si hace falta el decimal. Se decide por el
     // precio real de la última vela, no por el símbolo (no hay forma
     // confiable de adivinar el instrumento por el nombre solo).
-    const _lastClose = candles[candles.length-1].close;
-    candleSeries.applyOptions({ priceFormat: _lastClose>=1000
-      ? { type:'price', precision:0, minMove:1 }
-      : { type:'price', precision:2, minMove:0.01 } });
+    applyAutoPriceFormat(); // mismo formato en TODAS las series del eje (ver su comentario)
     // Resincroniza el tamaño del chart con el contenedor real antes de
     // acomodar la vista — si el ResizeObserver no llegó a correr a tiempo
     // (p.ej. justo después de un refresh/reload), el chart queda con una
