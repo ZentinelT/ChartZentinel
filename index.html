@@ -1672,6 +1672,9 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5" rx="0.5" fill="currentColor" stroke="none"/><rect x="12.5" y="9" width="3" height="9" rx="0.5" fill="currentColor" stroke="none"/><rect x="18" y="5" width="3" height="13" rx="0.5" fill="currentColor" stroke="none"/></svg>
     <span class="tb-label">Dashboard</span>
   </button>
+  <button class="topbar-btn" id="btn-snapshot" title="Snapshot: download chart as PNG (+ clipboard)" onclick="snapshotChart()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+  </button>
   <div class="tf-sep"></div>
   <button class="topbar-btn" id="btn-undo-top" title="Undo (Ctrl+Z)" onclick="undoDrawing()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H8"/><polyline points="7 5 3 10 7 15"/></svg>
@@ -3106,6 +3109,9 @@ function renderLayoutGrid(n){
         <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
       </div>
       <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
+      <button class="topbar-btn" id="gc-snapshot" title="Snapshot del panel activo (PNG + clipboard)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </button>
       <button class="topbar-btn" id="gc-refresh" title="Refrescar">
         ${SHARED_ICON.refresh}
       </button>
@@ -3715,6 +3721,12 @@ function renderLayoutGrid(n){
   // acá (ver isGridShell()) y leer/escribir el panel activo vía paneEval
   // en vez de un chart propio — ningún iframe se toca.
   gbar.querySelector('#gc-settings').addEventListener('click', openChartSettingsModal);
+  // Snapshot: siempre del panel ACTIVO (una imagen por chart — capturar la
+  // grilla entera sería otra feature); el pane descarga/copia él mismo.
+  gbar.querySelector('#gc-snapshot').addEventListener('click', () => {
+    const f = iframeEls[activePane-1];
+    if (f) paneEval(f, 'snapshotChart()');
+  });
 
   // Badge de estado: antes decía "MULTI" fijo (sin información real) y
   // después pegaba SIEMPRE al bridge de MT5 sin importar la fuente — con
@@ -13491,6 +13503,82 @@ function setChartType(type){
       : { type:'price', precision:2, minMove:0.01 } });
     renderSeries(STATE.timeframe);
     STATE.indicators.forEach(n => addIndicatorSeries(n));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  SNAPSHOT — exporta el chart como PNG (botón cámara del topbar).
+//  chart.takeScreenshot() de lightweight-charts entrega solo SUS canvas
+//  (velas/series/ejes) — las capas SVG que flotan encima (dibujos,
+//  Watchtower, Sniper, Sweeps, FM, StatMap) se rasterizan aparte
+//  (serializar → blob → Image → drawImage) y se componen en el mismo
+//  canvas, cada una en su posición real dentro del contenedor. Los
+//  textos que son HTML suelto (labels editables de dibujos, badges) no
+//  entran en la captura — limitación conocida de esta v1, por eso se
+//  estampa símbolo · TF a mano arriba a la izquierda.
+// ══════════════════════════════════════════════════════════
+async function buildChartSnapshotCanvas(){
+  const cont = document.getElementById('chart-container');
+  const src = chart.takeScreenshot();
+  // takeScreenshot devuelve el canvas en resolución física (devicePixelRatio)
+  // — todo lo que se compone encima se escala con el mismo ratio.
+  const ratio = cont.clientWidth ? (src.width / cont.clientWidth) : 1;
+  const out = document.createElement('canvas');
+  out.width = src.width; out.height = src.height;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = getComputedStyle(cont).backgroundColor || '#000';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(src, 0, 0);
+  const contRect = cont.getBoundingClientRect();
+  for (const svg of cont.querySelectorAll(':scope > svg')) {
+    try {
+      const r = svg.getBoundingClientRect();
+      if (!r.width || !r.height || getComputedStyle(svg).display === 'none') continue;
+      const clone = svg.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width', r.width);
+      clone.setAttribute('height', r.height);
+      // Los <text> del SVG heredan la fuente por CSS del documento — el
+      // SVG serializado la pierde, así que se la fijamos adentro.
+      const st = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      st.textContent = `text{font-family:${getComputedStyle(svg).fontFamily || 'sans-serif'};}`;
+      clone.insertBefore(st, clone.firstChild);
+      const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type:'image/svg+xml' }));
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      ctx.drawImage(img, (r.left - contRect.left) * ratio, (r.top - contRect.top) * ratio, r.width * ratio, r.height * ratio);
+      URL.revokeObjectURL(url);
+    } catch(e){ /* una capa que no rasterice no voltea el snapshot entero */ }
+  }
+  const tfLabel = (ALL_TIMEFRAMES.find(t => t.tf === STATE.timeframe) || {}).label || STATE.timeframe;
+  ctx.font = `600 ${13 * ratio}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.fillStyle = 'rgba(160,160,170,0.9)';
+  ctx.fillText(`${STATE.symbol} · ${tfLabel}`, 12 * ratio, 20 * ratio);
+  return out;
+}
+
+async function snapshotChart(){
+  if (!chart) return;
+  try {
+    const canvas = await buildChartSnapshotCanvas();
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('no se pudo generar el PNG');
+    // Portapapeles: mejor esfuerzo — si el navegador lo rebota (foco en
+    // otro lado, permisos), la descarga de abajo va igual.
+    let copied = false;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        copied = true;
+      }
+    } catch(e){}
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `chartzentinel_${STATE.symbol}_${STATE.timeframe}_${new Date().toISOString().slice(0,10)}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    showToast(copied ? 'Snapshot descargado y copiado al portapapeles.' : 'Snapshot descargado.', 'success');
+  } catch(e) {
+    showToast('No se pudo capturar el chart: ' + e.message, 'error');
   }
 }
 
