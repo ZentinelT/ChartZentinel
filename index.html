@@ -11121,7 +11121,7 @@ function snDetectFvgs(candles){
     list.forEach(f=>{
       for (let k=f.createIdx+1; k<confirmedLen; k++){
         const c=candles[k];
-        const invalid = isBull ? (c.close<f.bottom) : (c.close>f.top);
+        const invalid = isBull ? (c.close<f.top) : (c.close>f.bottom);
         if (invalid){ f.filledIdx=k; break; }
       }
     });
