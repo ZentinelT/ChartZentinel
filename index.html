@@ -957,6 +957,15 @@
   .order-cancel-btn, .order-edit-btn { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:12px; line-height:1; padding:2px; flex-shrink:0; }
   .order-cancel-btn:hover { color: var(--red); }
   .order-edit-btn:hover { color: var(--gold); }
+  .orders-close-all-wrap { display:none; gap:3px; }
+  .orders-close-all-btn {
+    font-size:9px; font-family:var(--font-mono); padding:1px 5px; height:16px;
+    border:none; border-radius:3px; cursor:pointer; line-height:16px;
+    background:rgba(128,128,128,.12); color:var(--text-secondary);
+  }
+  .orders-close-all-btn:hover { background:rgba(239,83,80,.18); color:#ef5350; }
+  .orders-close-all-btn.ca-profit:hover { background:rgba(38,166,154,.18); color:var(--green); }
+  .orders-close-all-btn.ca-loss:hover { background:rgba(239,83,80,.18); color:#ef5350; }
 
   /* Etiqueta "Buy/Sell Nx L [×]" sobre la línea de entrada de cada operación
      abierta (ver renderOrderPositionBadges) — div real posicionado A MANO
@@ -2039,7 +2048,7 @@
       </div>
       <div class="sidebar-header">Pending (<span id="orders-pending-count">0</span>)</div>
       <div id="orders-pending-list" class="orders-list"></div>
-      <div class="sidebar-header">Open (<span id="orders-open-count">0</span>)</div>
+      <div class="sidebar-header">Open (<span id="orders-open-count">0</span>)<span class="orders-close-all-wrap" id="orders-close-all-wrap"><button class="orders-close-all-btn" title="Cerrar todos" onclick="closeAllTrades('all')">✕ todo</button><button class="orders-close-all-btn ca-profit" title="Cerrar positivos" onclick="closeAllTrades('profit')">✕ +</button><button class="orders-close-all-btn ca-loss" title="Cerrar negativos" onclick="closeAllTrades('loss')">✕ −</button></span></div>
       <div id="orders-open-list" class="orders-list"></div>
     </div>
   </div>
@@ -4222,7 +4231,7 @@ function renderLayoutGrid(n){
       </div>
       <div class="sidebar-header">Pending (<span id="orders-pending-count">0</span>)</div>
       <div id="orders-pending-list" class="orders-list"></div>
-      <div class="sidebar-header">Open (<span id="orders-open-count">0</span>)</div>
+      <div class="sidebar-header">Open (<span id="orders-open-count">0</span>)<span class="orders-close-all-wrap" id="orders-close-all-wrap"><button class="orders-close-all-btn" title="Cerrar todos" onclick="closeAllTrades('all')">✕ todo</button><button class="orders-close-all-btn ca-profit" title="Cerrar positivos" onclick="closeAllTrades('profit')">✕ +</button><button class="orders-close-all-btn ca-loss" title="Cerrar negativos" onclick="closeAllTrades('loss')">✕ −</button></span></div>
       <div id="orders-open-list" class="orders-list"></div>
     </div>
   `;
@@ -16502,6 +16511,34 @@ async function closeTradeById(id){
   renderTradeMarkers();
 }
 
+// Cierra en lote las operaciones abiertas del símbolo actual.
+// filter: 'all' | 'profit' (solo positivas) | 'loss' (solo negativas).
+async function closeAllTrades(filter){
+  if (isGridShell() && window._shellSyncOrdersContext) window._shellSyncOrdersContext();
+  const sym = normalizeSymbolForJournal(STATE.symbol);
+  const pointValue = getTradesPointValue();
+  const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+  let candidates = getOpenTrades().filter(t => t.symbol === sym);
+  if (filter === 'profit' || filter === 'loss') {
+    candidates = candidates.filter(t => {
+      let pl;
+      if (t.real && t._liveProfit != null) {
+        pl = t._liveProfit;
+      } else if (lastBar) {
+        const sign = t.side === 'long' ? 1 : -1;
+        pl = (lastBar.close - t.entry_price) * sign * t.volume * pointValue;
+      } else { return false; }
+      return filter === 'profit' ? pl > 0 : pl < 0;
+    });
+  }
+  if (!candidates.length) { showToast('No hay operaciones para cerrar.', 'info'); return; }
+  const label = filter === 'all' ? 'todas las operaciones abiertas'
+    : filter === 'profit' ? `las ${candidates.length} ganadoras`
+    : `las ${candidates.length} perdedoras`;
+  if (!(await zConfirm(`¿Cerrar ${label} (${candidates.length})?`))) return;
+  for (const t of candidates) await closeTradeById(t.id);
+}
+
 // Cambia el SL/TP de una operación abierta por id, igual que closeTradeById
 // de arriba: sin pasar por un dibujo seleccionado. Hasta ahora la única
 // forma de tocar el SL/TP era arrastrar las líneas de la herramienta de
@@ -16877,6 +16914,9 @@ function renderOrdersPanel(){
 
   const pointValue = getTradesPointValue();
   const lastBar = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
+  const closeAllWrap = document.getElementById('orders-close-all-wrap');
+  if (closeAllWrap) closeAllWrap.style.display = open.length ? 'flex' : 'none';
+
   const openList = document.getElementById('orders-open-list');
   if (openList) {
     openList.innerHTML = !open.length ? '<div class="orders-empty">Sin operaciones abiertas.</div>' : open.map(t => {
