@@ -1704,14 +1704,10 @@
   #dtb-label-input:focus { border-color: var(--accent); }
 
   .drawing-handle {
-    fill: var(--text-secondary);
-    fill-opacity: .85;
-    stroke: var(--bg-panel);
-    stroke-width: 1;
+    fill: transparent;
+    stroke: none;
     cursor: move;
-    transition: r .1s;
   }
-  .drawing-handle:hover { r: 4.5; fill-opacity: 1; }
   [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
   .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
 
