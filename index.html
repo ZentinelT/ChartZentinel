@@ -8460,7 +8460,30 @@ function initDrawingLayer() {
       return;
     }
 
-    drawStart = { x, y, price, time };
+    // Para hline con magnet: snap de PRECIO puro al OHLC más cercano en precio
+    // de las velas visibles cerca del cursor (sin importar la distancia horizontal
+    // ni el modo weak/strong — el cursor ya apunta a un nivel horizontal, solo
+    // importa a qué precio exacto de vela estás más cerca).
+    let finalPrice = price, finalTime = time, finalY = y;
+    if (tool === 'hline' && STATE.magnetMode !== 'off') {
+      const barSpacing = chart.timeScale().options().barSpacing || 10;
+      const xRange = barSpacing * 3;
+      let bestDist = Infinity, bestPrice = price, bestTime = time;
+      candles.forEach(c => {
+        const cx = chart.timeScale().timeToCoordinate(c.time);
+        if (cx === null || Math.abs(cx - x) > xRange) return;
+        [c.open, c.high, c.low, c.close].forEach(p => {
+          const d = Math.abs(p - price);
+          if (d < bestDist) { bestDist = d; bestPrice = p; bestTime = c.time; }
+        });
+      });
+      if (bestDist < Infinity) {
+        finalPrice = bestPrice; finalTime = bestTime;
+        const sy = candleSeries.priceToCoordinate(bestPrice);
+        if (sy !== null) finalY = sy;
+      }
+    }
+    drawStart = { x, y: finalY, price: finalPrice, time: finalTime };
   });
 
   svg.addEventListener('mousemove', e => {
