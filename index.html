@@ -1662,6 +1662,20 @@
   #draw-toolbar .dtb-label { display: none; }
   #draw-toolbar .dtb-color-wrap[style*="gap:10px"] { flex-direction: column; gap: 4px !important; padding: 2px 0; }
 
+  .vline-time-label {
+    position: absolute;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 2px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 10;
+    line-height: 1.6;
+  }
+
   .drawing-handle {
     fill: var(--text-secondary);
     fill-opacity: .85;
@@ -2193,6 +2207,14 @@
       <path d="M10 4.5h3.2c.4 0 .6.2.8.5l1 2c.2.3.2.7 0 1l-1 2c-.2.3-.4.5-.8.5H10z"/>
     </svg>
     <span class="dtb-btn-text">Price</span>
+  </button>
+  <!-- Solo para vline: muestra u oculta la etiqueta de tiempo en el eje X -->
+  <button class="dtb-btn active" id="dtb-time-label" title="Mostrar/ocultar tiempo en el eje" onclick="onDtbToggleTimeLabel()" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="8" y1="1.5" x2="8" y2="10"/>
+      <path d="M4.5 10h7c.3 0 .5.2.7.4l1 2c.2.4.2.8 0 1.2l-1 2c-.2.2-.4.4-.7.4h-7c-.3 0-.5-.2-.7-.4l-1-2c-.2-.4-.2-.8 0-1.2l1-2c.2-.2.4-.4.7-.4z"/>
+    </svg>
+    <span class="dtb-btn-text">Tiempo</span>
   </button>
   <!-- Solo para 'rect': hoy borde y relleno comparten color y siempre están
        los dos prendidos — esto permite apagar uno sin el otro. -->
@@ -4981,7 +5003,7 @@ function serializeDrawings(){
       fillEl:undefined, profitFillEl:undefined, lossFillEl:undefined,
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
-      extSvgEl:undefined, extSvgEls:undefined,
+      extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5145,6 +5167,8 @@ function selectDrawing(id) {
   const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'fib');
   document.getElementById('dtb-price-label').style.display = hasPriceLabel ? '' : 'none';
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
+  document.getElementById('dtb-time-label').style.display = d.type === 'vline' ? '' : 'none';
+  document.getElementById('dtb-time-label').classList.toggle('active', d.showTimeLabel !== false);
   const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp' || d.type === 'hline');
   document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect' && d.type!=='vp') ? '' : 'none';
   // Volume Profile ya tiene su propio "Extend POC right" adentro de VP
@@ -5229,6 +5253,7 @@ function restyleDrawingAppearance(d) {
       d.vLineEl.setAttribute('stroke-width', lw);
       d.vLineEl.setAttribute('stroke-dasharray', ls===1?'6,4':ls===2?'2,3':'none');
     }
+    if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.style.background = C;
   } else if (d.type === 'rect') {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
@@ -5369,6 +5394,15 @@ function onDtbFibLabelMode(mode) {
   captureUndoSnapshot();
   d.fibLabelMode = mode;
   syncFibLabels(d);
+  markDrawingsDirty();
+  rememberToolStyle(d);
+}
+function onDtbToggleTimeLabel() {
+  const d = getSelected(); if (!d || d.type !== 'vline') return;
+  captureUndoSnapshot();
+  d.showTimeLabel = (d.showTimeLabel === false) ? true : false;
+  document.getElementById('dtb-time-label').classList.toggle('active', d.showTimeLabel !== false);
+  syncVLine(d);
   markDrawingsDirty();
   rememberToolStyle(d);
 }
@@ -5735,6 +5769,7 @@ function removeDrawingById(id) {
   if (Array.isArray(d.extSvgEls)) d.extSvgEls.forEach(el => el.remove());
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
+  if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
@@ -5759,11 +5794,34 @@ function syncVLine(d) {
   // línea queda invisible en esos TFs.
   const x = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
   // Parar antes de la franja de horas de abajo, para no taparla.
-  const h = document.getElementById('chart-container').clientHeight - chart.timeScale().height();
-  if (x === null) { d.vLineEl.style.display = 'none'; return; }
+  const chartContainer = document.getElementById('chart-container');
+  const h = chartContainer.clientHeight - chart.timeScale().height();
+  if (x === null) {
+    d.vLineEl.style.display = 'none';
+    if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.style.display = 'none';
+    return;
+  }
   d.vLineEl.style.display = '';
   d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
   d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', h);
+
+  // Etiqueta de tiempo en el eje X (estilo TradingView)
+  if (d.showTimeLabel !== false) {
+    if (!(d.vTimeLabelEl instanceof Element)) {
+      const el = document.createElement('div');
+      el.className = 'vline-time-label';
+      chartContainer.appendChild(el);
+      d.vTimeLabelEl = el;
+    }
+    const el = d.vTimeLabelEl;
+    el.style.display = '';
+    el.style.background = d.color || '#c9a84c';
+    el.textContent = fmtCrosshairTime(safeLineTime(d.p1.time));
+    el.style.left = x + 'px';
+    el.style.top = h + 'px';
+  } else if (d.vTimeLabelEl instanceof Element) {
+    d.vTimeLabelEl.style.display = 'none';
+  }
 }
 
 // Etiqueta de cada nivel del Fibo ("61.8%") — texto SVG plano, SIN fondo
