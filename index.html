@@ -8120,6 +8120,7 @@ function initDrawingLayer() {
     if (handleHit) {
       e.preventDefault(); e.stopPropagation();
       _pendingDragUndoSnapshot = serializeDrawings(); // ver _commitDragUndoSnapshot, al soltar
+      clearSvgHighlights();
       window._dragSession = { kind:'handle', drawing:handleHit.drawing, role:handleHit.role };
       return;
     }
@@ -8151,6 +8152,7 @@ function initDrawingLayer() {
       selectDrawing(hit.id);
       _pendingDragUndoSnapshot = serializeDrawings(); // ídem
       const { price, time } = getCoords(e);
+      clearSvgHighlights();
       window._dragSession = {
         kind:'body', drawing:hit, startPrice:price, startTime:time,
         origP1:{...hit.p1}, origP2: hit.p2?{...hit.p2}:null,
