@@ -1678,7 +1678,7 @@
     position: absolute;
     transform: translateX(-50%);
     color: #fff;
-    padding: 1px 4px;
+    padding: 0 4px;
     border-radius: 2px;
     pointer-events: none;
     white-space: nowrap;
@@ -14130,7 +14130,8 @@ function syncAlertZonePositions(){
     item.del.style.display = 'block';
     item.del.style.position = 'absolute';
     item.del.style.right = scaleW + 'px';
-    item.del.style.top = (y - 8) + 'px';
+    item.del.style.top = y + 'px';
+    item.del.style.transform = 'translateY(-50%)';
   });
 }
 
