@@ -6460,11 +6460,13 @@ function syncExtendedLineSvg(d) {
     // Para trendlines el texto va rotado paralelo a la línea; para hlines queda horizontal.
     if (d.type === 'trendline') {
       const angleDeg = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+      // Mismo offset ±4px que hline para que la distancia texto↔línea sea idéntica
+      const tly = isMid ? textLineY : isTop ? textLineY - 4 : textLineY + 4;
       d.lineLabelEl.setAttribute('x', textX);
-      d.lineLabelEl.setAttribute('y', textLineY);
+      d.lineLabelEl.setAttribute('y', tly);
       d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
       d.lineLabelEl.setAttribute('dominant-baseline', isTop ? 'auto' : isMid ? 'middle' : 'hanging');
-      d.lineLabelEl.setAttribute('transform', `rotate(${angleDeg.toFixed(2)},${textX.toFixed(2)},${textLineY.toFixed(2)})`);
+      d.lineLabelEl.setAttribute('transform', `rotate(${angleDeg.toFixed(2)},${textX.toFixed(2)},${tly.toFixed(2)})`);
     } else {
       d.lineLabelEl.setAttribute('x', textX);
       d.lineLabelEl.setAttribute('y', textY);
