@@ -5676,7 +5676,7 @@ function redrawDrawing(d) {
   d.svgEls.forEach(el => el.remove());
   d.svgEls = [];
   buildDrawingOnChart(d);
-  highlightSelectedSvg(d.id);
+  if (!window._dragSession) highlightSelectedSvg(d.id);
 }
 
 // Reposiciona TODOS los dibujos contra window._lastCandles actual — hace
@@ -7649,7 +7649,7 @@ function initChart() {
     invalidateContainerWidthCache();
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
-    if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
+    if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
     renderWatchtower();
     renderSniper();
     renderSweeps();
@@ -7769,7 +7769,7 @@ function initChart() {
     // highlightSelectedSvg ya debounces con su propio requestAnimationFrame
     // (ver _highlightSvgRaf), así que llamarla en cada tick de acá —
     // incluido el loop de arrastre/wheel de más arriba — no duplica trabajo.
-    if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
+    if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
     positionOrderPositionBadges();
     positionOrderLineBadges();
   }
