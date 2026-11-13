@@ -1519,12 +1519,13 @@
     cursor: ns-resize; z-index: 15; display: none;
   }
   .alert-line-del {
-    background: var(--bg-secondary); border: 1px solid var(--border-light);
-    color: var(--text-dim); border-radius: 3px; font-size: 10px; line-height: 1;
-    padding: 1px 4px; cursor: pointer; opacity: 0.4; transition: opacity .15s;
-    z-index: 16; display: none;
+    background: #c9a84c; color: #000; border: none;
+    border-radius: 2px; font-size: 10px; font-weight: 600; line-height: 1;
+    padding: 2px 5px; cursor: pointer; opacity: 0.85; transition: opacity .15s;
+    z-index: 16; display: none; white-space: nowrap;
   }
-  .alert-line-del:hover { opacity: 1; color: var(--red); border-color: var(--red); }
+  .alert-line-del:hover { opacity: 1; }
+  .alert-line-del:hover span { color: #c00; }
 
   #alert-ctx-menu {
     position: fixed; z-index: 950; display: none;
@@ -13978,7 +13979,7 @@ function renderAlertLines(){
     _alertPriceLines.push(candleSeries.createPriceLine({
       price: a.price, color: '#c9a84c', lineWidth: 1,
       lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: true, title: 'ALERT',
+      axisLabelVisible: true, title: '',
     }));
   });
   renderAlertZones();
@@ -14091,7 +14092,7 @@ function renderAlertZones(){
     // delete button — sibling in container, pegado al borde izq de la escala
     const del = document.createElement('button');
     del.className = 'alert-line-del';
-    del.textContent = '×';
+    del.innerHTML = '× <span style="font-size:9px;opacity:.8">ALERT</span>';
     cont.appendChild(el);
     cont.appendChild(del);
     _alertZoneEls.push({ el, del });
@@ -14129,7 +14130,7 @@ function syncAlertZonePositions(){
     // X button: pegado al borde izquierdo de la escala de precios
     item.del.style.display = 'block';
     item.del.style.position = 'absolute';
-    item.del.style.right = scaleW + 'px';
+    item.del.style.right = (scaleW + 2) + 'px';
     item.del.style.top = y + 'px';
     item.del.style.transform = 'translateY(-50%)';
   });
