@@ -1486,6 +1486,7 @@
     line-height: 13px; text-align: center; padding: 0 2px; display: none;
   }
   .alerts-badge.on { display: block; }
+  #alerts-backdrop { position: fixed; inset: 0; z-index: 699; background: transparent; display: none; }
   #alerts-popup {
     position: absolute; top: calc(100% + 6px); right: 0; z-index: 700;
     background: var(--bg-panel); border: 1px solid var(--border-light);
@@ -1521,9 +1522,9 @@
     position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
     background: var(--bg-secondary); border: 1px solid var(--border-light);
     color: var(--text-dim); border-radius: 3px; font-size: 10px; line-height: 1;
-    padding: 1px 3px; cursor: pointer; display: none;
+    padding: 1px 3px; cursor: pointer; opacity: 0.35; transition: opacity .15s;
   }
-  .alert-line-zone:hover .alert-line-del { display: block; }
+  .alert-line-zone:hover .alert-line-del, .alert-line-del:hover { opacity: 1; }
   .alert-line-del:hover { color: var(--red); border-color: var(--red); }
 
   #alert-ctx-menu {
@@ -1679,12 +1680,12 @@
     transform: translateX(-50%);
     font-family: var(--font-mono);
     color: #fff;
-    padding: 0 4px;
+    padding: 2px 4px;
     border-radius: 2px;
     pointer-events: none;
     white-space: nowrap;
     z-index: 10;
-    line-height: 1.2;
+    line-height: 1;
   }
 
   .drawing-handle {
@@ -13992,18 +13993,25 @@ function updateAlertBadge(){
 // ─── Panel de la campana (dropdown del topbar; mismo widget en single y
 // en el shell de la grilla). En el shell no hay chart propio: el precio
 // "actual" para el input sale del panel activo vía _gridPaneEval. ───
+function _alertsBackdrop(){
+  let bd = document.getElementById('alerts-backdrop');
+  if (!bd){
+    bd = document.createElement('div'); bd.id = 'alerts-backdrop';
+    document.body.appendChild(bd);
+    bd.addEventListener('click', () => {
+      const p = document.getElementById('alerts-popup');
+      if (p) p.classList.remove('open');
+      bd.style.display = 'none';
+    });
+  }
+  return bd;
+}
 function toggleAlertsPanel(){
   const popup = document.getElementById('alerts-popup');
   if (!popup) return;
-  if (!window._alertsOutsideWired){
-    window._alertsOutsideWired = true;
-    document.addEventListener('mousedown', (e) => {
-      const p = document.getElementById('alerts-popup');
-      if (p && p.classList.contains('open') && !e.target.closest?.('.alerts-wrap') && !e.target.closest?.('#gc-alerts-wrap')) p.classList.remove('open');
-    }, true);
-  }
   const opening = !popup.classList.contains('open');
   popup.classList.toggle('open');
+  _alertsBackdrop().style.display = opening ? 'block' : 'none';
   if (opening){
     const inp = document.getElementById('alerts-price-inp');
     let last = null, sym = STATE.symbol;
