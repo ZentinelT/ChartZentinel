@@ -1525,7 +1525,6 @@
     z-index: 16; display: none; white-space: nowrap;
   }
   .alert-line-del:hover { opacity: 1; }
-  .alert-line-del:hover span { color: #c00; }
 
   #alert-ctx-menu {
     position: fixed; z-index: 950; display: none;
@@ -14092,7 +14091,7 @@ function renderAlertZones(){
     // delete button — sibling in container, pegado al borde izq de la escala
     const del = document.createElement('button');
     del.className = 'alert-line-del';
-    del.innerHTML = '× <span style="font-size:9px;opacity:.8">ALERT</span>';
+    del.textContent = 'ALERT';
     cont.appendChild(el);
     cont.appendChild(del);
     _alertZoneEls.push({ el, del });
