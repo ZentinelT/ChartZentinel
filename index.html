@@ -1685,6 +1685,23 @@
     z-index: 10;
     line-height: 1;
   }
+  .dtb-lp-btn {
+    width: 20px; height: 18px; padding: 0;
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 2px; cursor: pointer; opacity: 0.4;
+    transition: opacity .15s, border-color .15s;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-primary); flex-shrink: 0;
+  }
+  .dtb-lp-btn.active { opacity: 1; border-color: var(--accent); }
+  .dtb-lp-btn:hover { opacity: 0.75; }
+  #dtb-label-input {
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: 4px; color: var(--text-primary); font-family: var(--font-mono);
+    font-size: 11px; padding: 2px 5px; width: 76px; outline: none; height: 22px;
+    box-sizing: border-box;
+  }
+  #dtb-label-input:focus { border-color: var(--accent); }
 
   .drawing-handle {
     fill: var(--text-secondary);
@@ -2226,6 +2243,44 @@
     </svg>
     <span class="dtb-btn-text">Tiempo</span>
   </button>
+  <!-- Label de texto para hline/trendline/vline -->
+  <div class="dtb-sep" id="dtb-label-sep" style="display:none"></div>
+  <div id="dtb-label-wrap" style="display:none; flex-direction:column; gap:4px; align-items:stretch; width:100%;">
+    <input id="dtb-label-input" type="text" placeholder="Label…" maxlength="40" oninput="onDtbLabelChange(this.value)">
+    <!-- picker hline/trendline: 3 filas × 2 cols -->
+    <div id="dtb-lp-hl" style="display:none; grid-template-columns:1fr 1fr; gap:2px;">
+      <button class="dtb-lp-btn" data-pos="tl" onclick="onDtbLabelPosChange('tl')" title="Arriba izq">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="8" x2="13" y2="8"/><circle cx="3" cy="4" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="tr" onclick="onDtbLabelPosChange('tr')" title="Arriba der">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="8" x2="13" y2="8"/><circle cx="11" cy="4" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="ml" onclick="onDtbLabelPosChange('ml')" title="Sobre la línea izq">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="6" x2="4" y2="6"/><line x1="9" y1="6" x2="13" y2="6"/><circle cx="6.5" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="mr" onclick="onDtbLabelPosChange('mr')" title="Sobre la línea der">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="6" x2="6" y2="6"/><line x1="11" y1="6" x2="13" y2="6"/><circle cx="8.5" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="bl" onclick="onDtbLabelPosChange('bl')" title="Abajo izq">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="4" x2="13" y2="4"/><circle cx="3" cy="9" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="br" onclick="onDtbLabelPosChange('br')" title="Abajo der">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="1" y1="4" x2="13" y2="4"/><circle cx="11" cy="9" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
+    <!-- picker vline: 3 filas × 1 col -->
+    <div id="dtb-lp-vl" style="display:none; grid-template-columns:1fr; gap:2px;">
+      <button class="dtb-lp-btn" data-pos="tc" onclick="onDtbLabelPosChange('tc')" title="Arriba">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="7" y1="4" x2="7" y2="11"/><circle cx="7" cy="2" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="mc" onclick="onDtbLabelPosChange('mc')" title="Medio">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="7" y1="1" x2="7" y2="4.5"/><line x1="7" y1="7.5" x2="7" y2="11"/><circle cx="7" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="dtb-lp-btn" data-pos="bc" onclick="onDtbLabelPosChange('bc')" title="Abajo">
+        <svg viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="7" y1="1" x2="7" y2="8.5"/><circle cx="7" cy="10.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
+  </div>
   <!-- Solo para 'rect': hoy borde y relleno comparten color y siempre están
        los dos prendidos — esto permite apagar uno sin el otro. -->
   <button class="dtb-btn active" id="dtb-rect-border" title="Show/hide border" onclick="onDtbToggleRectPart('showBorder')" style="display:none">
@@ -5025,6 +5080,7 @@ function serializeDrawings(){
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
+      lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5190,6 +5246,16 @@ function selectDrawing(id) {
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
   document.getElementById('dtb-time-label').style.display = d.type === 'vline' ? '' : 'none';
   document.getElementById('dtb-time-label').classList.toggle('active', d.showTimeLabel !== false);
+  const hasLineLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'vline');
+  document.getElementById('dtb-label-sep').style.display = hasLineLabel ? '' : 'none';
+  document.getElementById('dtb-label-wrap').style.display = hasLineLabel ? 'flex' : 'none';
+  if (hasLineLabel) {
+    document.getElementById('dtb-label-input').value = d.lineLabel || '';
+    const isVline = d.type === 'vline';
+    document.getElementById('dtb-lp-hl').style.display = isVline ? 'none' : 'grid';
+    document.getElementById('dtb-lp-vl').style.display = isVline ? 'grid' : 'none';
+    _syncLabelPosBtns(d.lineLabelPos || (isVline ? 'tc' : 'tr'), isVline);
+  }
   const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp' || d.type === 'hline');
   document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect' && d.type!=='vp') ? '' : 'none';
   // Volume Profile ya tiene su propio "Extend POC right" adentro de VP
@@ -5426,6 +5492,30 @@ function onDtbToggleTimeLabel() {
   syncVLine(d);
   markDrawingsDirty();
   rememberToolStyle(d);
+}
+function onDtbLabelChange(val) {
+  const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
+  d.lineLabel = val;
+  if (d.type === 'hline' || d.type === 'trendline') syncExtendedLineSvg(d);
+  else if (d.type === 'vline') syncVLine(d);
+  markDrawingsDirty();
+}
+function onDtbLabelPosChange(pos) {
+  const d = getSelected(); if (!d) return;
+  captureUndoSnapshot();
+  d.lineLabelPos = pos;
+  _syncLabelPosBtns(pos, d.type === 'vline');
+  if (d.type === 'hline' || d.type === 'trendline') syncExtendedLineSvg(d);
+  else if (d.type === 'vline') syncVLine(d);
+  markDrawingsDirty();
+}
+function _syncLabelPosBtns(pos, isVline) {
+  const grid = document.getElementById(isVline ? 'dtb-lp-vl' : 'dtb-lp-hl');
+  if (!grid) return;
+  grid.querySelectorAll('.dtb-lp-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.pos === pos);
+  });
 }
 // Solo para 'rect': apaga/prende el borde o el relleno sin tocar el otro.
 function onDtbToggleRectPart(field) {
@@ -5791,6 +5881,10 @@ function removeDrawingById(id) {
   if (d.label) d.label.remove();
   if (d.vLineEl instanceof Element) d.vLineEl.remove();
   if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.remove();
+  if (d.extSvgEl2 instanceof Element) d.extSvgEl2.remove();
+  if (d.lineLabelEl instanceof Element) d.lineLabelEl.remove();
+  if (d.vLineEl2 instanceof Element) d.vLineEl2.remove();
+  if (d.vLabelEl instanceof Element) d.vLabelEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
@@ -5807,26 +5901,81 @@ function removeDrawingById(id) {
 // después de crearla/arrastrarla, porque no sigue el pan/zoom sola).
 function syncVLine(d) {
   if (!(d.vLineEl instanceof Element)) return;
-  // safeLineTime: el horario crudo de d.p1.time puede no ser un horario de
-  // vela real en el TF/panel actual (p.ej. dibujada en M1, vista en M2/M6)
-  // — a diferencia de hline/trendline/fib, esta línea no es una serie del
-  // chart, así que lightweight-charts no le inserta un punto en el eje de
-  // tiempo solo; sin este redondeo, timeToCoordinate() devuelve null y la
-  // línea queda invisible en esos TFs.
   const x = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
-  // Parar antes de la franja de horas de abajo, para no taparla.
   const chartContainer = document.getElementById('chart-container');
   const h = chartContainer.clientHeight - chart.timeScale().height();
+  const svg = window._drawingLayerSvg;
+
   if (x === null) {
     d.vLineEl.style.display = 'none';
     if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.style.display = 'none';
+    if (d.vLineEl2 instanceof Element) d.vLineEl2.style.display = 'none';
+    if (d.vLabelEl instanceof Element) d.vLabelEl.style.display = 'none';
     return;
   }
-  d.vLineEl.style.display = '';
-  d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
-  d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', h);
 
-  // Etiqueta de tiempo en el eje X (estilo TradingView)
+  const hasLabel = !!(d.lineLabel && d.lineLabel.trim());
+  const pos = d.lineLabelPos || 'tc';
+  const isMid = pos === 'mc';
+
+  if (hasLabel && isMid) {
+    // Gap in the middle of the line
+    const midY = h / 2;
+    const textH = 14;
+    const gapY1 = Math.max(0, midY - textH);
+    const gapY2 = Math.min(h, midY + textH);
+    d.vLineEl.style.display = '';
+    d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
+    d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', gapY1);
+    if (svg && !(d.vLineEl2 instanceof Element)) {
+      const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line2.style.pointerEvents = 'none';
+      svg.appendChild(line2);
+      d.vLineEl2 = line2;
+    }
+    if (d.vLineEl2 instanceof Element) {
+      d.vLineEl2.setAttribute('stroke', d.vLineEl.getAttribute('stroke'));
+      d.vLineEl2.setAttribute('stroke-width', d.vLineEl.getAttribute('stroke-width'));
+      const dash = d.vLineEl.getAttribute('stroke-dasharray');
+      if (dash && dash !== 'none') d.vLineEl2.setAttribute('stroke-dasharray', dash);
+      else d.vLineEl2.removeAttribute('stroke-dasharray');
+      d.vLineEl2.setAttribute('x1', x); d.vLineEl2.setAttribute('y1', gapY2);
+      d.vLineEl2.setAttribute('x2', x); d.vLineEl2.setAttribute('y2', h);
+      d.vLineEl2.style.display = '';
+    }
+  } else {
+    d.vLineEl.style.display = '';
+    d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
+    d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', h);
+    if (d.vLineEl2 instanceof Element) d.vLineEl2.style.display = 'none';
+  }
+
+  // Text label
+  if (hasLabel && svg) {
+    if (!(d.vLabelEl instanceof Element)) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      el.setAttribute('font-size', '10');
+      el.setAttribute('font-family', "'DM Mono',monospace");
+      el.setAttribute('text-anchor', 'middle');
+      el.style.pointerEvents = 'none';
+      svg.appendChild(el);
+      d.vLabelEl = el;
+    }
+    let labelY, baseline;
+    if (pos === 'tc') { labelY = 12; baseline = 'hanging'; }
+    else if (pos === 'bc') { labelY = h - 6; baseline = 'auto'; }
+    else { labelY = h / 2; baseline = 'middle'; }
+    d.vLabelEl.style.display = '';
+    d.vLabelEl.setAttribute('x', x);
+    d.vLabelEl.setAttribute('y', labelY);
+    d.vLabelEl.setAttribute('dominant-baseline', baseline);
+    d.vLabelEl.setAttribute('fill', d.color);
+    d.vLabelEl.textContent = d.lineLabel.trim();
+  } else if (d.vLabelEl instanceof Element) {
+    d.vLabelEl.style.display = 'none';
+  }
+
+  // Etiqueta de tiempo en el eje X
   if (d.showTimeLabel !== false) {
     if (!(d.vTimeLabelEl instanceof Element)) {
       const el = document.createElement('div');
@@ -6201,14 +6350,25 @@ function syncExtendedLineSvg(d) {
   const svg = window._drawingLayerSvg;
   if (!svg || !candleSeries || !chart) return;
   const extend = !!(d.extLeft || d.extRight);
-  if (!extend) { if (d.extSvgEl) d.extSvgEl.style.display = 'none'; return; }
+  const hasLabel = !!(d.lineLabel && d.lineLabel.trim());
+  if (!extend && !hasLabel) {
+    if (d.extSvgEl) d.extSvgEl.style.display = 'none';
+    if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
+    if (d.lineLabelEl instanceof Element) d.lineLabelEl.style.display = 'none';
+    return;
+  }
   const container = document.getElementById('chart-container');
   if (!container) return;
   const w = container.clientWidth;
   let x1, y1, x2, y2;
   if (d.type === 'hline') {
     const y = candleSeries.priceToCoordinate(d.p1.price);
-    if (y === null) { if (d.extSvgEl) d.extSvgEl.style.display = 'none'; return; }
+    if (y === null) {
+      if (d.extSvgEl) d.extSvgEl.style.display = 'none';
+      if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
+      if (d.lineLabelEl instanceof Element) d.lineLabelEl.style.display = 'none';
+      return;
+    }
     const xp = chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time));
     x1 = d.extLeft ? 0 : (xp ?? 0);
     x2 = d.extRight ? w : (xp ?? w);
@@ -6218,7 +6378,12 @@ function syncExtendedLineSvg(d) {
     const y1raw = candleSeries.priceToCoordinate(d.p1.price);
     const x2raw = chart.timeScale().timeToCoordinate(safeLineTime(d.p2.time));
     const y2raw = candleSeries.priceToCoordinate(d.p2.price);
-    if (x1raw===null||y1raw===null||x2raw===null||y2raw===null) { if (d.extSvgEl) d.extSvgEl.style.display = 'none'; return; }
+    if (x1raw===null||y1raw===null||x2raw===null||y2raw===null) {
+      if (d.extSvgEl) d.extSvgEl.style.display = 'none';
+      if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
+      if (d.lineLabelEl instanceof Element) d.lineLabelEl.style.display = 'none';
+      return;
+    }
     x1=x1raw; y1=y1raw; x2=x2raw; y2=y2raw;
     const dx = x2raw - x1raw;
     if (Math.abs(dx) >= 0.5) {
@@ -6229,20 +6394,101 @@ function syncExtendedLineSvg(d) {
   } else {
     return;
   }
+
   if (!d.extSvgEl) {
     d.extSvgEl = document.createElementNS('http://www.w3.org/2000/svg','line');
     d.extSvgEl.style.pointerEvents = 'none';
     svg.appendChild(d.extSvgEl);
   }
   const ls = lwStyle(d.style);
-  d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
-  d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
-  d.extSvgEl.setAttribute('stroke', d.color);
-  d.extSvgEl.setAttribute('stroke-width', d.width);
-  if (ls === 1) d.extSvgEl.setAttribute('stroke-dasharray', '2,3');
-  else if (ls === 2) d.extSvgEl.setAttribute('stroke-dasharray', '6,4');
-  else d.extSvgEl.removeAttribute('stroke-dasharray');
-  d.extSvgEl.style.display = '';
+  const applyStroke = (el) => {
+    el.setAttribute('stroke', d.color);
+    el.setAttribute('stroke-width', d.width);
+    if (ls === 1) el.setAttribute('stroke-dasharray', '2,3');
+    else if (ls === 2) el.setAttribute('stroke-dasharray', '6,4');
+    else el.removeAttribute('stroke-dasharray');
+  };
+  applyStroke(d.extSvgEl);
+
+  // Text label
+  const yAtX = (xi) => {
+    if (Math.abs(x2 - x1) < 0.5) return (y1 + y2) / 2;
+    return y1 + (y2 - y1) * (xi - x1) / (x2 - x1);
+  };
+
+  if (!hasLabel) {
+    if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
+    if (d.lineLabelEl instanceof Element) d.lineLabelEl.style.display = 'none';
+    if (extend) {
+      d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
+      d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
+      d.extSvgEl.style.display = '';
+    } else {
+      d.extSvgEl.style.display = 'none';
+    }
+  } else {
+    const text = d.lineLabel.trim();
+    const pos = d.lineLabelPos || 'tr';
+    const isLeft = pos.endsWith('l');
+    const isMid = pos.startsWith('m');
+    const isTop = pos.startsWith('t');
+    const pad = 8;
+    const textW = text.length * 6.5 + 8;
+    const scaleR = chart ? (chart.priceScale('right').width() || 0) : 0;
+    const minX = Math.min(x1, x2), maxX = Math.max(x1, x2) - scaleR;
+    const textX = isLeft ? (minX + pad) : (maxX - pad);
+    const textLineY = yAtX(textX);
+    let textY, baseline;
+    if (isTop)      { textY = textLineY - 4; baseline = 'auto'; }
+    else if (isMid) { textY = textLineY;     baseline = 'middle'; }
+    else            { textY = textLineY + 4; baseline = 'hanging'; }
+
+    if (!(d.lineLabelEl instanceof Element)) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      el.setAttribute('font-size', '10');
+      el.setAttribute('font-family', "'DM Mono',monospace");
+      el.style.pointerEvents = 'none';
+      svg.appendChild(el);
+      d.lineLabelEl = el;
+    }
+    d.lineLabelEl.style.display = '';
+    d.lineLabelEl.setAttribute('x', textX);
+    d.lineLabelEl.setAttribute('y', textY);
+    d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
+    d.lineLabelEl.setAttribute('dominant-baseline', baseline);
+    d.lineLabelEl.setAttribute('fill', d.color);
+    d.lineLabelEl.textContent = text;
+
+    if (isMid && extend) {
+      // Cut gap in the line
+      const gapHalf = textW / 2 + 4;
+      const gapStartX = isLeft ? (textX - 4)         : (textX - textW - 4);
+      const gapEndX   = isLeft ? (textX + textW + 4) : (textX + 4);
+      const gsX = Math.max(minX, gapStartX);
+      const geX = Math.min(maxX, gapEndX);
+      d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
+      d.extSvgEl.setAttribute('x2', gsX); d.extSvgEl.setAttribute('y2', yAtX(gsX));
+      d.extSvgEl.style.display = '';
+      if (!(d.extSvgEl2 instanceof Element)) {
+        d.extSvgEl2 = document.createElementNS('http://www.w3.org/2000/svg','line');
+        d.extSvgEl2.style.pointerEvents = 'none';
+        svg.appendChild(d.extSvgEl2);
+      }
+      applyStroke(d.extSvgEl2);
+      d.extSvgEl2.setAttribute('x1', geX); d.extSvgEl2.setAttribute('y1', yAtX(geX));
+      d.extSvgEl2.setAttribute('x2', x2); d.extSvgEl2.setAttribute('y2', y2);
+      d.extSvgEl2.style.display = '';
+    } else {
+      if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
+      if (extend) {
+        d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
+        d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
+        d.extSvgEl.style.display = '';
+      } else {
+        d.extSvgEl.style.display = 'none';
+      }
+    }
+  }
 }
 
 function buildDrawingOnChart(d) {
