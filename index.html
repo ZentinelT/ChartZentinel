@@ -5829,7 +5829,7 @@ function updateDrawingGeometry(d) {
     ok = true;
   }
 
-  if (ok) { applyDrawingZOrder(d); highlightSelectedSvg(d.id); }
+  if (ok) { applyDrawingZOrder(d); if (!window._dragSession) highlightSelectedSvg(d.id); }
   return ok;
 }
 
