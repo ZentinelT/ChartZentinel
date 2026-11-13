@@ -9417,7 +9417,7 @@ async function deleteSelectedIndTemplate(){
   const sel = document.getElementById('ind-settings-template-select');
   const name = sel.value;
   if (!name || !_indSettingsTarget) return;
-  if (!(await zConfirm(`Delete template "${name}"?`, { danger:true, confirmText:'Delete' }))) return;
+  if (!(await zConfirm(`Delete template "${name}"?`, { danger:true, confirmText:'Delete', noAskKey:'td_no_confirm_delete_ind_tpl' }))) return;
   rereadIndicatorTemplates();
   delete STATE.indicatorTemplates[_indSettingsTarget][name];
   saveIndicatorTemplatesState();
@@ -12926,7 +12926,7 @@ async function deleteSelectedWorkspace(){
   const sel = document.getElementById('cs-workspace-select');
   const name = sel.value;
   if (!name) return;
-  if (!(await zConfirm(`Delete workspace "${name}"?`, { danger:true, confirmText:'Delete' }))) return;
+  if (!(await zConfirm(`Delete workspace "${name}"?`, { danger:true, confirmText:'Delete', noAskKey:'td_no_confirm_delete_workspace' }))) return;
   delete STATE.workspaces[name];
   saveWorkspacesState();
   renderWorkspaceSelect();
@@ -13039,7 +13039,7 @@ async function deleteSelectedPreset(){
   const sel = document.getElementById('cs-preset-select');
   const name = sel.value;
   if (!name) return;
-  if (!(await zConfirm(`Delete theme "${name}"?`, { danger:true, confirmText:'Delete' }))) return;
+  if (!(await zConfirm(`Delete theme "${name}"?`, { danger:true, confirmText:'Delete', noAskKey:'td_no_confirm_delete_theme' }))) return;
   delete STATE.presets[name];
   savePresetsState();
   renderPresetSelect();
@@ -13331,7 +13331,7 @@ function saveDtbTemplateAs(type){
       const name = delEl.dataset.tplDel;
       // .then() y no await: el listener sigue siendo sync, el borrado
       // simplemente ocurre cuando el usuario responde el modal.
-      zConfirm(`Delete template "${name}"?`, { danger:true, confirmText:'Delete' }).then(ok => {
+      zConfirm(`Delete template "${name}"?`, { danger:true, confirmText:'Delete', noAskKey:'td_no_confirm_delete_draw_tpl' }).then(ok => {
         if (!ok) return;
         delete DRAWING_TEMPLATES[type][name];
         saveDrawingTemplatesStore();
