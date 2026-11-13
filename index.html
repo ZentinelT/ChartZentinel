@@ -4942,7 +4942,7 @@ function _flushDrawingsSync(){
   // propio localStorage — así que al borrar un dibujo desde OTRO panel,
   // este se quedaba con la versión vieja guardada, y un refresh de la
   // página la revivía y la volvía a contagiar al resto.
-  if (_suppressDrawingBroadcast) return;
+  if (_suppressDrawingBroadcast) { _suppressDrawingBroadcast = false; return; }
   if (!EMBED_MODE || window.top === window || !window.top.zentinelDrawingsSync) return;
   try { window.top.zentinelDrawingsSync(PANE_ID, STATE.symbol, serializeDrawings()); } catch(e){}
 }
@@ -5003,8 +5003,15 @@ window.applyExternalDrawings = function(list){
         buildDrawingOnChart(d);
       }
     });
+    // Garantiza el guardado aunque no hubiera dibujos previos que remover
+    // (removeDrawingById no fue llamado) o buildDrawingOnChart saliera early
+    // (sin velas cargadas). markDrawingsDirty es idempotente: si ya hay un
+    // timer pendiente de las llamadas anteriores, esta es no-op.
+    markDrawingsDirty();
   } finally {
-    setTimeout(() => { _suppressDrawingBroadcast = false; }, 150);
+    // La supresión del broadcast ya la resetea _flushDrawingsSync después de
+    // guardar. No hay setTimeout separado — evita que un reset tardío de un
+    // sync anterior anule la supresión de uno posterior (eco entre paneles).
   }
 };
 
