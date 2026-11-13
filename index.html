@@ -5080,7 +5080,7 @@ function serializeDrawings(){
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
-      lineLabelEl:undefined, lineLabelBgEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined, vLabelBgEl:undefined,
+      lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5883,8 +5883,6 @@ function removeDrawingById(id) {
   if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.remove();
   if (d.extSvgEl2 instanceof Element) d.extSvgEl2.remove();
   if (d.lineLabelEl instanceof Element) d.lineLabelEl.remove();
-  if (d.lineLabelBgEl instanceof Element) d.lineLabelBgEl.remove();
-  if (d.vLabelBgEl instanceof Element) d.vLabelBgEl.remove();
   if (d.vLineEl2 instanceof Element) d.vLineEl2.remove();
   if (d.vLabelEl instanceof Element) d.vLabelEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
@@ -5921,9 +5919,9 @@ function syncVLine(d) {
   const isMid = pos === 'mc';
 
   if (hasLabel && isMid) {
-    // Gap en la mitad de la línea
+    // Gap en la mitad de la línea — proporcional al ancho del texto (que rota -90°)
     const midY = h / 2;
-    const textH = 14;
+    const textH = (d.lineLabel.trim().length * 6.5 + 8) / 2 + 4;
     const gapY1 = Math.max(0, midY - textH);
     const gapY2 = Math.min(h, midY + textH);
     d.vLineEl.style.display = '';
@@ -5970,32 +5968,13 @@ function syncVLine(d) {
     d.vLabelEl.style.display = '';
     d.vLabelEl.setAttribute('x', x);
     d.vLabelEl.setAttribute('y', labelY);
-    d.vLabelEl.setAttribute('dominant-baseline', baseline);
+    d.vLabelEl.setAttribute('dominant-baseline', 'middle');
     d.vLabelEl.setAttribute('fill', d.color);
     d.vLabelEl.textContent = d.lineLabel.trim();
-    // Rect de fondo para posición 'mc': tapa cualquier línea visible a través
-    // del gap (igual que syncExtendedLineSvg para hline/trendline).
-    if (isMid) {
-      const bgColor = chart.options().layout?.background?.color || '#0a0a0c';
-      const textW = d.lineLabel.trim().length * 6.5 + 8;
-      if (!(d.vLabelBgEl instanceof Element)) {
-        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        bg.style.pointerEvents = 'none';
-        svg.insertBefore(bg, d.vLabelEl);
-        d.vLabelBgEl = bg;
-      }
-      d.vLabelBgEl.setAttribute('x', x - textW / 2);
-      d.vLabelBgEl.setAttribute('y', gapY1);
-      d.vLabelBgEl.setAttribute('width', textW);
-      d.vLabelBgEl.setAttribute('height', gapY2 - gapY1);
-      d.vLabelBgEl.setAttribute('fill', bgColor);
-      d.vLabelBgEl.style.display = '';
-    } else {
-      if (d.vLabelBgEl instanceof Element) d.vLabelBgEl.style.display = 'none';
-    }
-  } else {
-    if (d.vLabelEl instanceof Element) d.vLabelEl.style.display = 'none';
-    if (d.vLabelBgEl instanceof Element) d.vLabelBgEl.style.display = 'none';
+    // Texto vertical paralelo a la línea
+    d.vLabelEl.setAttribute('transform', `rotate(-90,${x.toFixed(2)},${labelY.toFixed(2)})`);
+  } else if (d.vLabelEl instanceof Element) {
+    d.vLabelEl.style.display = 'none';
   }
 
   // Etiqueta de tiempo en el eje X
@@ -6475,35 +6454,43 @@ function syncExtendedLineSvg(d) {
       d.lineLabelEl = el;
     }
     d.lineLabelEl.style.display = '';
-    d.lineLabelEl.setAttribute('x', textX);
-    d.lineLabelEl.setAttribute('y', textY);
-    d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
-    d.lineLabelEl.setAttribute('dominant-baseline', baseline);
     d.lineLabelEl.setAttribute('fill', d.color);
     d.lineLabelEl.textContent = text;
 
+    // Para trendlines el texto va rotado paralelo a la línea; para hlines queda horizontal.
+    if (d.type === 'trendline') {
+      const angleDeg = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+      d.lineLabelEl.setAttribute('x', textX);
+      d.lineLabelEl.setAttribute('y', textLineY);
+      d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
+      d.lineLabelEl.setAttribute('dominant-baseline', isTop ? 'auto' : isMid ? 'middle' : 'hanging');
+      d.lineLabelEl.setAttribute('transform', `rotate(${angleDeg.toFixed(2)},${textX.toFixed(2)},${textLineY.toFixed(2)})`);
+    } else {
+      d.lineLabelEl.setAttribute('x', textX);
+      d.lineLabelEl.setAttribute('y', textY);
+      d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
+      d.lineLabelEl.setAttribute('dominant-baseline', baseline);
+      d.lineLabelEl.removeAttribute('transform');
+    }
+
     if (isMid && extend) {
-      const gapStartX = isLeft ? (textX - 4)         : (textX - textW - 4);
-      const gapEndX   = isLeft ? (textX + textW + 4) : (textX + 4);
-      const gsX = Math.max(minX, gapStartX);
-      const geX = Math.min(maxX, gapEndX);
-      // Rect de fondo: tapa la serie nativa del chart que queda visible a
-      // través del gap SVG (el canvas del chart está detrás del overlay SVG).
-      const bgColor = chart.options().layout?.background?.color || '#0a0a0c';
-      if (!(d.lineLabelBgEl instanceof Element)) {
-        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        bg.style.pointerEvents = 'none';
-        svg.insertBefore(bg, d.lineLabelEl);
-        d.lineLabelBgEl = bg;
+      let gsX, gsY, geX, geY;
+      if (d.type === 'trendline') {
+        // Gap a lo largo de la línea (no sólo en x) para que sea correcto con cualquier ángulo
+        const lineLen = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        const ux = lineLen > 0.5 ? (x2 - x1) / lineLen : 1;
+        const uy = lineLen > 0.5 ? (y2 - y1) / lineLen : 0;
+        const hg = textW / 2 + 4;
+        gsX = textX - ux * hg; gsY = textLineY - uy * hg;
+        geX = textX + ux * hg; geY = textLineY + uy * hg;
+      } else {
+        const gapStartX = isLeft ? (textX - 4)         : (textX - textW - 4);
+        const gapEndX   = isLeft ? (textX + textW + 4) : (textX + 4);
+        gsX = Math.max(minX, gapStartX); gsY = yAtX(gsX);
+        geX = Math.min(maxX, gapEndX);   geY = yAtX(geX);
       }
-      d.lineLabelBgEl.setAttribute('x', gsX);
-      d.lineLabelBgEl.setAttribute('y', textLineY - 7);
-      d.lineLabelBgEl.setAttribute('width', geX - gsX);
-      d.lineLabelBgEl.setAttribute('height', 14);
-      d.lineLabelBgEl.setAttribute('fill', bgColor);
-      d.lineLabelBgEl.style.display = '';
       d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
-      d.extSvgEl.setAttribute('x2', gsX); d.extSvgEl.setAttribute('y2', yAtX(gsX));
+      d.extSvgEl.setAttribute('x2', gsX); d.extSvgEl.setAttribute('y2', gsY);
       d.extSvgEl.style.display = '';
       if (!(d.extSvgEl2 instanceof Element)) {
         d.extSvgEl2 = document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -6511,11 +6498,10 @@ function syncExtendedLineSvg(d) {
         svg.appendChild(d.extSvgEl2);
       }
       applyStroke(d.extSvgEl2);
-      d.extSvgEl2.setAttribute('x1', geX); d.extSvgEl2.setAttribute('y1', yAtX(geX));
+      d.extSvgEl2.setAttribute('x1', geX); d.extSvgEl2.setAttribute('y1', geY);
       d.extSvgEl2.setAttribute('x2', x2); d.extSvgEl2.setAttribute('y2', y2);
       d.extSvgEl2.style.display = '';
     } else {
-      if (d.lineLabelBgEl instanceof Element) d.lineLabelBgEl.style.display = 'none';
       if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
       if (extend) {
         d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
