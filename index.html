@@ -6471,20 +6471,11 @@ function syncExtendedLineSvg(d) {
       d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
       d.lineLabelEl.setAttribute('dominant-baseline', baseline);
       d.lineLabelEl.removeAttribute('transform');
-      // Sin halo en hline — la serie nativa es un segmento de 2 puntos y no llega al texto
-      d.lineLabelEl.removeAttribute('stroke');
-      d.lineLabelEl.removeAttribute('stroke-width');
-      d.lineLabelEl.removeAttribute('paint-order');
     }
-
-    // Para trendline 'isMid': la serie nativa va de p1 a p2 y pisa el texto a través del gap.
-    // paint-order:stroke con color de fondo crea un halo alrededor de cada letra que la tapa.
-    if (d.type === 'trendline' && isMid) {
-      const bgColor = chart.options().layout?.background?.color || '#0a0a0c';
-      d.lineLabelEl.setAttribute('stroke', bgColor);
-      d.lineLabelEl.setAttribute('stroke-width', '3');
-      d.lineLabelEl.setAttribute('paint-order', 'stroke');
-    }
+    // Nunca usar paint-order:stroke — deja un halo visible sobre el texto
+    d.lineLabelEl.removeAttribute('stroke');
+    d.lineLabelEl.removeAttribute('stroke-width');
+    d.lineLabelEl.removeAttribute('paint-order');
 
     if (isMid && (extend || d.type === 'trendline')) {
       let gsX, gsY, geX, geY;
