@@ -1519,13 +1519,12 @@
     cursor: ns-resize; z-index: 15; display: none;
   }
   .alert-line-del {
-    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
     background: var(--bg-secondary); border: 1px solid var(--border-light);
     color: var(--text-dim); border-radius: 3px; font-size: 10px; line-height: 1;
-    padding: 1px 3px; cursor: pointer; opacity: 0.35; transition: opacity .15s;
+    padding: 1px 4px; cursor: pointer; opacity: 0.4; transition: opacity .15s;
+    z-index: 16; display: none;
   }
-  .alert-line-zone:hover .alert-line-del, .alert-line-del:hover { opacity: 1; }
-  .alert-line-del:hover { color: var(--red); border-color: var(--red); }
+  .alert-line-del:hover { opacity: 1; color: var(--red); border-color: var(--red); }
 
   #alert-ctx-menu {
     position: fixed; z-index: 950; display: none;
@@ -1678,9 +1677,8 @@
   .vline-time-label {
     position: absolute;
     transform: translateX(-50%);
-    font-family: var(--font-mono);
     color: #fff;
-    padding: 2px 4px;
+    padding: 1px 4px;
     border-radius: 2px;
     pointer-events: none;
     white-space: nowrap;
@@ -5840,6 +5838,7 @@ function syncVLine(d) {
     el.style.display = '';
     el.style.background = d.color || '#c9a84c';
     el.style.fontSize = (chart.options().layout?.fontSize || 11) + 'px';
+      el.style.fontFamily = chart.options().layout?.fontFamily || 'sans-serif';
     el.textContent = fmtCrosshairTime(safeLineTime(d.p1.time));
     el.style.left = x + 'px';
     el.style.top = h + 'px';
@@ -14085,20 +14084,22 @@ function renderAlertZones(){
   const cont = document.getElementById('chart-container');
   if (!cont) return;
   const alerts = getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol);
-  // recycle / create
   while (_alertZoneEls.length < alerts.length){
+    // drag zone (chart area, transparent)
     const el = document.createElement('div');
     el.className = 'alert-line-zone';
+    // delete button — sibling in container, pegado al borde izq de la escala
     const del = document.createElement('button');
     del.className = 'alert-line-del';
     del.textContent = '×';
-    el.appendChild(del);
     cont.appendChild(el);
+    cont.appendChild(del);
     _alertZoneEls.push({ el, del });
   }
-  // hide extras
-  for (let i = alerts.length; i < _alertZoneEls.length; i++) _alertZoneEls[i].el.style.display = 'none';
-  // size (width = chart area, excluding right price scale)
+  for (let i = alerts.length; i < _alertZoneEls.length; i++){
+    _alertZoneEls[i].el.style.display = 'none';
+    _alertZoneEls[i].del.style.display = 'none';
+  }
   const scaleW = chart ? (chart.priceScale('right').width() || 0) : 0;
   const zoneW = cont.clientWidth - scaleW;
   alerts.forEach((a, i) => {
@@ -14114,14 +14115,22 @@ function syncAlertZonePositions(){
   const cont = document.getElementById('chart-container');
   if (!cont) return;
   const chartH = cont.clientHeight - (chart ? chart.timeScale().height() : 0);
+  const scaleW = chart ? (chart.priceScale('right').width() || 0) : 0;
   const alerts = getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol);
   alerts.forEach((a, i) => {
     const item = _alertZoneEls[i];
     if (!item) return;
     const y = candleSeries.priceToCoordinate(a.price);
-    if (y == null || y < 0 || y > chartH){ item.el.style.display = 'none'; return; }
+    if (y == null || y < 0 || y > chartH){
+      item.el.style.display = 'none'; item.del.style.display = 'none'; return;
+    }
     item.el.style.display = 'block';
     item.el.style.top = (y - 4) + 'px';
+    // X button: pegado al borde izquierdo de la escala de precios
+    item.del.style.display = 'block';
+    item.del.style.position = 'absolute';
+    item.del.style.right = scaleW + 'px';
+    item.del.style.top = (y - 8) + 'px';
   });
 }
 
