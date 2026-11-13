@@ -14073,32 +14073,50 @@ async function buildChartSnapshotCanvas(){
       URL.revokeObjectURL(url);
     } catch(e){ /* una capa que no rasterice no voltea el snapshot entero */ }
   }
-  // Los badges de órdenes (.order-pos-badge) son <div> HTML, no SVG — el loop
-  // de arriba los omite. Se capturan igual vía foreignObject: se inlinan todos
-  // los estilos computados para que el SVG serializado no dependa de las CSS
-  // vars del documento, que no viajan con el Blob.
+  // Los badges de órdenes (.order-pos-badge) son <div> HTML — se dibujan
+  // directamente con canvas 2D para evitar el foreignObject que tinta el canvas
+  // y bloquea toBlob() en Chrome.
   for (const el of cont.querySelectorAll('.order-pos-badge')) {
     try {
       if (getComputedStyle(el).display === 'none') continue;
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;
-      const clone = el.cloneNode(true);
-      (function inlineCS(src, dst) {
-        const cs = getComputedStyle(src);
-        let st = '';
-        for (let i = 0; i < cs.length; i++) st += `${cs[i]}:${cs.getPropertyValue(cs[i])};`;
-        dst.setAttribute('style', st);
-        for (let i = 0; i < src.children.length; i++) inlineCS(src.children[i], dst.children[i]);
-      })(el, clone);
-      clone.style.position = 'static';
-      clone.style.transform = 'none';
-      clone.style.left = '0'; clone.style.top = '0';
-      const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="${r.width}" height="${r.height}"><div xmlns="http://www.w3.org/1999/xhtml">${clone.outerHTML}</div></foreignObject></svg>`;
-      const url = URL.createObjectURL(new Blob([svgStr], {type:'image/svg+xml'}));
-      const img = await new Promise((res, rej) => { const i = new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
-      ctx.drawImage(img, (r.left - contRect.left) * ratio, (r.top - contRect.top) * ratio, r.width * ratio, r.height * ratio);
-      URL.revokeObjectURL(url);
-    } catch(e){ /* badge que no rasterice no voltea el snapshot */ }
+      const bx = (r.left - contRect.left) * ratio;
+      const by = (r.top - contRect.top) * ratio;
+      const bw = r.width * ratio;
+      const bh = r.height * ratio;
+      const rad = bh / 2;
+      // Fondo en píldora
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(bx + rad, by);
+      ctx.arcTo(bx + bw, by, bx + bw, by + bh, rad);
+      ctx.arcTo(bx + bw, by + bh, bx, by + bh, rad);
+      ctx.arcTo(bx, by + bh, bx, by, rad);
+      ctx.arcTo(bx, by, bx + bw, by, rad);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(14,14,20,0.92)';
+      ctx.fill();
+      ctx.strokeStyle = el.style.getPropertyValue('--order-badge-side') || '#888';
+      ctx.lineWidth = 1 * ratio;
+      ctx.stroke();
+      // Texto de cada <span>
+      ctx.font = `700 ${10 * ratio}px 'DM Mono',monospace`;
+      ctx.textBaseline = 'middle';
+      const midY = by + bh / 2;
+      let tx = bx + 8 * ratio;
+      el.querySelectorAll('span').forEach(span => {
+        const t = span.textContent;
+        if (!t) return;
+        if (span.classList.contains('order-pos-badge-val'))
+          ctx.fillStyle = span.classList.contains('pos') ? '#26a69a' : '#ef5350';
+        else
+          ctx.fillStyle = '#e8e8f0';
+        ctx.fillText(t, tx, midY);
+        tx += ctx.measureText(t).width + 5 * ratio;
+      });
+      ctx.restore();
+    } catch(e){ /* badge fallido no tumba el snapshot */ }
   }
   const tfLabel = (ALL_TIMEFRAMES.find(t => t.tf === STATE.timeframe) || {}).label || STATE.timeframe;
   ctx.font = `600 ${13 * ratio}px ${getComputedStyle(document.body).fontFamily}`;
