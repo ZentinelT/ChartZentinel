@@ -5080,7 +5080,7 @@ function serializeDrawings(){
       entryTextEl:undefined, tpTextEl:undefined, slTextEl:undefined,
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
-      lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
+      lineLabelEl:undefined, lineLabelBgEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined, vLabelBgEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5883,6 +5883,8 @@ function removeDrawingById(id) {
   if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.remove();
   if (d.extSvgEl2 instanceof Element) d.extSvgEl2.remove();
   if (d.lineLabelEl instanceof Element) d.lineLabelEl.remove();
+  if (d.lineLabelBgEl instanceof Element) d.lineLabelBgEl.remove();
+  if (d.vLabelBgEl instanceof Element) d.vLabelBgEl.remove();
   if (d.vLineEl2 instanceof Element) d.vLineEl2.remove();
   if (d.vLabelEl instanceof Element) d.vLabelEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
@@ -5919,7 +5921,7 @@ function syncVLine(d) {
   const isMid = pos === 'mc';
 
   if (hasLabel && isMid) {
-    // Gap in the middle of the line
+    // Gap en la mitad de la línea
     const midY = h / 2;
     const textH = 14;
     const gapY1 = Math.max(0, midY - textH);
@@ -5971,8 +5973,29 @@ function syncVLine(d) {
     d.vLabelEl.setAttribute('dominant-baseline', baseline);
     d.vLabelEl.setAttribute('fill', d.color);
     d.vLabelEl.textContent = d.lineLabel.trim();
-  } else if (d.vLabelEl instanceof Element) {
-    d.vLabelEl.style.display = 'none';
+    // Rect de fondo para posición 'mc': tapa cualquier línea visible a través
+    // del gap (igual que syncExtendedLineSvg para hline/trendline).
+    if (isMid) {
+      const bgColor = chart.options().layout?.background?.color || '#0a0a0c';
+      const textW = d.lineLabel.trim().length * 6.5 + 8;
+      if (!(d.vLabelBgEl instanceof Element)) {
+        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bg.style.pointerEvents = 'none';
+        svg.insertBefore(bg, d.vLabelEl);
+        d.vLabelBgEl = bg;
+      }
+      d.vLabelBgEl.setAttribute('x', x - textW / 2);
+      d.vLabelBgEl.setAttribute('y', gapY1);
+      d.vLabelBgEl.setAttribute('width', textW);
+      d.vLabelBgEl.setAttribute('height', gapY2 - gapY1);
+      d.vLabelBgEl.setAttribute('fill', bgColor);
+      d.vLabelBgEl.style.display = '';
+    } else {
+      if (d.vLabelBgEl instanceof Element) d.vLabelBgEl.style.display = 'none';
+    }
+  } else {
+    if (d.vLabelEl instanceof Element) d.vLabelEl.style.display = 'none';
+    if (d.vLabelBgEl instanceof Element) d.vLabelBgEl.style.display = 'none';
   }
 
   // Etiqueta de tiempo en el eje X
@@ -6460,12 +6483,25 @@ function syncExtendedLineSvg(d) {
     d.lineLabelEl.textContent = text;
 
     if (isMid && extend) {
-      // Cut gap in the line
-      const gapHalf = textW / 2 + 4;
       const gapStartX = isLeft ? (textX - 4)         : (textX - textW - 4);
       const gapEndX   = isLeft ? (textX + textW + 4) : (textX + 4);
       const gsX = Math.max(minX, gapStartX);
       const geX = Math.min(maxX, gapEndX);
+      // Rect de fondo: tapa la serie nativa del chart que queda visible a
+      // través del gap SVG (el canvas del chart está detrás del overlay SVG).
+      const bgColor = chart.options().layout?.background?.color || '#0a0a0c';
+      if (!(d.lineLabelBgEl instanceof Element)) {
+        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bg.style.pointerEvents = 'none';
+        svg.insertBefore(bg, d.lineLabelEl);
+        d.lineLabelBgEl = bg;
+      }
+      d.lineLabelBgEl.setAttribute('x', gsX);
+      d.lineLabelBgEl.setAttribute('y', textLineY - 7);
+      d.lineLabelBgEl.setAttribute('width', geX - gsX);
+      d.lineLabelBgEl.setAttribute('height', 14);
+      d.lineLabelBgEl.setAttribute('fill', bgColor);
+      d.lineLabelBgEl.style.display = '';
       d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
       d.extSvgEl.setAttribute('x2', gsX); d.extSvgEl.setAttribute('y2', yAtX(gsX));
       d.extSvgEl.style.display = '';
@@ -6479,6 +6515,7 @@ function syncExtendedLineSvg(d) {
       d.extSvgEl2.setAttribute('x2', x2); d.extSvgEl2.setAttribute('y2', y2);
       d.extSvgEl2.style.display = '';
     } else {
+      if (d.lineLabelBgEl instanceof Element) d.lineLabelBgEl.style.display = 'none';
       if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
       if (extend) {
         d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
