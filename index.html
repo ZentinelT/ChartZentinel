@@ -2709,7 +2709,9 @@ const _qs = new URLSearchParams(location.search);
 const LAYOUT_N = Number(_qs.get('layout')) || 1;
 const EMBED_MODE = _qs.get('embed') === '1';
 const PANE_ID = _qs.get('pane') || '';
-const LS_SUFFIX = PANE_ID ? ('_p' + PANE_ID) : '';
+// Pane 1 comparte claves con el panel único (sin sufijo) — así el estado
+// se preserva al pasar de 1 gráfico a grilla y viceversa.
+const LS_SUFFIX = (PANE_ID && PANE_ID !== '1') ? ('_p' + PANE_ID) : '';
 function lsKey(name){ return name + LS_SUFFIX; }
 if (EMBED_MODE) document.documentElement.classList.add('embed-mode');
 
