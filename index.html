@@ -5077,6 +5077,7 @@ function serializeDrawings(){
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
       lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
+      anchorDotEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5091,7 +5092,7 @@ window.applyExternalDrawings = function(list){
     [...drawings].forEach(d => removeDrawingById(d.id));
     deselectDrawing();
     (list || []).forEach(data => {
-      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined };
+      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined };
       drawings.push(d);
       if (d.type === 'text') {
         const fontSize = d.fontSize || 14, bgColor = d.bgColor || '#0a0a0c';
