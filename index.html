@@ -5752,11 +5752,11 @@ function updateDrawingGeometry(d) {
     ok = true;
 
   } else if (d.type === 'trendline' && d.series.length === 1) {
-    // Mismo criterio que hline arriba: la serie real queda en el segmento
-    // p1-p2 sin extender, la extensión es el overlay SVG.
-    let t1=safeLineTime(d.p1.time), t2=safeLineTime(d.p2.time), p1=d.p1.price, p2=d.p2.price;
-    if (t1 === t2) t2 = t1 + barInterval;
-    d.series[0].setData([{time:t1,value:p1},{time:t2,value:p2}]);
+    // Serie nativa mínima (1 barra en p1) — toda la línea real la dibuja
+    // syncExtendedLineSvg como overlay SVG, igual que hline. Así no hay
+    // ningún trazo del canvas que se cuele a través del gap del texto.
+    const t1=safeLineTime(d.p1.time);
+    d.series[0].setData([{time:t1,value:d.p1.price},{time:t1+barInterval,value:d.p1.price}]);
     syncExtendedLineSvg(d);
     ok = true;
 
@@ -6351,7 +6351,9 @@ function syncExtendedLineSvg(d) {
   if (!svg || !candleSeries || !chart) return;
   const extend = !!(d.extLeft || d.extRight);
   const hasLabel = !!(d.lineLabel && d.lineLabel.trim());
-  if (!extend && !hasLabel) {
+  // Para trendline la serie nativa es mínima (1 barra) — el SVG debe
+  // dibujar la línea completa aunque no haya extensión ni label.
+  if (!extend && !hasLabel && d.type !== 'trendline') {
     if (d.extSvgEl) d.extSvgEl.style.display = 'none';
     if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
     if (d.lineLabelEl instanceof Element) d.lineLabelEl.style.display = 'none';
@@ -6419,7 +6421,7 @@ function syncExtendedLineSvg(d) {
   if (!hasLabel) {
     if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
     if (d.lineLabelEl instanceof Element) d.lineLabelEl.style.display = 'none';
-    if (extend) {
+    if (extend || d.type === 'trendline') {
       d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
       d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
       d.extSvgEl.style.display = '';
@@ -6484,16 +6486,23 @@ function syncExtendedLineSvg(d) {
       d.lineLabelEl.setAttribute('paint-order', 'stroke');
     }
 
-    if (isMid && extend) {
+    if (isMid && (extend || d.type === 'trendline')) {
       let gsX, gsY, geX, geY;
       if (d.type === 'trendline') {
-        // Gap a lo largo de la línea (no sólo en x) para que sea correcto con cualquier ángulo
+        // Gap a lo largo de la línea para cualquier ángulo, con clamping
+        // para que el gap nunca se salga del segmento p1→p2.
         const lineLen = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
         const ux = lineLen > 0.5 ? (x2 - x1) / lineLen : 1;
         const uy = lineLen > 0.5 ? (y2 - y1) / lineLen : 0;
         const hg = textW / 2 + 4;
-        gsX = textX - ux * hg; gsY = textLineY - uy * hg;
-        geX = textX + ux * hg; geY = textLineY + uy * hg;
+        // posición paramétrica del CENTRO del texto sobre el segmento.
+        // Para anchor 'start' el pivot es el borde izquierdo → center += textW/2
+        // Para anchor 'end' el pivot es el borde derecho → center -= textW/2
+        const tText = (textX - x1) * ux + (textLineY - y1) * uy + (isLeft ? textW/2 : -textW/2);
+        const tGs = Math.max(0, tText - hg);
+        const tGe = Math.min(lineLen, tText + hg);
+        gsX = x1 + ux * tGs; gsY = y1 + uy * tGs;
+        geX = x1 + ux * tGe; geY = y1 + uy * tGe;
       } else {
         const gapStartX = isLeft ? (textX - 4)         : (textX - textW - 4);
         const gapEndX   = isLeft ? (textX + textW + 4) : (textX + 4);
@@ -6514,7 +6523,7 @@ function syncExtendedLineSvg(d) {
       d.extSvgEl2.style.display = '';
     } else {
       if (d.extSvgEl2 instanceof Element) d.extSvgEl2.style.display = 'none';
-      if (extend) {
+      if (extend || d.type === 'trendline') {
         d.extSvgEl.setAttribute('x1', x1); d.extSvgEl.setAttribute('y1', y1);
         d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
         d.extSvgEl.style.display = '';
@@ -6582,12 +6591,10 @@ function buildDrawingOnChart(d) {
     syncExtendedLineSvg(d);
 
   } else if (d.type === 'trendline') {
-    // Mismo criterio que hline arriba: la serie real queda en el segmento
-    // p1-p2 sin extender, la extensión es el overlay SVG.
-    let t1 = safeLineTime(d.p1.time), t2 = safeLineTime(d.p2.time), p1 = d.p1.price, p2 = d.p2.price;
-    if (t1 === t2) t2 = t1 + barInterval; // los dos puntos cayeron en la misma vela de este TF
-
-    mkLine([{time:t1,value:p1},{time:t2,value:p2}], { lastValue: d.showPriceLabel !== false });
+    // Serie nativa mínima (igual que hline) — syncExtendedLineSvg dibuja
+    // toda la línea en SVG, así el canvas no pisa el texto isMid.
+    const t1 = safeLineTime(d.p1.time);
+    mkLine([{time:t1,value:d.p1.price},{time:t1+barInterval,value:d.p1.price}], { lastValue: d.showPriceLabel !== false });
     syncExtendedLineSvg(d);
 
   } else if (d.type === 'rect') {
