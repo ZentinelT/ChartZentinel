@@ -5838,7 +5838,7 @@ function syncVLine(d) {
     const el = d.vTimeLabelEl;
     el.style.display = '';
     el.style.background = d.color || '#c9a84c';
-    el.style.fontSize = (chart.options().layout?.fontSize || 11) + 'px';
+    el.style.fontSize = Math.max(9, (chart.options().layout?.fontSize || 11) - 2) + 'px';
       el.style.fontFamily = chart.options().layout?.fontFamily || 'sans-serif';
     el.textContent = fmtCrosshairTime(safeLineTime(d.p1.time));
     el.style.left = x + 'px';
