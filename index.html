@@ -7172,7 +7172,8 @@ function initChart() {
   // la más ancha, así que esos ".59" dejaban una franja vacía a la derecha
   // de los precios (reporte del usuario). El decimal del volumen no aporta.
   volumeSeries = chart.addHistogramSeries({
-    color:'#c9a84c22', priceFormat:{type:'volume', precision:0, minMove:1}, priceScaleId:'vol', visible:volumeVisible,
+    color:'#c9a84c22', priceFormat:{type:'volume', precision:0, minMove:1}, priceScaleId:'vol',
+    visible: volumeVisible, lastValueVisible: false, priceLineVisible: false,
   });
   chart.priceScale('vol').applyOptions({ scaleMargins:{top:0.82,bottom:0} });
 
@@ -8739,8 +8740,13 @@ function closeTfFavPopup(){
 // ══════════════════════════════════════════════════════════
 //  TOOLS
 // ══════════════════════════════════════════════════════════
-let volumeVisible = false;
-function toggleVolume() { volumeVisible=!volumeVisible; volumeSeries.applyOptions({visible:volumeVisible}); document.getElementById('btn-volume').classList.toggle('active',volumeVisible); }
+let volumeVisible = lsGet(lsKey('td_volume_visible')) === '1';
+function toggleVolume() {
+  volumeVisible = !volumeVisible;
+  volumeSeries.applyOptions({ visible: volumeVisible });
+  document.getElementById('btn-volume').classList.toggle('active', volumeVisible);
+  lsSet(lsKey('td_volume_visible'), volumeVisible ? '1' : '0');
+}
 // (toggleIndicatorLegend vive arriba, cerca de td_theme — es una
 // preferencia GLOBAL de toda la app, no por panel; ver ahí el porqué.)
 
@@ -17201,6 +17207,7 @@ function downloadTradesCsv(){
   // reconstruir TODO desde una lista plana (lo reusa el sync entre
   // paneles y el undo/redo) — texto incluido, que buildDrawingOnChart
   // solo no sabe armar.
+  document.getElementById('btn-volume').classList.toggle('active', volumeVisible);
   loadChart(STATE.symbol,STATE.timeframe).then(() => {
     try {
       const saved = JSON.parse(lsGet(lsKey('td_drawings')) || '[]');
