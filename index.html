@@ -1513,6 +1513,18 @@
   .alerts-foot label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
   .alerts-foot .link-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 11px; padding: 0; }
   .alerts-foot .link-btn:hover { color: var(--red); }
+  .alert-line-zone {
+    position: absolute; left: 0; height: 9px; pointer-events: auto;
+    cursor: ns-resize; z-index: 15; display: none;
+  }
+  .alert-line-del {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    color: var(--text-dim); border-radius: 3px; font-size: 10px; line-height: 1;
+    padding: 1px 3px; cursor: pointer; display: none;
+  }
+  .alert-line-zone:hover .alert-line-del { display: block; }
+  .alert-line-del:hover { color: var(--red); border-color: var(--red); }
 
   #alert-ctx-menu {
     position: fixed; z-index: 950; display: none;
@@ -13969,6 +13981,7 @@ function renderAlertLines(){
       axisLabelVisible: true, title: 'ALERT',
     }));
   });
+  renderAlertZones();
 }
 
 function updateAlertBadge(){
@@ -13984,9 +13997,9 @@ function toggleAlertsPanel(){
   if (!popup) return;
   if (!window._alertsOutsideWired){
     window._alertsOutsideWired = true;
-    document.addEventListener('click', (e) => {
+    document.addEventListener('mousedown', (e) => {
       const p = document.getElementById('alerts-popup');
-      if (p && p.classList.contains('open') && !e.target.closest('.alerts-wrap') && !e.target.closest('#gc-alerts-wrap')) p.classList.remove('open');
+      if (p && p.classList.contains('open') && !e.target.closest?.('.alerts-wrap') && !e.target.closest?.('#gc-alerts-wrap')) p.classList.remove('open');
     }, true);
   }
   const opening = !popup.classList.contains('open');
@@ -14057,36 +14070,76 @@ function wireAlertContextMenu(){
   });
 }
 
-let _alertDrag = null; // { id } mientras se arrastra una línea de alerta
+let _alertDrag = null; // { id, contRect } mientras se arrastra
+let _alertZoneEls = []; // { id, el } overlay divs
+
+function renderAlertZones(){
+  const cont = document.getElementById('chart-container');
+  if (!cont) return;
+  const alerts = getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol);
+  // recycle / create
+  while (_alertZoneEls.length < alerts.length){
+    const el = document.createElement('div');
+    el.className = 'alert-line-zone';
+    const del = document.createElement('button');
+    del.className = 'alert-line-del';
+    del.textContent = '×';
+    el.appendChild(del);
+    cont.appendChild(el);
+    _alertZoneEls.push({ el, del });
+  }
+  // hide extras
+  for (let i = alerts.length; i < _alertZoneEls.length; i++) _alertZoneEls[i].el.style.display = 'none';
+  // size (width = chart area, excluding right price scale)
+  const scaleW = chart ? (chart.priceScale('right').width() || 0) : 0;
+  const zoneW = cont.clientWidth - scaleW;
+  alerts.forEach((a, i) => {
+    const item = _alertZoneEls[i];
+    item.id = a.id;
+    item.el.style.width = zoneW + 'px';
+    item.del.onclick = (e) => { e.stopPropagation(); deletePriceAlert(a.id); };
+  });
+}
+
+function syncAlertZonePositions(){
+  if (!candleSeries) return;
+  const cont = document.getElementById('chart-container');
+  if (!cont) return;
+  const chartH = cont.clientHeight - (chart ? chart.timeScale().height() : 0);
+  const alerts = getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol);
+  alerts.forEach((a, i) => {
+    const item = _alertZoneEls[i];
+    if (!item) return;
+    const y = candleSeries.priceToCoordinate(a.price);
+    if (y == null || y < 0 || y > chartH){ item.el.style.display = 'none'; return; }
+    item.el.style.display = 'block';
+    item.el.style.top = (y - 4) + 'px';
+  });
+}
+
+function startAlertZoneLoop(){
+  if (window._alertZoneLoopStarted) return;
+  window._alertZoneLoopStarted = true;
+  (function loop(){ syncAlertZonePositions(); requestAnimationFrame(loop); })();
+}
+
 function wireAlertDrag(){
   const cont = document.getElementById('chart-container');
   if (!cont || cont._alertDragWired) return;
   cont._alertDragWired = true;
-  function nearAlertY(y){
-    const alerts = getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol);
-    for (const a of alerts){
-      if (!candleSeries) continue;
-      const lineY = candleSeries.priceToCoordinate(a.price);
-      if (lineY != null && Math.abs(y - lineY) <= 6) return a;
-    }
-    return null;
-  }
+  startAlertZoneLoop();
   document.addEventListener('mousedown', (e) => {
-    if (e.button !== 0 || !e.target.closest?.('#chart-container')) return;
-    const rect = cont.getBoundingClientRect();
-    const hit = nearAlertY(e.clientY - rect.top);
-    if (!hit) return;
-    _alertDrag = { id: hit.id };
+    if (e.button !== 0) return;
+    const zone = e.target.closest?.('.alert-line-zone');
+    if (!zone) return;
+    const item = _alertZoneEls.find(z => z.el === zone);
+    if (!item) return;
+    _alertDrag = { id: item.id, contRect: cont.getBoundingClientRect() };
     e.stopPropagation(); e.preventDefault();
   }, true);
   document.addEventListener('mousemove', (e) => {
-    const rect = cont.getBoundingClientRect();
-    if (!_alertDrag){
-      if (!e.target.closest?.('#chart-container')) return;
-      cont.style.cursor = nearAlertY(e.clientY - rect.top) ? 'ns-resize' : '';
-      return;
-    }
-    const y = e.clientY - rect.top;
+    if (!_alertDrag) return;
+    const y = e.clientY - _alertDrag.contRect.top;
     const newPrice = candleSeries && candleSeries.coordinateToPrice(y);
     if (newPrice == null || !isFinite(newPrice)) return;
     let minMove = 0.01;
@@ -14101,9 +14154,7 @@ function wireAlertDrag(){
     savePriceAlerts(list);
     renderAlertLines(); renderAlertsPanelList();
   }, true);
-  document.addEventListener('mouseup', () => {
-    if (_alertDrag){ _alertDrag = null; cont.style.cursor = ''; }
-  });
+  document.addEventListener('mouseup', () => { _alertDrag = null; });
 }
 
 // Cambios hechos desde OTRO documento (el shell, u otro pane de la
