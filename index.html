@@ -13883,7 +13883,9 @@ function savePriceAlerts(list){ lsSet('td_price_alerts', JSON.stringify(list)); 
 function addPriceAlert(price, symbol){
   if (!isFinite(price) || price <= 0) { showToast('Precio de alerta inválido.', 'warn'); return; }
   const list = getPriceAlerts();
-  list.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2,7), symbol: symbol || STATE.symbol, price, created: Date.now(), status: 'active' });
+  const n = window._lastCandles ? window._lastCandles.length : 0;
+  const createdBarTime = n > 0 ? window._lastCandles[n-1].time : 0;
+  list.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2,7), symbol: symbol || STATE.symbol, price, created: Date.now(), created_bar: createdBarTime, status: 'active' });
   savePriceAlerts(list);
   renderAlertLines(); updateAlertBadge(); renderAlertsPanelList();
   showToast(`Alerta creada: ${symbol || STATE.symbol} en ${fmt(price)}`, 'success');
@@ -13938,6 +13940,7 @@ function checkPriceAlertsAgainstBar(bar){
   const prev = n > 1 ? window._lastCandles[n-2] : null;
   for (const a of list){
     if (a.status !== 'active' || a.symbol !== STATE.symbol) continue;
+    if (a.created_bar && bar.time <= a.created_bar) continue;
     const touched = bar.high >= a.price && bar.low <= a.price;
     const gapped = prev && ((prev.close < a.price && bar.low > a.price) || (prev.close > a.price && bar.high < a.price));
     if (touched || gapped){
@@ -13982,8 +13985,8 @@ function toggleAlertsPanel(){
     window._alertsOutsideWired = true;
     document.addEventListener('click', (e) => {
       const p = document.getElementById('alerts-popup');
-      if (p && p.classList.contains('open') && !e.target.closest('.alerts-wrap')) p.classList.remove('open');
-    });
+      if (p && p.classList.contains('open') && !e.target.closest('.alerts-wrap') && !e.target.closest('#gc-alerts-wrap')) p.classList.remove('open');
+    }, true);
   }
   const opening = !popup.classList.contains('open');
   popup.classList.toggle('open');
