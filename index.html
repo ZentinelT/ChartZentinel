@@ -5916,14 +5916,17 @@ function syncVLine(d) {
 
   const hasLabel = !!(d.lineLabel && d.lineLabel.trim());
   const pos = d.lineLabelPos || 'tc';
-  const isMid = pos === 'mc';
+  // labelY primero porque lo necesita la lógica del gap
+  const textEstHalf = hasLabel ? ((d.lineLabel.trim().length * 6.5 + 8) / 2 + 4) : 0;
+  let labelY;
+  if (pos === 'tc')      { labelY = Math.max(textEstHalf, 12); }
+  else if (pos === 'bc') { labelY = Math.min(h - textEstHalf, h - 12); }
+  else                   { labelY = h / 2; }
 
-  if (hasLabel && isMid) {
-    // Gap en la mitad de la línea — proporcional al ancho del texto (que rota -90°)
-    const midY = h / 2;
-    const textH = (d.lineLabel.trim().length * 6.5 + 8) / 2 + 4;
-    const gapY1 = Math.max(0, midY - textH);
-    const gapY2 = Math.min(h, midY + textH);
+  // Con etiqueta: siempre cortar la línea donde va el texto (tc/mc/bc)
+  if (hasLabel) {
+    const gapY1 = Math.max(0, labelY - textEstHalf);
+    const gapY2 = Math.min(h, labelY + textEstHalf);
     d.vLineEl.style.display = '';
     d.vLineEl.setAttribute('x1', x); d.vLineEl.setAttribute('y1', 0);
     d.vLineEl.setAttribute('x2', x); d.vLineEl.setAttribute('y2', gapY1);
@@ -5961,17 +5964,12 @@ function syncVLine(d) {
       svg.appendChild(el);
       d.vLabelEl = el;
     }
-    let labelY, baseline;
-    if (pos === 'tc') { labelY = 12; baseline = 'hanging'; }
-    else if (pos === 'bc') { labelY = h - 6; baseline = 'auto'; }
-    else { labelY = h / 2; baseline = 'middle'; }
     d.vLabelEl.style.display = '';
     d.vLabelEl.setAttribute('x', x);
     d.vLabelEl.setAttribute('y', labelY);
     d.vLabelEl.setAttribute('dominant-baseline', 'middle');
     d.vLabelEl.setAttribute('fill', d.color);
     d.vLabelEl.textContent = d.lineLabel.trim();
-    // Texto vertical paralelo a la línea
     d.vLabelEl.setAttribute('transform', `rotate(-90,${x.toFixed(2)},${labelY.toFixed(2)})`);
   } else if (d.vLabelEl instanceof Element) {
     d.vLabelEl.style.display = 'none';
@@ -6471,6 +6469,19 @@ function syncExtendedLineSvg(d) {
       d.lineLabelEl.setAttribute('text-anchor', isLeft ? 'start' : 'end');
       d.lineLabelEl.setAttribute('dominant-baseline', baseline);
       d.lineLabelEl.removeAttribute('transform');
+      // Sin halo en hline — la serie nativa es un segmento de 2 puntos y no llega al texto
+      d.lineLabelEl.removeAttribute('stroke');
+      d.lineLabelEl.removeAttribute('stroke-width');
+      d.lineLabelEl.removeAttribute('paint-order');
+    }
+
+    // Para trendline 'isMid': la serie nativa va de p1 a p2 y pisa el texto a través del gap.
+    // paint-order:stroke con color de fondo crea un halo alrededor de cada letra que la tapa.
+    if (d.type === 'trendline' && isMid) {
+      const bgColor = chart.options().layout?.background?.color || '#0a0a0c';
+      d.lineLabelEl.setAttribute('stroke', bgColor);
+      d.lineLabelEl.setAttribute('stroke-width', '3');
+      d.lineLabelEl.setAttribute('paint-order', 'stroke');
     }
 
     if (isMid && extend) {
