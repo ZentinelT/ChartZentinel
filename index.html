@@ -2500,7 +2500,8 @@
 <div class="modal-overlay" id="modal-confirm" style="z-index:650;">
   <div class="modal" style="max-width:380px;">
     <h2 id="confirm-title">Confirm</h2>
-    <div id="confirm-msg" style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:18px;"></div>
+    <div id="confirm-msg" style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:14px;"></div>
+    <div id="confirm-extra" style="margin-bottom:14px;"></div>
     <div class="modal-btns">
       <button class="btn-ghost" onclick="closeModal('modal-confirm')">Cancel</button>
       <button class="btn-primary" id="confirm-ok-btn">OK</button>
@@ -12377,22 +12378,36 @@ function showToast(msg, type, ms){
 let _zConfirmResolve = null;
 function zConfirm(message, opts){
   opts = opts || {};
+  // opts.noAskKey: clave de localStorage — si está guardada, salta el diálogo
+  // y resuelve true directo. Si se muestra el diálogo, incluye un checkbox
+  // "No volver a preguntar" que al confirmar guarda la preferencia.
+  if (opts.noAskKey && lsGet(opts.noAskKey) === '1') return Promise.resolve(true);
   document.getElementById('confirm-title').textContent = opts.title || 'Confirm';
   document.getElementById('confirm-msg').textContent = message;
   const btn = document.getElementById('confirm-ok-btn');
   btn.textContent = opts.confirmText || 'OK';
   btn.className = opts.danger ? 'btn-danger' : 'btn-primary';
+  const extraEl = document.getElementById('confirm-extra');
+  if (extraEl) {
+    if (opts.noAskKey) {
+      const uid = 'zc_noask_' + opts.noAskKey;
+      extraEl.innerHTML = `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text-secondary);"><input type="checkbox" id="${uid}" style="cursor:pointer;"> No volver a preguntar</label>`;
+    } else {
+      extraEl.innerHTML = '';
+    }
+  }
   return new Promise(resolve => {
     _zConfirmResolve = resolve;
-    // onclick (no addEventListener): mismo criterio que promptSaveAsName —
-    // el modal se reusa, asignar pisa el handler de la apertura anterior.
     btn.onclick = () => {
+      if (opts.noAskKey && extraEl) {
+        const cb = extraEl.querySelector('input[type=checkbox]');
+        if (cb && cb.checked) lsSet(opts.noAskKey, '1');
+      }
       const r = _zConfirmResolve; _zConfirmResolve = null;
       closeModal('modal-confirm');
       if (r) r(true);
     };
     openModal('modal-confirm');
-    // Foco en OK: Enter confirma, Tab va a Cancel.
     setTimeout(() => btn.focus(), 50);
   });
 }
@@ -16535,7 +16550,7 @@ async function closeAllTrades(filter){
   const label = filter === 'all' ? 'todas las operaciones abiertas'
     : filter === 'profit' ? `las ${candidates.length} ganadoras`
     : `las ${candidates.length} perdedoras`;
-  if (!(await zConfirm(`¿Cerrar ${label} (${candidates.length})?`))) return;
+  if (!(await zConfirm(`¿Cerrar ${label} (${candidates.length})?`, { noAskKey: 'td_close_all_no_confirm' }))) return;
   for (const t of candidates) await closeTradeById(t.id);
 }
 
