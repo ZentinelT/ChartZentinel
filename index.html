@@ -1524,7 +1524,7 @@
     padding: 2px 5px; cursor: pointer; opacity: 0.85; transition: opacity .15s;
     z-index: 16; display: none; white-space: nowrap;
   }
-  .alert-line-del:hover { opacity: 1; }
+  .alert-line-del:hover { opacity: 1; color: #c00; }
 
   #alert-ctx-menu {
     position: fixed; z-index: 950; display: none;
@@ -14038,6 +14038,33 @@ async function buildChartSnapshotCanvas(){
       ctx.drawImage(img, (r.left - contRect.left) * ratio, (r.top - contRect.top) * ratio, r.width * ratio, r.height * ratio);
       URL.revokeObjectURL(url);
     } catch(e){ /* una capa que no rasterice no voltea el snapshot entero */ }
+  }
+  // Los badges de órdenes (.order-pos-badge) son <div> HTML, no SVG — el loop
+  // de arriba los omite. Se capturan igual vía foreignObject: se inlinan todos
+  // los estilos computados para que el SVG serializado no dependa de las CSS
+  // vars del documento, que no viajan con el Blob.
+  for (const el of cont.querySelectorAll('.order-pos-badge')) {
+    try {
+      if (getComputedStyle(el).display === 'none') continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const clone = el.cloneNode(true);
+      (function inlineCS(src, dst) {
+        const cs = getComputedStyle(src);
+        let st = '';
+        for (let i = 0; i < cs.length; i++) st += `${cs[i]}:${cs.getPropertyValue(cs[i])};`;
+        dst.setAttribute('style', st);
+        for (let i = 0; i < src.children.length; i++) inlineCS(src.children[i], dst.children[i]);
+      })(el, clone);
+      clone.style.position = 'static';
+      clone.style.transform = 'none';
+      clone.style.left = '0'; clone.style.top = '0';
+      const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="${r.width}" height="${r.height}"><div xmlns="http://www.w3.org/1999/xhtml">${clone.outerHTML}</div></foreignObject></svg>`;
+      const url = URL.createObjectURL(new Blob([svgStr], {type:'image/svg+xml'}));
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+      ctx.drawImage(img, (r.left - contRect.left) * ratio, (r.top - contRect.top) * ratio, r.width * ratio, r.height * ratio);
+      URL.revokeObjectURL(url);
+    } catch(e){ /* badge que no rasterice no voltea el snapshot */ }
   }
   const tfLabel = (ALL_TIMEFRAMES.find(t => t.tf === STATE.timeframe) || {}).label || STATE.timeframe;
   ctx.font = `600 ${13 * ratio}px ${getComputedStyle(document.body).fontFamily}`;
