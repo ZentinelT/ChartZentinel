@@ -5276,9 +5276,11 @@ function selectDrawing(id) {
 }
 
 function deselectDrawing() {
+  const prev = drawings.find(x => x.id === selectedDrawingId);
   selectedDrawingId = null;
   hideDrawToolbar();
   clearSvgHighlights();
+  if (prev && prev.anchorDotEl) prev.anchorDotEl.style.display = 'none';
 }
 
 function showDrawToolbar() {
@@ -6535,7 +6537,7 @@ function syncExtendedLineSvg(d) {
       d.anchorDotEl = c;
       d.svgEls.push(c);
     }
-    if (xp === null) {
+    if (xp === null || d.id !== selectedDrawingId) {
       d.anchorDotEl.style.display = 'none';
     } else {
       d.anchorDotEl.setAttribute('cx', xp);
