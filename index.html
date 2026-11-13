@@ -5253,7 +5253,7 @@ function restyleDrawingAppearance(d) {
     if (d.vLineEl) {
       d.vLineEl.setAttribute('stroke', C);
       d.vLineEl.setAttribute('stroke-width', lw);
-      d.vLineEl.setAttribute('stroke-dasharray', ls===1?'6,4':ls===2?'2,3':'none');
+      d.vLineEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     }
     if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.style.background = C;
   } else if (d.type === 'rect') {
@@ -5946,7 +5946,7 @@ function syncExtendedRectBorder(d, x1, yHi, yLo) {
     });
   }
   const ls = lwStyle(d.style);
-  const dashArr = ls===1 ? '6,4' : ls===2 ? '2,3' : null;
+  const dashArr = ls===1 ? '2,3' : ls===2 ? '6,4' : null;
   d.extSvgEls.forEach((el, i) => {
     el.setAttribute('x1', x1); el.setAttribute('y1', i===0 ? yHi : yLo);
     el.setAttribute('x2', w);  el.setAttribute('y2', i===0 ? yHi : yLo);
@@ -6218,8 +6218,8 @@ function syncExtendedLineSvg(d) {
   d.extSvgEl.setAttribute('x2', x2); d.extSvgEl.setAttribute('y2', y2);
   d.extSvgEl.setAttribute('stroke', d.color);
   d.extSvgEl.setAttribute('stroke-width', d.width);
-  if (ls === 1) d.extSvgEl.setAttribute('stroke-dasharray', '6,4');
-  else if (ls === 2) d.extSvgEl.setAttribute('stroke-dasharray', '2,3');
+  if (ls === 1) d.extSvgEl.setAttribute('stroke-dasharray', '2,3');
+  else if (ls === 2) d.extSvgEl.setAttribute('stroke-dasharray', '6,4');
   else d.extSvgEl.removeAttribute('stroke-dasharray');
   d.extSvgEl.style.display = '';
 }
@@ -6425,7 +6425,7 @@ function buildDrawingOnChart(d) {
       window._drawingLayerSvg.appendChild(line);
       d.vLineEl = line;
     }
-    const dash = ls===1?'6,4':ls===2?'2,3':'none';
+    const dash = ls===1?'2,3':ls===2?'6,4':'none';
     d.vLineEl.setAttribute('stroke', C);
     d.vLineEl.setAttribute('stroke-width', lw);
     d.vLineEl.setAttribute('stroke-dasharray', dash);
