@@ -6811,6 +6811,7 @@ function highlightSelectedSvg(id) {
   if (_highlightSvgRaf !== null) cancelAnimationFrame(_highlightSvgRaf);
   _highlightSvgRaf = requestAnimationFrame(() => {
     _highlightSvgRaf = null;
+    if (window._dragSession) return;
     const d = drawings.find(x => x.id === id);
     if (!d || !window._drawingLayerSvg) return;
     const svg = window._drawingLayerSvg;
