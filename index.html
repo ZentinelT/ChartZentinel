@@ -1672,7 +1672,7 @@
     pointer-events: none;
     white-space: nowrap;
     z-index: 10;
-    line-height: 1.6;
+    line-height: 1.2;
   }
 
   .drawing-handle {
@@ -7140,6 +7140,7 @@ function initChart() {
   createMainSeries(); // crea candleSeries según STATE.chartType (ver TIPOS DE GRÁFICO)
   applyChartSettings();
   wireAlertContextMenu(); // click derecho → alerta de precio
+  wireAlertDrag();        // drag vertical → mover alerta
   updateAlertBadge();
 
   // Serie invisible, aparte de candleSeries: solo lleva los puntos fantasma
@@ -14053,6 +14054,55 @@ function wireAlertContextMenu(){
     menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
     menu.style.top = Math.min(e.clientY, window.innerHeight - 50) + 'px';
     menu.classList.add('open');
+  });
+}
+
+let _alertDrag = null; // { id } mientras se arrastra una línea de alerta
+function wireAlertDrag(){
+  const cont = document.getElementById('chart-container');
+  if (!cont || cont._alertDragWired) return;
+  cont._alertDragWired = true;
+  function nearAlertY(y){
+    const alerts = getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol);
+    for (const a of alerts){
+      if (!candleSeries) continue;
+      const lineY = candleSeries.priceToCoordinate(a.price);
+      if (lineY != null && Math.abs(y - lineY) <= 6) return a;
+    }
+    return null;
+  }
+  document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || !e.target.closest?.('#chart-container')) return;
+    const rect = cont.getBoundingClientRect();
+    const hit = nearAlertY(e.clientY - rect.top);
+    if (!hit) return;
+    _alertDrag = { id: hit.id };
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+  document.addEventListener('mousemove', (e) => {
+    const rect = cont.getBoundingClientRect();
+    if (!_alertDrag){
+      if (!e.target.closest?.('#chart-container')) return;
+      cont.style.cursor = nearAlertY(e.clientY - rect.top) ? 'ns-resize' : '';
+      return;
+    }
+    const y = e.clientY - rect.top;
+    const newPrice = candleSeries && candleSeries.coordinateToPrice(y);
+    if (newPrice == null || !isFinite(newPrice)) return;
+    let minMove = 0.01;
+    try { minMove = candleSeries.options().priceFormat.minMove || 0.01; } catch(err){}
+    const rounded = Math.round(newPrice / minMove) * minMove;
+    const list = getPriceAlerts();
+    const idx = list.findIndex(a => a.id === _alertDrag.id);
+    if (idx < 0){ _alertDrag = null; return; }
+    const n = window._lastCandles ? window._lastCandles.length : 0;
+    list[idx].price = rounded;
+    list[idx].created_bar = n > 0 ? window._lastCandles[n-1].time : 0;
+    savePriceAlerts(list);
+    renderAlertLines(); renderAlertsPanelList();
+  }, true);
+  document.addEventListener('mouseup', () => {
+    if (_alertDrag){ _alertDrag = null; cont.style.cursor = ''; }
   });
 }
 
