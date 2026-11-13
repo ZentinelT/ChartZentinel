@@ -1665,7 +1665,7 @@
   .vline-time-label {
     position: absolute;
     transform: translateX(-50%);
-    font-size: 8px;
+    font-size: 7px;
     font-family: var(--font-mono);
     color: #fff;
     padding: 0 3px;
@@ -1673,7 +1673,7 @@
     pointer-events: none;
     white-space: nowrap;
     z-index: 10;
-    line-height: 1.4;
+    line-height: 1.5;
   }
 
   .drawing-handle {
@@ -5827,7 +5827,7 @@ function syncVLine(d) {
     const el = d.vTimeLabelEl;
     el.style.display = '';
     el.style.background = d.color || '#c9a84c';
-    el.textContent = fmtVLineTime(safeLineTime(d.p1.time));
+    el.textContent = fmtCrosshairTime(safeLineTime(d.p1.time));
     el.style.left = x + 'px';
     el.style.top = h + 'px';
   } else if (d.vTimeLabelEl instanceof Element) {
