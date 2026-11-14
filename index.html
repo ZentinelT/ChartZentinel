@@ -3005,7 +3005,7 @@ function renderLayoutGrid(n){
   // el shell, operando sobre el panel activo vía paneEval (ver
   // isGridShell()/_gridActiveFrame más abajo) — la grilla entera queda
   // tal cual está, nunca se toca.
-  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades','modal-confirm']
+  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades','modal-confirm','modal-calendar']
     .map(id => { const el = document.getElementById(id); return el ? el.outerHTML : ''; }).join('');
 
   document.body.innerHTML = '';
