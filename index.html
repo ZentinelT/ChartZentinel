@@ -9339,6 +9339,9 @@ function goToLayout(v){
   popup.innerHTML = [1,2,3,4].map(v =>
     `<div class="layout-opt-row${v===LAYOUT_N?' active':''}" data-layout="${v}">${LAYOUT_ICONS[v]}<span>${LAYOUT_LABELS[v]}</span></div>`
   ).join('');
+  // Sync trigger icon to current layout
+  const triggerSvg = trigger.querySelector('svg:not(.tb-caret)');
+  if (triggerSvg) triggerSvg.outerHTML = LAYOUT_ICONS[LAYOUT_N];
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
     popup.classList.toggle('open');
