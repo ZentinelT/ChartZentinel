@@ -23,10 +23,10 @@
        Variable propia, más clara que --border-light a propósito, SOLO
        para esas líneas divisorias. */
     --sep-color:    #3f3f52;
-    --gold:         #c9a84c;
-    --gold-bright:  #f0c060;
-    --gold-dim:     #7a6030;
-    --gold-glow:    rgba(201,168,76,0.15);
+    --gold:         #d4d4d4;
+    --gold-bright:  #ffffff;
+    --gold-dim:     #464646;
+    --gold-glow:    rgba(255,255,255,0.07);
     /* Fijo a propósito (NO se redefine en html[data-theme="light"], a
        diferencia de --gold): el anillo del panel activo en la grilla
        necesita el MISMO color sin importar el tema — si sigue a --gold,
@@ -74,10 +74,10 @@
     --border:       #dde1e8;
     --border-light: #c9ced8;
     --sep-color:    #c9ced8;
-    --gold:         #a07508;
-    --gold-bright:  #c4920f;
-    --gold-dim:     #cbab6c;
-    --gold-glow:    rgba(160,117,8,0.12);
+    --gold:         #1f1f1f;
+    --gold-bright:  #000000;
+    --gold-dim:     #b8b8b8;
+    --gold-glow:    rgba(0,0,0,0.07);
     --text-primary: #16171d;
     --text-secondary:#54586b;
     --text-dim:     #8d90a0;
@@ -131,7 +131,7 @@
     display: flex;
     align-items: center;
     gap: 0;
-    text-shadow: 0 0 24px rgba(201,168,76,0.35), 0 1px 0 rgba(201,168,76,0.15);
+    text-shadow: 0 0 24px rgba(255,255,255,0.18), 0 1px 0 rgba(255,255,255,0.08);
   }
   .logo-sep { width: 1px; height: 24px; background: var(--sep-color); margin: 0 4px; }
 
@@ -1069,7 +1069,7 @@
     font-weight: 700;
     letter-spacing: 5px;
     color: var(--gold);
-    text-shadow: 0 0 24px rgba(201,168,76,0.35), 0 1px 0 rgba(201,168,76,0.15);
+    text-shadow: 0 0 24px rgba(255,255,255,0.18), 0 1px 0 rgba(255,255,255,0.08);
   }
   .loader-bar { width: 120px; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .loader-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); border-radius: 2px; animation: loaderAnim 1.5s ease-in-out infinite; }
@@ -1131,16 +1131,16 @@
   #replay-bar {
     display: flex; align-items: center; gap: 6px; flex-shrink: 0;
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    background: linear-gradient(180deg, rgba(201,168,76,.14), rgba(201,168,76,.06));
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
     border: 1px solid var(--gold-dim); border-radius: 14px;
-    padding: 3px 10px; box-shadow: 0 0 10px rgba(201,168,76,.12);
+    padding: 3px 10px; box-shadow: 0 0 10px rgba(255,255,255,.05);
   }
   #replay-bar button {
     background: none; border: 1px solid var(--gold-dim); border-radius: 50%;
     color: var(--gold); cursor: pointer;
     width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
   }
-  #replay-bar button:hover { color: var(--gold); border-color: var(--gold); background: rgba(201,168,76,.15); }
+  #replay-bar button:hover { color: var(--gold); border-color: var(--gold); background: var(--gold-glow); }
   #replay-bar button svg { width: 11px; height: 11px; }
   #replay-bar select {
     background: var(--bg-secondary); border: 1px solid var(--gold-dim); border-radius: 3px;
@@ -1411,7 +1411,7 @@
     font-family: var(--font-ui); font-size: 12px; font-weight: 600; padding: 7px 18px;
     border-radius: 5px; cursor: pointer; letter-spacing: .5px; transition: background .15s;
   }
-  .btn-primary:hover { background: rgba(201,168,76,.3); }
+  .btn-primary:hover { background: var(--gold-dim); }
 
   .btn-ghost {
     background: none; border: 1px solid var(--border-light); color: var(--text-secondary);
@@ -1519,7 +1519,7 @@
     cursor: ns-resize; z-index: 15; display: none;
   }
   .alert-line-del {
-    background: #c9a84c; color: #000; border: none;
+    background: var(--text-secondary); color: var(--bg-primary); border: none;
     border-radius: 2px; font-size: 10px; font-weight: 600; line-height: 1;
     padding: 2px 5px; cursor: pointer; opacity: 0.85; transition: opacity .15s;
     z-index: 16; display: none; white-space: nowrap;
@@ -1709,7 +1709,43 @@
     cursor: move;
   }
   [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
-  .selected-drawing { filter: drop-shadow(0 0 4px rgba(201,168,76,.7)); }
+  .selected-drawing { filter: drop-shadow(0 0 4px rgba(255,255,255,.5)); }
+
+  /* ─── TOOL FAVORITES BAR ─────────────────────────────────── */
+  .tool-btn .tool-fav-star {
+    display: none; position: absolute; top: 2px; right: 2px;
+    font-size: 9px; line-height: 1; color: var(--text-dim);
+    cursor: pointer; z-index: 2; padding: 1px;
+  }
+  .tool-btn:hover .tool-fav-star { display: block; }
+  .tool-btn .tool-fav-star.on { display: block; color: var(--gold); }
+  #tool-fav-bar {
+    position: fixed; z-index: 500;
+    display: none;
+    align-items: center; gap: 2px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 4px 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    user-select: none;
+  }
+  #tool-fav-bar.visible { display: flex; }
+  #tool-fav-bar-handle {
+    width: 14px; height: 28px; cursor: grab; display: flex;
+    align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: 11px; margin-right: 2px;
+    flex-shrink: 0;
+  }
+  #tool-fav-bar-handle:active { cursor: grabbing; }
+  #tool-fav-bar .fav-tool-btn {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid transparent; border-radius: 5px;
+    color: var(--text-secondary); cursor: pointer; flex-shrink: 0;
+  }
+  #tool-fav-bar .fav-tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border); }
+  #tool-fav-bar .fav-tool-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
+  #tool-fav-bar .fav-tool-btn svg { width: 14px; height: 14px; }
 
   /* ─── Divisores arrastrables entre paneles (modo 2×/4⊞) ──── */
   /* Mismo color que el anillo del panel activo (var(--pane-active), ver
@@ -1757,6 +1793,7 @@
     <option value="mt5">Mt5</option>
     <option value="binance">Binance</option>
     <option value="bybit">Bybit</option>
+    <option value="hyperliquid">Hyperliquid</option>
   </select>
   <div class="tf-sep"></div>
 
@@ -1816,6 +1853,9 @@
   </button>
   <button class="topbar-btn" id="btn-redo-top" title="Redo (Ctrl+Shift+Z)" onclick="redoDrawing()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
+  </button>
+  <button class="topbar-btn" id="btn-fullscreen" title="Pantalla completa" onclick="toggleFullscreen()">
+    <svg id="btn-fullscreen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
   </button>
   <div id="goto-date-wrap" class="goto-date-wrap">
     <button class="topbar-btn" id="goto-date-trigger" title="Go to date/time">
@@ -1891,40 +1931,40 @@
 
   <!-- ── TOOLBAR ───────────────────────────────────────── -->
   <div id="toolbar">
-    <button class="tool-btn active" data-tip="Cursor" onclick="setTool(this,'cursor')">
+    <button class="tool-btn active" data-tip="Cursor" data-tool="cursor" onclick="setTool(this,'cursor')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-7 1-3 7z"/></svg>
     </button>
-    <button class="tool-btn" data-tip="Crosshair" onclick="setTool(this,'cross')">
+    <button class="tool-btn" data-tip="Crosshair" data-tool="cross" onclick="setTool(this,'cross')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="3"/>
       </svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn" data-tip="Trend Line" onclick="setTool(this,'trendline')">
+    <button class="tool-btn" data-tip="Trend Line" data-tool="trendline" onclick="setTool(this,'trendline')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="4" y1="20" x2="20" y2="4"/>
         <circle cx="4" cy="20" r="2" fill="currentColor"/><circle cx="20" cy="4" r="2" fill="currentColor"/>
       </svg>
     </button>
-    <button class="tool-btn" data-tip="Horizontal Line" onclick="setTool(this,'hline')">
+    <button class="tool-btn" data-tip="Horizontal Line" data-tool="hline" onclick="setTool(this,'hline')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="2" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="2" fill="currentColor"/>
       </svg>
     </button>
-    <button class="tool-btn" data-tip="Vertical Line" onclick="setTool(this,'vline')">
+    <button class="tool-btn" data-tip="Vertical Line" data-tool="vline" onclick="setTool(this,'vline')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="2" x2="12" y2="22"/><circle cx="12" cy="12" r="2" fill="currentColor"/>
       </svg>
     </button>
-    <button class="tool-btn" data-tip="Rectangle" onclick="setTool(this,'rect')">
+    <button class="tool-btn" data-tip="Rectangle" data-tool="rect" onclick="setTool(this,'rect')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg>
     </button>
-    <button class="tool-btn" data-tip="Volume Profile" onclick="setTool(this,'vp')">
+    <button class="tool-btn" data-tip="Volume Profile" data-tool="vp" onclick="setTool(this,'vp')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="4" width="11" height="3"/><rect x="3" y="9" width="17" height="3"/><rect x="3" y="14" width="7" height="3"/><rect x="3" y="19" width="14" height="3"/>
       </svg>
     </button>
-    <button class="tool-btn" data-tip="Fibonacci" onclick="setTool(this,'fib')">
+    <button class="tool-btn" data-tip="Fibonacci" data-tool="fib" onclick="setTool(this,'fib')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
         <line x1="2" y1="3.5" x2="22" y2="3.5"/>
         <line x1="2" y1="8.3" x2="15" y2="8.3"/>
@@ -1933,7 +1973,7 @@
         <line x1="2" y1="22.5" x2="22" y2="22.5"/>
       </svg>
     </button>
-    <button class="tool-btn" data-tip="Long Position" onclick="setTool(this,'long')">
+    <button class="tool-btn" data-tip="Long Position" data-tool="long" onclick="setTool(this,'long')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/>
         <rect x="3" y="14" width="18" height="7" rx="1" fill="none"/>
@@ -1941,7 +1981,7 @@
         <polyline points="9 16 12 19 15 16"/>
       </svg>
     </button>
-    <button class="tool-btn" data-tip="Short Position" onclick="setTool(this,'short')">
+    <button class="tool-btn" data-tip="Short Position" data-tool="short" onclick="setTool(this,'short')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/>
         <rect x="3" y="3" width="18" height="7" rx="1" fill="none"/>
@@ -1950,7 +1990,7 @@
       </svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn" data-tip="Text Label" onclick="setTool(this,'text')">
+    <button class="tool-btn" data-tip="Text Label" data-tool="text" onclick="setTool(this,'text')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="4 7 4 4 20 4 20 7"/>
         <line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
@@ -13680,14 +13720,32 @@ function initStatusbarClock(){
     popup.classList.remove('open');
     trigger.classList.remove('active');
   });
-  document.addEventListener('click', (e) => {
-    if (!document.getElementById('sb-tz-wrap').contains(e.target)) {
+  document.addEventListener('mousedown', (e) => {
+    if (popup.classList.contains('open') && !document.getElementById('sb-tz-wrap').contains(e.target)) {
       popup.classList.remove('open');
       trigger.classList.remove('active');
     }
-  });
+  }, true);
 }
 initStatusbarClock();
+
+// ══════════════════════════════════════════════════════════
+//  FULLSCREEN
+// ══════════════════════════════════════════════════════════
+const _fsIconExpand = `<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>`;
+const _fsIconContract = `<path d="M4 14h6v6M14 4h6v6M20 4l-6 6M4 20l6-6"/>`;
+function toggleFullscreen(){
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const icon = document.getElementById('btn-fullscreen-icon');
+  if (!icon) return;
+  icon.innerHTML = document.fullscreenElement ? _fsIconContract : _fsIconExpand;
+});
 
 // ══════════════════════════════════════════════════════════
 //  DTB TEMPLATE POPUP — templates nombrados por tipo de dibujo (ver
@@ -13839,7 +13897,8 @@ _dataSourceSelect.value = STATE.dataSource;
 // debe intentar cargar "ETHUSDT" en MT5 ni "NAS100.fs" en Binance.
 const _lastSymbolBySource = { mt5: STATE.dataSource==='mt5' ? STATE.symbol : 'NAS100.fs',
                                binance: STATE.dataSource==='binance' ? STATE.symbol : 'BTCUSDT',
-                               bybit: STATE.dataSource==='bybit' ? STATE.symbol : 'BTCUSDT' };
+                               bybit: STATE.dataSource==='bybit' ? STATE.symbol : 'BTCUSDT',
+                               hyperliquid: STATE.dataSource==='hyperliquid' ? STATE.symbol : 'BTC' };
 _dataSourceSelect.addEventListener('change', () => {
   _lastSymbolBySource[STATE.dataSource] = STATE.symbol;
   STATE.dataSource = _dataSourceSelect.value;
@@ -13947,9 +14006,52 @@ const BYBIT_TF_MAP = {
   '1h':'60', '2h':'120', '4h':'240', '6h':'360', '12h':'720',
   '1day':'D', '1week':'W', '1month':'M'
 };
+// ══════════════════════════════════════════════════════════
+//  Conector de datos — Hyperliquid (DEX perps, sin cuenta)
+// ══════════════════════════════════════════════════════════
+const HYPERLIQUID_URL = 'https://api.hyperliquid.xyz';
+const HL_TF_MAP = {
+  '1min':'1m', '3min':'3m', '5min':'5m', '15min':'15m', '30min':'30m',
+  '1h':'1h', '2h':'2h', '4h':'4h', '8h':'8h', '12h':'12h',
+  '1day':'1d', '1week':'1w'
+};
+const HL_TF_MS = {
+  '1min':60000, '3min':180000, '5min':300000, '15min':900000, '30min':1800000,
+  '1h':3600000, '2h':7200000, '4h':14400000, '8h':28800000, '12h':43200000,
+  '1day':86400000, '1week':604800000
+};
+// Hyperliquid usa solo el nombre del coin sin sufijo (BTC, ETH, SOL…).
+// Normaliza símbolos típicos de CEX: BTCUSDT → BTC, ETH-PERP → ETH.
+function hlCoin(symbol){
+  return symbol.replace(/[-_]?(USDT|BUSD|USDC|USD|PERP)$/i,'').toUpperCase();
+}
+async function fetchOhlcvHyperliquid(symbol, interval, bars, before){
+  const hlInt = HL_TF_MAP[interval];
+  if (!hlInt) throw new Error('Timeframe no soportado en Hyperliquid: '+interval);
+  const intervalMs = HL_TF_MS[interval] || 60000;
+  const coin = hlCoin(symbol);
+  const endTime = before
+    ? Math.floor((before - NY_OFFSET_SECONDS)*1000)
+    : Date.now();
+  const startTime = endTime - Math.ceil(bars * intervalMs * 1.1);
+  const res = await fetch(`${HYPERLIQUID_URL}/info`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type:'candleSnapshot', req:{ coin, interval:hlInt, startTime, endTime } })
+  });
+  const rows = await res.json();
+  if (!Array.isArray(rows)) throw new Error('Error de Hyperliquid');
+  const outBars = rows.slice(-bars).map(r => ({
+    time: utcMsToNyFakeEpochSeconds(r.t),
+    open:+r.o, high:+r.h, low:+r.l, close:+r.c, volume:+r.v
+  }));
+  return { serverTime: utcMsToNyFakeEpochSeconds(Date.now()), bars: outBars };
+}
+
 function isSupportedTfForSource(tf, source){
   if (source==='binance') return !!BINANCE_TF_MAP[tf];
   if (source==='bybit') return !!BYBIT_TF_MAP[tf];
+  if (source==='hyperliquid') return !!HL_TF_MAP[tf];
   return true;
 }
 
@@ -13959,10 +14061,11 @@ function isSupportedTfForSource(tf, source){
 // necesitan el bridge para nada, y al revés, mostraba "MT5 BRIDGE ✓" sin
 // que MT5 tuviera nada que ver con lo que se estaba mirando. Esto refleja
 // la fuente REALMENTE activa, pegándole a SU propio endpoint de salud.
-const DATASOURCE_BADGE_LABEL = { mt5:'MT5 BRIDGE', binance:'BINANCE', bybit:'BYBIT' };
+const DATASOURCE_BADGE_LABEL = { mt5:'MT5 BRIDGE', binance:'BINANCE', bybit:'BYBIT', hyperliquid:'HYPERLIQUID' };
 function checkDataSourceHealth(source){
   if (source === 'binance') return fetch(`${BINANCE_URL}/api/v3/ping`).then(r=>r.ok).catch(()=>false);
   if (source === 'bybit') return fetch(`${BYBIT_URL}/v5/market/time`).then(r=>r.ok).catch(()=>false);
+  if (source === 'hyperliquid') return fetch(`${HYPERLIQUID_URL}/info`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"type":"meta"}'}).then(r=>r.ok).catch(()=>false);
   return fetch(`${BRIDGE_URL}/health`).then(r=>r.ok).catch(()=>false);
 }
 function updateApiBadge(badgeEl, source){
@@ -14001,6 +14104,7 @@ async function fetchOhlcvBybit(symbol, interval, bars, before){
 async function fetchOhlcvData(symbol, interval, bars, before){
   if (STATE.dataSource === 'binance') return fetchOhlcvBinance(symbol, interval, bars, before);
   if (STATE.dataSource === 'bybit') return fetchOhlcvBybit(symbol, interval, bars, before);
+  if (STATE.dataSource === 'hyperliquid') return fetchOhlcvHyperliquid(symbol, interval, bars, before);
   let url = `${BRIDGE_URL}/ohlcv?symbol=${encodeURIComponent(symbol)}&interval=${interval}&bars=${bars}`;
   if (before) url += `&before=${before}`;
   const res = await fetch(url);
@@ -17775,6 +17879,107 @@ function downloadTradesCsv(){
       if (Array.isArray(saved) && saved.length) applyExternalDrawings(saved);
     } catch(e){}
   });
+})();
+
+// ══════════════════════════════════════════════════════════
+//  TOOL FAVORITES BAR
+// ══════════════════════════════════════════════════════════
+(function(){
+  const FAV_KEY = 'zentinel_tool_favs';
+  const FAV_POS_KEY = 'zentinel_tool_fav_pos';
+
+  function getFavs(){ try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); }catch(e){ return []; } }
+  function setFavs(arr){ try{ localStorage.setItem(FAV_KEY, JSON.stringify(arr)); }catch(e){} }
+  function getFavPos(){ try{ return JSON.parse(localStorage.getItem(FAV_POS_KEY)||'null'); }catch(e){ return null; } }
+  function setFavPos(p){ try{ localStorage.setItem(FAV_POS_KEY, JSON.stringify(p)); }catch(e){} }
+
+  // Inject star buttons into existing tool buttons
+  document.querySelectorAll('#toolbar .tool-btn[data-tool]').forEach(btn => {
+    const tool = btn.dataset.tool;
+    const star = document.createElement('span');
+    star.className = 'tool-fav-star' + (getFavs().includes(tool) ? ' on' : '');
+    star.textContent = '★';
+    star.title = 'Toggle favorite';
+    star.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
+    star.addEventListener('click', e => {
+      e.stopPropagation(); e.preventDefault();
+      const favs = getFavs();
+      const idx = favs.indexOf(tool);
+      if (idx === -1) favs.push(tool); else favs.splice(idx, 1);
+      setFavs(favs);
+      star.classList.toggle('on', favs.includes(tool));
+      renderFavBar();
+    });
+    btn.style.position = 'relative';
+    btn.appendChild(star);
+  });
+
+  // Build favorites bar element
+  const bar = document.createElement('div');
+  bar.id = 'tool-fav-bar';
+  bar.innerHTML = '<div id="tool-fav-bar-handle" title="Drag to move">⣿</div>';
+  document.body.appendChild(bar);
+
+  function renderFavBar(){
+    const favs = getFavs();
+    // Remove old fav buttons (keep handle)
+    bar.querySelectorAll('.fav-tool-btn').forEach(b => b.remove());
+    if (!favs.length){ bar.classList.remove('visible'); return; }
+    bar.classList.add('visible');
+    favs.forEach(tool => {
+      const src = document.querySelector(`#toolbar .tool-btn[data-tool="${tool}"]`);
+      if (!src) return;
+      const btn = document.createElement('button');
+      btn.className = 'fav-tool-btn' + (STATE.activeTool === tool ? ' active' : '');
+      btn.title = src.dataset.tip || tool;
+      btn.innerHTML = src.querySelector('svg').outerHTML;
+      btn.addEventListener('click', () => {
+        setTool(null, tool);
+        bar.querySelectorAll('.fav-tool-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      bar.appendChild(btn);
+    });
+    // Restore position
+    const pos = getFavPos();
+    if (pos) { bar.style.left = pos.x + 'px'; bar.style.top = pos.y + 'px'; }
+    else { bar.style.left = '80px'; bar.style.top = '100px'; }
+  }
+
+  // Drag behavior
+  const handle = bar.querySelector('#tool-fav-bar-handle');
+  let dragging = false, ox = 0, oy = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    ox = e.clientX - bar.getBoundingClientRect().left;
+    oy = e.clientY - bar.getBoundingClientRect().top;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - bar.offsetWidth));
+    const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - bar.offsetHeight));
+    bar.style.left = x + 'px'; bar.style.top = y + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
+  });
+
+  // Sync active state when setTool is called
+  const _origSetTool = window.setTool;
+  window.setTool = function(btn, name){
+    _origSetTool && _origSetTool(btn, name);
+    bar.querySelectorAll('.fav-tool-btn').forEach(b => b.classList.remove('active'));
+    const fb = bar.querySelector(`.fav-tool-btn[title]`);
+    bar.querySelectorAll('.fav-tool-btn').forEach(b => {
+      const src = document.querySelector(`#toolbar .tool-btn[data-tool="${name}"]`);
+      if (src && b.title === (src.dataset.tip || name)) b.classList.add('active');
+    });
+  };
+
+  renderFavBar();
 })();
 </script>
 </body>
