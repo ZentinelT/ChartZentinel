@@ -3585,7 +3585,7 @@ function renderLayoutGrid(n){
         setFavs(favs);
         star.classList.toggle('on', favs.includes(tool));
         // Trigger re-render of floating bar in each embed panel
-        document.querySelectorAll('iframe.grid-pane').forEach(f => {
+        document.querySelectorAll('iframe').forEach(f => {
           try { f.contentWindow._gridFavBarRender && f.contentWindow._gridFavBarRender(); } catch(x){}
         });
       });
