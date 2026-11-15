@@ -16058,26 +16058,20 @@ function attachColorPalette(input){
     + '</div>';
   document.body.appendChild(popup);
 
-  // El click en el input de color ABRE NUESTRA paleta en vez del picker
-  // nativo del navegador — así el swatch de siempre (el que ya se usaba
-  // en toda la app) es directamente el que dispara la grilla tipo TV, sin
-  // agregar un botón aparte que nadie nota. El picker nativo sigue a un
-  // click de distancia: es la opción "personalizado" (el círculo arcoíris)
-  // adentro de la propia grilla — ahí sí se deja pasar el click real.
-  input.addEventListener('click', (e) => {
-    if (input.dataset.palBypass) { delete input.dataset.palBypass; return; }
+  // En Electron/macOS el color panel nativo del SO se dispara en mousedown,
+  // no en click — por eso e.preventDefault() en 'click' no alcanzaba para
+  // bloquearlo. Handler movido a mousedown para interceptarlo a tiempo.
+  // El picker nativo sigue disponible vía la opción "personalizado" (círculo
+  // arcoíris) dentro de la grilla; esa ruta usa palBypass para saltear este
+  // guard y dejar pasar el click real.
+  input.addEventListener('mousedown', (e) => {
+    if (input.dataset.palBypass) return;
     e.preventDefault();
     e.stopPropagation();
     const wasOpen = popup.classList.contains('open');
     closeColorPalette();
     if (wasOpen) return;
     const r = input.getBoundingClientRect();
-    // El input puede estar pegado al borde inferior de la pantalla (panel
-    // de config de dibujos, que queda abajo del gráfico y no se puede
-    // reacomodar) — ahí "abrir siempre hacia abajo" sacaba la grilla fuera
-    // de la ventana. Medimos la popup ya visible (display:block le da
-    // tamaño real aunque opacity 0) y la volteamos hacia arriba del input
-    // si no entra abajo; lo mismo para que no se corte por los costados.
     popup.classList.add('open');
     popup.style.visibility = 'hidden';
     popup.style.top = '0px';
@@ -16085,11 +16079,6 @@ function attachColorPalette(input){
     const pw = popup.offsetWidth, ph = popup.offsetHeight;
     const spaceBelow = window.innerHeight - r.bottom;
     const top = spaceBelow >= ph + 6 ? (r.bottom + 6) : Math.max(4, r.top - ph - 6);
-    // Si el viewport (panel achicado a mano) es más angosto que la popup,
-    // el límite superior (innerWidth - pw - 4) queda por debajo del
-    // inferior (4) — Math.min(Math.max(4,...), ese límite) daba negativo
-    // y la sacaba de pantalla por la izquierda en vez de dejarla pegada
-    // al borde (mismo bug que tenía el clamp del draw-toolbar).
     const maxLeft = window.innerWidth - pw - 4;
     const left = maxLeft >= 4 ? Math.min(Math.max(4, r.left), maxLeft) : 4;
     popup.style.top = top + 'px';
@@ -16097,6 +16086,10 @@ function attachColorPalette(input){
     popup.style.visibility = '';
     input.classList.add('color-pal-input-active');
     _colorPalOpenPopup = { popup, trigger: input };
+  });
+  input.addEventListener('click', (e) => {
+    if (input.dataset.palBypass) { delete input.dataset.palBypass; return; }
+    e.preventDefault(); e.stopPropagation();
   });
   popup.addEventListener('click', (e) => {
     const sw = e.target.closest('[data-color]');
