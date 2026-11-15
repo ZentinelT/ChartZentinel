@@ -3565,6 +3565,35 @@ function renderLayoutGrid(n){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>`;
 
+  // Inject favorite-star badges into shell toolbar buttons
+  (function(){
+    const FAV_KEY = 'zentinel_tool_favs';
+    function getFavs(){ try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); }catch(e){ return []; } }
+    function setFavs(a){ try{ localStorage.setItem(FAV_KEY, JSON.stringify(a)); }catch(e){} }
+    shellToolbar.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+      const tool = btn.dataset.tool;
+      const star = document.createElement('span');
+      star.className = 'tool-fav-star' + (getFavs().includes(tool) ? ' on' : '');
+      star.textContent = '★';
+      star.title = 'Toggle favorite';
+      star.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
+      star.addEventListener('click', e => {
+        e.stopPropagation(); e.preventDefault();
+        const favs = getFavs();
+        const idx = favs.indexOf(tool);
+        if (idx === -1) favs.push(tool); else favs.splice(idx, 1);
+        setFavs(favs);
+        star.classList.toggle('on', favs.includes(tool));
+        // Trigger re-render of floating bar in each embed panel
+        document.querySelectorAll('iframe.grid-pane').forEach(f => {
+          try { f.contentWindow._gridFavBarRender && f.contentWindow._gridFavBarRender(); } catch(x){}
+        });
+      });
+      btn.style.position = 'relative';
+      btn.appendChild(star);
+    });
+  })();
+
   const shellSidebarToggle = document.createElement('button');
   shellSidebarToggle.id = 'btn-sidebar-toggle';
   shellSidebarToggle.title = 'Mostrar/ocultar watchlist';
@@ -4367,7 +4396,7 @@ function renderLayoutGrid(n){
   document.body.appendChild(shellStatusbar);
   initStatusbarClock();
   renderShellStatus();
-  _initGridFavBar(SHARED_ICON.toolBtns);
+  // Stars para favoritos se inyectan directo en el shellToolbar (ver abajo)
 
   // ─── PANEL DE OPERAR DEL SHELL ───────────────────────────────────
   // Copia del #orders-panel + #modal-prompt-fields de la página de 1
@@ -18041,7 +18070,7 @@ function _initGridFavBar(toolBtns){
 }
 
 (function(){
-  if (EMBED_MODE) return; // en iframes la barra vive en el shell, no acá
+  if (isGridShell()) return; // en el shell la barra vive en cada pane, no aquí
   const FAV_KEY = 'zentinel_tool_favs';
   const FAV_POS_KEY = 'zentinel_tool_fav_pos';
 
@@ -18136,6 +18165,7 @@ function _initGridFavBar(toolBtns){
     });
   };
 
+  window._gridFavBarRender = renderFavBar;
   renderFavBar();
 })();
 </script>
