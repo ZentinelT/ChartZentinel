@@ -25,8 +25,8 @@
     --sep-color:    #3f3f52;
     --gold:         #d4d4d4;
     --gold-bright:  #ffffff;
-    --gold-dim:     #464646;
-    --gold-glow:    rgba(255,255,255,0.07);
+    --gold-dim:     #585858;
+    --gold-glow:    rgba(255,255,255,0.17);
     /* Fijo a propósito (NO se redefine en html[data-theme="light"], a
        diferencia de --gold): el anillo del panel activo en la grilla
        necesita el MISMO color sin importar el tema — si sigue a --gold,
@@ -76,8 +76,8 @@
     --sep-color:    #c9ced8;
     --gold:         #1f1f1f;
     --gold-bright:  #000000;
-    --gold-dim:     #b8b8b8;
-    --gold-glow:    rgba(0,0,0,0.07);
+    --gold-dim:     #a0a0a0;
+    --gold-glow:    rgba(0,0,0,0.12);
     --text-primary: #16171d;
     --text-secondary:#54586b;
     --text-dim:     #8d90a0;
@@ -414,7 +414,7 @@
      borde quedaba viéndose "a cuadros" al lado de los demás íconos que
      no lo tienen. */
   .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .topbar-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
+  .topbar-btn.active { background-color: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
   .topbar-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
   /* Flechita de "esto abre un menú/panel" — mismo lenguaje visual que el
      caret de los botones de TF/Indicadores/etc. en TV. */
@@ -726,8 +726,8 @@
     position: relative;
   }
   .tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .tool-btn.active { background: var(--gold-glow); color: var(--gold); }
-  .tool-btn.weak-active { background: var(--gold-glow); color: var(--gold); opacity: .55; }
+  .tool-btn.active { background-color: var(--gold-glow); color: var(--gold); }
+  .tool-btn.weak-active { background-color: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--gold-dim); }
   .tool-btn svg { width: 15px; height: 15px; }
   .tool-sep { width: 20px; height: 1px; background: var(--sep-color); margin: 4px 0; }
 
