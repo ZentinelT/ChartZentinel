@@ -4816,11 +4816,11 @@ const STATE = {
   watchtower: Object.assign({
     enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
-    // Color de las letras de PDH/PDL/PDM/PWH/PWL/PWM/MNO — antes venían
-    // fijas (blanco los PD, lila los PW, celeste MNO) sin ningún toggle,
-    // así que en modo claro (fondo blanco) el blanco quedaba invisible.
-    labelColor:'#ffffff',
+    labelColor:'#ffffff', // legacy — ya no se usa (cada sección tiene su propio color)
     behindCandles:false,
+    pdColor:'#ffffff', pdHlStyle:'solid', pdMStyle:'dashed',
+    pwColor:'#c99cd0', pwHlStyle:'solid', pwMStyle:'dashed',
+    mnoColor:'#80deea', mnoStyle:'solid',
     // Daily Bias Table — mismos inputs que el Pine original (Table
     // location, Previous days for average, Neutral Threshold %), que
     // acá venían todos hardcodeados (posición fija abajo-derecha,
@@ -9609,9 +9609,45 @@ function openIndicatorSettings(name) {
         <span style="flex:1">Killzones visual history (days back)</span>
         <input type="number" id="wt-hist-days" min="1" max="60" step="1" value="${STATE.watchtower.histDays}" style="width:56px">
       </div>`
-      + `<div class="wt-set-row" style="gap:8px">
-        <span style="flex:1">PDH/PDL/PWH/PWL/MNO label color</span>
-        <input type="color" id="wt-label-color" value="${STATE.watchtower.labelColor}">
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Previous Day Levels</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="wt-pd-color" value="${STATE.watchtower.pdColor}">
+        <select id="wt-pd-hl-style" class="dtb-select" title="H/L style">
+          <option value="solid" ${STATE.watchtower.pdHlStyle==='solid'?'selected':''}>Solid H/L</option>
+          <option value="dashed" ${STATE.watchtower.pdHlStyle==='dashed'?'selected':''}>Dashed H/L</option>
+          <option value="dotted" ${STATE.watchtower.pdHlStyle==='dotted'?'selected':''}>Dotted H/L</option>
+        </select>
+        <select id="wt-pd-m-style" class="dtb-select" title="Mid style">
+          <option value="solid" ${STATE.watchtower.pdMStyle==='solid'?'selected':''}>Solid M</option>
+          <option value="dashed" ${STATE.watchtower.pdMStyle==='dashed'?'selected':''}>Dashed M</option>
+          <option value="dotted" ${STATE.watchtower.pdMStyle==='dotted'?'selected':''}>Dotted M</option>
+        </select>
+      </div>`
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Previous Week Levels</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="wt-pw-color" value="${STATE.watchtower.pwColor}">
+        <select id="wt-pw-hl-style" class="dtb-select" title="H/L style">
+          <option value="solid" ${STATE.watchtower.pwHlStyle==='solid'?'selected':''}>Solid H/L</option>
+          <option value="dashed" ${STATE.watchtower.pwHlStyle==='dashed'?'selected':''}>Dashed H/L</option>
+          <option value="dotted" ${STATE.watchtower.pwHlStyle==='dotted'?'selected':''}>Dotted H/L</option>
+        </select>
+        <select id="wt-pw-m-style" class="dtb-select" title="Mid style">
+          <option value="solid" ${STATE.watchtower.pwMStyle==='solid'?'selected':''}>Solid M</option>
+          <option value="dashed" ${STATE.watchtower.pwMStyle==='dashed'?'selected':''}>Dashed M</option>
+          <option value="dotted" ${STATE.watchtower.pwMStyle==='dotted'?'selected':''}>Dotted M</option>
+        </select>
+      </div>`
+      + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">MNO (Midnight Open)</div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Color</span>
+        <input type="color" id="wt-mno-color" value="${STATE.watchtower.mnoColor}">
+        <select id="wt-mno-style" class="dtb-select" title="Style">
+          <option value="solid" ${STATE.watchtower.mnoStyle==='solid'?'selected':''}>Solid</option>
+          <option value="dashed" ${STATE.watchtower.mnoStyle==='dashed'?'selected':''}>Dashed</option>
+          <option value="dotted" ${STATE.watchtower.mnoStyle==='dotted'?'selected':''}>Dotted</option>
+        </select>
       </div>`
       + `<div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Killzone times (NY time)</div>`
       + kzHtml
@@ -9997,11 +10033,25 @@ function applyIndSettingsForm() {
     const colorEl=document.getElementById('wt-org-color');
     const boxOpacityEl=document.getElementById('wt-box-opacity');
     const histDaysEl=document.getElementById('wt-hist-days');
-    const labelColorEl=document.getElementById('wt-label-color');
     if (colorEl) STATE.watchtower.orgColor = colorEl.value;
     if (boxOpacityEl) STATE.watchtower.boxOpacity = Math.max(0, Math.min(100, Number(boxOpacityEl.value) || 0));
     if (histDaysEl) STATE.watchtower.histDays = Math.max(1, Math.min(60, Number(histDaysEl.value) || 3));
-    if (labelColorEl) STATE.watchtower.labelColor = labelColorEl.value;
+    const pdColorEl=document.getElementById('wt-pd-color');
+    const pdHlStyleEl=document.getElementById('wt-pd-hl-style');
+    const pdMStyleEl=document.getElementById('wt-pd-m-style');
+    if (pdColorEl) STATE.watchtower.pdColor = pdColorEl.value;
+    if (pdHlStyleEl) STATE.watchtower.pdHlStyle = pdHlStyleEl.value;
+    if (pdMStyleEl) STATE.watchtower.pdMStyle = pdMStyleEl.value;
+    const pwColorEl=document.getElementById('wt-pw-color');
+    const pwHlStyleEl=document.getElementById('wt-pw-hl-style');
+    const pwMStyleEl=document.getElementById('wt-pw-m-style');
+    if (pwColorEl) STATE.watchtower.pwColor = pwColorEl.value;
+    if (pwHlStyleEl) STATE.watchtower.pwHlStyle = pwHlStyleEl.value;
+    if (pwMStyleEl) STATE.watchtower.pwMStyle = pwMStyleEl.value;
+    const mnoColorEl=document.getElementById('wt-mno-color');
+    const mnoStyleEl=document.getElementById('wt-mno-style');
+    if (mnoColorEl) STATE.watchtower.mnoColor = mnoColorEl.value;
+    if (mnoStyleEl) STATE.watchtower.mnoStyle = mnoStyleEl.value;
     const wtBehindEl=document.getElementById('wt-behind-candles');
     if (wtBehindEl) STATE.watchtower.behindCandles = wtBehindEl.checked;
     const biasPosEl=document.getElementById('wt-bias-position');
@@ -10605,6 +10655,8 @@ function wtPlotRight(){
   }
   return _cachedContainerWidth - chartGutterWidth();
 }
+function wtStyleToDash(s){ return s==='dashed'?'4,3':s==='dotted'?'2,2':''; }
+
 function wtLine(svg,t1,t2,y,color,width,dash,indName){
   indName = indName || 'Watchtower';
   // ANTES clampeaba x1/x2 a wtPlotRight() (el ancho del contenedor) para
@@ -10794,12 +10846,13 @@ function renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep){
     const isCurrentDay = dayKey===todayKey;
     const x1=dayCandles[0].time;
     const x2 = isCurrentDay ? (lastTime+LEVEL_EXTEND_BARS*barStep) : dayCandles[dayCandles.length-1].time;
-    wtLine(svg, x1, x2, high, '#ffffff', 1);
-    wtLine(svg, x1, x2, low,  '#ffffff', 1);
-    wtLine(svg, x1, x2, mid,  '#ffffff', 1, '4,3');
-    wtLabel(svg, x2, high, 'PDH', STATE.watchtower.labelColor);
-    wtLabel(svg, x2, low,  'PDL', STATE.watchtower.labelColor);
-    wtLabel(svg, x2, mid,  'PDM', STATE.watchtower.labelColor);
+    const pdC=STATE.watchtower.pdColor||'#ffffff';
+    wtLine(svg, x1, x2, high, pdC, 1, wtStyleToDash(STATE.watchtower.pdHlStyle||'solid'));
+    wtLine(svg, x1, x2, low,  pdC, 1, wtStyleToDash(STATE.watchtower.pdHlStyle||'solid'));
+    wtLine(svg, x1, x2, mid,  pdC, 1, wtStyleToDash(STATE.watchtower.pdMStyle||'dashed'));
+    wtLabel(svg, x2, high, 'PDH', pdC);
+    wtLabel(svg, x2, low,  'PDL', pdC);
+    wtLabel(svg, x2, mid,  'PDM', pdC);
   });
 }
 
@@ -10821,12 +10874,13 @@ function renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep){
     const isCurrentWeek = wk===curWeek;
     const x1=curCandles[0].time;
     const x2 = isCurrentWeek ? (lastTime+LEVEL_EXTEND_BARS*barStep) : curCandles[curCandles.length-1].time;
-    wtLine(svg, x1, x2, high, '#c99cd0', 1);
-    wtLine(svg, x1, x2, low,  '#c99cd0', 1);
-    wtLine(svg, x1, x2, mid,  '#c99cd0', 1, '4,3');
-    wtLabel(svg, x2, high, 'PWH', STATE.watchtower.labelColor);
-    wtLabel(svg, x2, low,  'PWL', STATE.watchtower.labelColor);
-    wtLabel(svg, x2, mid,  'PWM', STATE.watchtower.labelColor);
+    const pwC=STATE.watchtower.pwColor||'#c99cd0';
+    wtLine(svg, x1, x2, high, pwC, 1, wtStyleToDash(STATE.watchtower.pwHlStyle||'solid'));
+    wtLine(svg, x1, x2, low,  pwC, 1, wtStyleToDash(STATE.watchtower.pwHlStyle||'solid'));
+    wtLine(svg, x1, x2, mid,  pwC, 1, wtStyleToDash(STATE.watchtower.pwMStyle||'dashed'));
+    wtLabel(svg, x2, high, 'PWH', pwC);
+    wtLabel(svg, x2, low,  'PWL', pwC);
+    wtLabel(svg, x2, mid,  'PWM', pwC);
   });
 }
 
@@ -10844,8 +10898,9 @@ function renderWtMNO(svg, byDate, dateKeys, lastTime, barStep){
     if(!mnoCandle) return;
     const isCurrentDay = dayKey===todayKey;
     const x2 = isCurrentDay ? (lastTime+LEVEL_EXTEND_BARS*barStep) : dayCandles[dayCandles.length-1].time;
-    wtLine(svg, mnoCandle.time, x2, mnoCandle.open, '#80deea', 1, '2,2');
-    wtLabel(svg, x2, mnoCandle.open, 'MNO', STATE.watchtower.labelColor);
+    const mnoC=STATE.watchtower.mnoColor||'#80deea';
+    wtLine(svg, mnoCandle.time, x2, mnoCandle.open, mnoC, 1, wtStyleToDash(STATE.watchtower.mnoStyle||'solid'));
+    wtLabel(svg, x2, mnoCandle.open, 'MNO', mnoC);
   });
 }
 
