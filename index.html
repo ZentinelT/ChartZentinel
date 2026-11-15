@@ -155,7 +155,7 @@
   }
   .topbar-input:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 2px var(--gold-glow); }
 
-  #price-display { display: flex; align-items: baseline; gap: 8px; }
+  #price-display { display: none; }
   #price-last { font-family: var(--font-mono); font-size: 18px; font-weight: 500; color: var(--text-primary); }
   /* min-width + align left: fijar los decimales en updateTopbarPrice ya
      evitaba el salto de "2 ó 4 decimales", pero la CANTIDAD de dígitos
@@ -550,20 +550,17 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     color: var(--text-dim);
-    cursor: pointer;
-    transition: all .2s;
-    /* Ancho fijo: el texto cambia solo ("BRIDGE…" / "MT5 BRIDGE ✓" / "BYBIT
-       OFF"...), cada uno de largo distinto — sin esto, cada cambio corre
-       un par de px todo lo que viene después en la barra (reportado: un
-       "salto" al cambiar de panel activo en la grilla, porque ahí el
-       badge se re-chequea contra la fuente de ESE panel cada vez). El
-       texto más largo real ("MT5 BRIDGE ✓") entra cómodo en 100px. */
-    display: inline-block;
-    min-width: 100px;
-    text-align: center;
+    transition: border-color .2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 72px;
   }
-  #api-badge.connected { color: var(--green); border-color: rgba(38,166,154,.4); }
-  #api-badge:hover { color: var(--gold); border-color: var(--gold-dim); }
+  #api-badge img { width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0; }
+  #api-badge .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  #api-badge.connected .badge-dot { background: var(--green); }
+  #api-badge:not(.connected) .badge-dot { background: var(--red); }
 
   /* ─── TIMEFRAME BAR ───────────────────────────────────── */
   #tf-bar {
@@ -1829,11 +1826,10 @@
     <div id="symbol-input-suggestions" class="add-sym-suggestions"></div>
   </div>
 
-  <div id="price-display">
+  <div id="price-display" style="display:none">
     <span id="price-last">—</span>
     <span id="price-change" class="">—</span>
   </div>
-  <div class="tf-sep"></div>
 
   <button class="topbar-btn" id="btn-indicators" title="Indicators" onclick="openIndicatorModal()">
     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="-1" y="20" font-family="Georgia,'Times New Roman',serif" font-size="22" font-style="italic" font-weight="700">ƒ</text><text x="13" y="21" font-family="Georgia,'Times New Roman',serif" font-size="12" font-style="italic" font-weight="700">x</text></svg>
@@ -1943,7 +1939,7 @@
       </svg>
     </button>
 
-    <div id="api-badge" onclick="openChartSettingsModal()">BRIDGE…</div>
+    <div id="api-badge">BRIDGE…</div>
   </div>
 </div>
 </div><!-- /header-row -->
@@ -4075,7 +4071,6 @@ function renderLayoutGrid(n){
   // ver syncShellControls, que la vuelve a llamar cada vez que cambia el
   // panel activo o su fuente). Clickear abre Settings del panel activo.
   const gcBadge = gbar.querySelector('#api-badge');
-  gcBadge.addEventListener('click', openChartSettingsModal);
   updateApiBadge(gcBadge, STATE.dataSource);
 
   // Indicators — como Settings, siempre sobre el panel activo.
@@ -14136,6 +14131,12 @@ function isSupportedTfForSource(tf, source){
 // que MT5 tuviera nada que ver con lo que se estaba mirando. Esto refleja
 // la fuente REALMENTE activa, pegándole a SU propio endpoint de salud.
 const DATASOURCE_BADGE_LABEL = { mt5:'MT5 BRIDGE', binance:'BINANCE', bybit:'BYBIT', hyperliquid:'HYPERLIQUID' };
+const DATASOURCE_LOGO = {
+  binance:     'https://www.google.com/s2/favicons?domain=binance.com&sz=32',
+  bybit:       'https://www.google.com/s2/favicons?domain=bybit.com&sz=32',
+  hyperliquid: 'https://www.google.com/s2/favicons?domain=hyperliquid.xyz&sz=32',
+  mt5:         null,
+};
 function checkDataSourceHealth(source){
   if (source === 'binance') return fetch(`${BINANCE_URL}/api/v3/ping`).then(r=>r.ok).catch(()=>false);
   if (source === 'bybit') return fetch(`${BYBIT_URL}/v5/market/time`).then(r=>r.ok).catch(()=>false);
@@ -14145,9 +14146,13 @@ function checkDataSourceHealth(source){
 function updateApiBadge(badgeEl, source){
   if (!badgeEl) return Promise.resolve(false);
   const label = DATASOURCE_BADGE_LABEL[source] || String(source).toUpperCase();
-  badgeEl.textContent = label + '…';
+  const logoUrl = DATASOURCE_LOGO[source];
+  if (logoUrl) {
+    badgeEl.innerHTML = `<img src="${logoUrl}" alt="${label}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${label}'}))"><span class="badge-dot"></span>`;
+  } else {
+    badgeEl.innerHTML = `<span>${label}</span><span class="badge-dot"></span>`;
+  }
   return checkDataSourceHealth(source).then(ok => {
-    badgeEl.textContent = label + (ok ? ' ✓' : ' OFF');
     badgeEl.classList.toggle('connected', ok);
     return ok;
   });
