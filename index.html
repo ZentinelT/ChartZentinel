@@ -1709,7 +1709,7 @@
     cursor: move;
   }
   [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
-  .selected-drawing { filter: drop-shadow(0 0 4px rgba(255,255,255,.5)); }
+  .selected-drawing { filter: drop-shadow(0 0 8px rgba(255,255,255,1)) drop-shadow(0 0 3px rgba(255,255,255,1)); }
 
   /* ─── TOOL FAVORITES BAR ─────────────────────────────────── */
   .tool-btn .tool-fav-star {
@@ -1855,7 +1855,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h5"/><polyline points="17 5 21 10 17 15"/></svg>
   </button>
   <button class="topbar-btn" id="btn-fullscreen" title="Pantalla completa" onclick="toggleFullscreen()">
-    <svg id="btn-fullscreen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+    <svg id="btn-fullscreen-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+    <svg id="btn-fullscreen-icon-contract" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M4 14h6v6M14 4h6v6M20 4l-6 6M4 20l6-6"/></svg>
   </button>
   <div id="goto-date-wrap" class="goto-date-wrap">
     <button class="topbar-btn" id="goto-date-trigger" title="Go to date/time">
@@ -3031,6 +3032,10 @@ function renderLayoutGrid(n){
     calendar: _bar1g('btn-calendar'),
     layoutPicker: (document.getElementById('layout-picker-trigger')||{}).innerHTML || '',
     datasourceOptions: (document.getElementById('data-source-select')||{}).innerHTML || '',
+    toolBtns: Array.from(document.querySelectorAll('#toolbar .tool-btn[data-tool]')).map(b => ({
+      tool: b.dataset.tool, tip: b.title || b.dataset.tip || b.dataset.tool,
+      svg: (b.querySelector('svg')||{}).outerHTML || ''
+    })),
   };
   // Mismo truco que SHARED_ICON de arriba (sacar el HTML del documento de
   // a punto de borrarse ANTES de borrarlo) — para el modal de Chart
@@ -3379,6 +3384,10 @@ function renderLayoutGrid(n){
           </div>
         </div>
       </div>
+      <button class="topbar-btn" id="gc-fullscreen" title="Pantalla completa" onclick="toggleFullscreen()">
+        <svg id="gc-fullscreen-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        <svg id="gc-fullscreen-icon-contract" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M4 14h6v6M14 4h6v6M20 4l-6 6M4 20l6-6"/></svg>
+      </button>
       <button class="topbar-btn" id="gc-snapshot" title="Snapshot de todos los paneles (PNG + clipboard)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
@@ -4337,6 +4346,7 @@ function renderLayoutGrid(n){
   document.body.appendChild(shellStatusbar);
   initStatusbarClock();
   renderShellStatus();
+  _initGridFavBar(SHARED_ICON.toolBtns);
 
   // ─── PANEL DE OPERAR DEL SHELL ───────────────────────────────────
   // Copia del #orders-panel + #modal-prompt-fields de la página de 1
@@ -13726,14 +13736,20 @@ function initStatusbarClock(){
       trigger.classList.remove('active');
     }
   }, true);
+  // En modo grilla, los clicks dentro de iframes no llegan al documento del shell
+  // — el window.blur se dispara cuando el foco pasa a cualquier iframe hijo
+  window.addEventListener('blur', () => {
+    if (popup.classList.contains('open')) {
+      popup.classList.remove('open');
+      trigger.classList.remove('active');
+    }
+  });
 }
 initStatusbarClock();
 
 // ══════════════════════════════════════════════════════════
 //  FULLSCREEN
 // ══════════════════════════════════════════════════════════
-const _fsIconExpand = `<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>`;
-const _fsIconContract = `<path d="M4 14h6v6M14 4h6v6M20 4l-6 6M4 20l6-6"/>`;
 function toggleFullscreen(){
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen().catch(()=>{});
@@ -13741,11 +13757,16 @@ function toggleFullscreen(){
     document.exitFullscreen().catch(()=>{});
   }
 }
-document.addEventListener('fullscreenchange', () => {
-  const icon = document.getElementById('btn-fullscreen-icon');
-  if (!icon) return;
-  icon.innerHTML = document.fullscreenElement ? _fsIconContract : _fsIconExpand;
-});
+function _syncFullscreenIcons(){
+  const inFS = !!document.fullscreenElement;
+  ['btn-fullscreen', 'gc-fullscreen'].forEach(prefix => {
+    const e = document.getElementById(prefix + '-icon-expand');
+    const c = document.getElementById(prefix + '-icon-contract');
+    if (e) e.style.display = inFS ? 'none' : '';
+    if (c) c.style.display = inFS ? '' : 'none';
+  });
+}
+document.addEventListener('fullscreenchange', _syncFullscreenIcons);
 
 // ══════════════════════════════════════════════════════════
 //  DTB TEMPLATE POPUP — templates nombrados por tipo de dibujo (ver
@@ -17884,7 +17905,75 @@ function downloadTradesCsv(){
 // ══════════════════════════════════════════════════════════
 //  TOOL FAVORITES BAR
 // ══════════════════════════════════════════════════════════
+
+// Inicializa la barra de favoritos en el SHELL de grilla (no en iframes).
+// toolBtns: array de {tool, tip, svg} capturado antes del body.innerHTML='' en renderLayoutGrid.
+function _initGridFavBar(toolBtns){
+  const FAV_KEY = 'zentinel_tool_favs';
+  const FAV_POS_KEY = 'zentinel_tool_fav_pos';
+  function getFavs(){ try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); }catch(e){ return []; } }
+  function setFavs(a){ try{ localStorage.setItem(FAV_KEY, JSON.stringify(a)); }catch(e){} }
+  function getFavPos(){ try{ return JSON.parse(localStorage.getItem(FAV_POS_KEY)||'null'); }catch(e){ return null; } }
+  function setFavPos(p){ try{ localStorage.setItem(FAV_POS_KEY, JSON.stringify(p)); }catch(e){} }
+
+  const toolMap = {};
+  toolBtns.forEach(t => { toolMap[t.tool] = t; });
+
+  const bar = document.createElement('div');
+  bar.id = 'tool-fav-bar';
+  bar.innerHTML = '<div id="tool-fav-bar-handle" title="Drag to move">⣿</div>';
+  document.body.appendChild(bar);
+
+  function renderFavBar(){
+    const favs = getFavs();
+    bar.querySelectorAll('.fav-tool-btn').forEach(b => b.remove());
+    if (!favs.length){ bar.classList.remove('visible'); return; }
+    bar.classList.add('visible');
+    favs.forEach(tool => {
+      const info = toolMap[tool];
+      if (!info) return;
+      const btn = document.createElement('button');
+      btn.className = 'fav-tool-btn';
+      btn.title = info.tip;
+      btn.innerHTML = info.svg;
+      btn.addEventListener('click', () => {
+        const f = window._gridActiveFrame && window._gridActiveFrame();
+        if (f){ try{ f.contentWindow.setTool(null, tool); }catch(e){} }
+        bar.querySelectorAll('.fav-tool-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      bar.appendChild(btn);
+    });
+    const pos = getFavPos();
+    if (pos){ bar.style.left = pos.x + 'px'; bar.style.top = pos.y + 'px'; }
+    else { bar.style.left = '80px'; bar.style.top = '100px'; }
+  }
+
+  const handle = bar.querySelector('#tool-fav-bar-handle');
+  let dragging = false, ox = 0, oy = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    ox = e.clientX - bar.getBoundingClientRect().left;
+    oy = e.clientY - bar.getBoundingClientRect().top;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - bar.offsetWidth));
+    const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - bar.offsetHeight));
+    bar.style.left = x + 'px'; bar.style.top = y + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
+  });
+
+  renderFavBar();
+}
+
 (function(){
+  if (EMBED_MODE) return; // en iframes la barra vive en el shell, no acá
   const FAV_KEY = 'zentinel_tool_favs';
   const FAV_POS_KEY = 'zentinel_tool_fav_pos';
 
