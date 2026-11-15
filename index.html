@@ -1709,7 +1709,7 @@
     cursor: move;
   }
   [contenteditable]:empty:before { content: attr(data-placeholder); opacity: .5; }
-  .selected-drawing { filter: drop-shadow(0 0 8px rgba(255,255,255,1)) drop-shadow(0 0 3px rgba(255,255,255,1)); }
+  .selected-drawing { filter: drop-shadow(0 0 16px rgba(255,255,255,1)) drop-shadow(0 0 8px rgba(255,255,255,1)) drop-shadow(0 0 2px rgba(255,255,255,1)); }
 
   /* ─── TOOL FAVORITES BAR ─────────────────────────────────── */
   .tool-btn .tool-fav-star {
@@ -1746,6 +1746,27 @@
   #tool-fav-bar .fav-tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border); }
   #tool-fav-bar .fav-tool-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
   #tool-fav-bar .fav-tool-btn svg { width: 14px; height: 14px; }
+  #tool-fav-bar .fav-edit-btn {
+    width: 22px; height: 28px; display: flex; align-items: center; justify-content: center;
+    background: none; border: none; border-radius: 5px; color: var(--text-dim);
+    cursor: pointer; font-size: 13px; flex-shrink: 0; margin-left: 2px;
+  }
+  #tool-fav-bar .fav-edit-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+  #tool-fav-mgr-popup {
+    position: fixed; z-index: 600; background: var(--bg-panel);
+    border: 1px solid var(--border-light); border-radius: 8px;
+    padding: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    display: none; flex-wrap: wrap; gap: 2px; max-width: 220px;
+  }
+  #tool-fav-mgr-popup.open { display: flex; }
+  #tool-fav-mgr-popup .fav-mgr-item {
+    width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+    border-radius: 5px; cursor: pointer; border: 1px solid transparent;
+    color: var(--text-secondary); position: relative;
+  }
+  #tool-fav-mgr-popup .fav-mgr-item:hover { background: var(--bg-hover); }
+  #tool-fav-mgr-popup .fav-mgr-item.on { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-dim); }
+  #tool-fav-mgr-popup .fav-mgr-item svg { width: 14px; height: 14px; pointer-events: none; }
 
   /* ─── Divisores arrastrables entre paneles (modo 2×/4⊞) ──── */
   /* Mismo color que el anillo del panel activo (var(--pane-active), ver
@@ -17922,13 +17943,59 @@ function _initGridFavBar(toolBtns){
   const bar = document.createElement('div');
   bar.id = 'tool-fav-bar';
   bar.innerHTML = '<div id="tool-fav-bar-handle" title="Drag to move">⣿</div>';
+  bar.classList.add('visible'); // siempre visible en modo grilla (mínimo el botón de edición)
   document.body.appendChild(bar);
 
-  function renderFavBar(){
+  const mgr = document.createElement('div');
+  mgr.id = 'tool-fav-mgr-popup';
+  document.body.appendChild(mgr);
+
+  function renderMgrPopup(){
     const favs = getFavs();
+    mgr.innerHTML = '';
+    toolBtns.forEach(info => {
+      const item = document.createElement('button');
+      item.className = 'fav-mgr-item' + (favs.includes(info.tool) ? ' on' : '');
+      item.title = info.tip;
+      item.innerHTML = info.svg;
+      item.addEventListener('click', () => {
+        const f2 = getFavs();
+        const idx = f2.indexOf(info.tool);
+        if (idx === -1) f2.push(info.tool); else f2.splice(idx, 1);
+        setFavs(f2);
+        item.classList.toggle('on', f2.includes(info.tool));
+        renderFavBar();
+      });
+      mgr.appendChild(item);
+    });
+  }
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'fav-edit-btn';
+  editBtn.title = 'Editar favoritos';
+  editBtn.textContent = '✦';
+  editBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = mgr.classList.toggle('open');
+    if (open) {
+      renderMgrPopup();
+      const r = editBtn.getBoundingClientRect();
+      mgr.style.left = r.left + 'px';
+      mgr.style.top = (r.bottom + 4) + 'px';
+    }
+  });
+  bar.appendChild(editBtn);
+
+  document.addEventListener('mousedown', e => {
+    if (mgr.classList.contains('open') && !mgr.contains(e.target) && e.target !== editBtn) {
+      mgr.classList.remove('open');
+    }
+  }, true);
+
+  function renderFavBar(){
     bar.querySelectorAll('.fav-tool-btn').forEach(b => b.remove());
-    if (!favs.length){ bar.classList.remove('visible'); return; }
-    bar.classList.add('visible');
+    editBtn.remove(); // se re-agrega al final
+    const favs = getFavs();
     favs.forEach(tool => {
       const info = toolMap[tool];
       if (!info) return;
@@ -17944,6 +18011,7 @@ function _initGridFavBar(toolBtns){
       });
       bar.appendChild(btn);
     });
+    bar.appendChild(editBtn);
     const pos = getFavPos();
     if (pos){ bar.style.left = pos.x + 'px'; bar.style.top = pos.y + 'px'; }
     else { bar.style.left = '80px'; bar.style.top = '100px'; }
