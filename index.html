@@ -18018,22 +18018,22 @@ function _initGridFavBar(toolBtns){
   }
 
   const handle = bar.querySelector('#tool-fav-bar-handle');
-  let dragging = false, ox = 0, oy = 0;
-  handle.addEventListener('mousedown', e => {
-    dragging = true;
+  let ox = 0, oy = 0;
+  handle.addEventListener('pointerdown', e => {
     ox = e.clientX - bar.getBoundingClientRect().left;
     oy = e.clientY - bar.getBoundingClientRect().top;
+    handle.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
+  handle.addEventListener('pointermove', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
     const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - bar.offsetWidth));
     const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - bar.offsetHeight));
     bar.style.left = x + 'px'; bar.style.top = y + 'px';
   });
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
+  handle.addEventListener('pointerup', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    handle.releasePointerCapture(e.pointerId);
     setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
   });
 
@@ -18105,22 +18105,22 @@ function _initGridFavBar(toolBtns){
 
   // Drag behavior
   const handle = bar.querySelector('#tool-fav-bar-handle');
-  let dragging = false, ox = 0, oy = 0;
-  handle.addEventListener('mousedown', e => {
-    dragging = true;
+  let ox = 0, oy = 0;
+  handle.addEventListener('pointerdown', e => {
     ox = e.clientX - bar.getBoundingClientRect().left;
     oy = e.clientY - bar.getBoundingClientRect().top;
+    handle.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
+  handle.addEventListener('pointermove', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
     const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - bar.offsetWidth));
     const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - bar.offsetHeight));
     bar.style.left = x + 'px'; bar.style.top = y + 'px';
   });
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
+  handle.addEventListener('pointerup', e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    handle.releasePointerCapture(e.pointerId);
     setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
   });
 
