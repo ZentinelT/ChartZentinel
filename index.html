@@ -3581,10 +3581,8 @@ function renderLayoutGrid(n){
         if (idx === -1) favs.push(tool); else favs.splice(idx, 1);
         setFavs(favs);
         star.classList.toggle('on', favs.includes(tool));
-        // Trigger re-render of floating bar in each embed panel
-        document.querySelectorAll('iframe').forEach(f => {
-          try { f.contentWindow._gridFavBarRender && f.contentWindow._gridFavBarRender(); } catch(x){}
-        });
+        // Re-render la barra flotante del shell directamente
+        window._reRenderGridFavBar && window._reRenderGridFavBar();
       });
       btn.style.position = 'relative';
       btn.appendChild(star);
@@ -18034,55 +18032,8 @@ function _initGridFavBar(toolBtns){
   // visible solo si hay favoritos (renderFavBar lo gestiona)
   document.body.appendChild(bar);
 
-  const mgr = document.createElement('div');
-  mgr.id = 'tool-fav-mgr-popup';
-  document.body.appendChild(mgr);
-
-  function renderMgrPopup(){
-    const favs = getFavs();
-    mgr.innerHTML = '';
-    toolBtns.forEach(info => {
-      const item = document.createElement('button');
-      item.className = 'fav-mgr-item' + (favs.includes(info.tool) ? ' on' : '');
-      item.title = info.tip;
-      item.innerHTML = info.svg;
-      item.addEventListener('click', () => {
-        const f2 = getFavs();
-        const idx = f2.indexOf(info.tool);
-        if (idx === -1) f2.push(info.tool); else f2.splice(idx, 1);
-        setFavs(f2);
-        item.classList.toggle('on', f2.includes(info.tool));
-        renderFavBar();
-      });
-      mgr.appendChild(item);
-    });
-  }
-
-  const editBtn = document.createElement('button');
-  editBtn.className = 'fav-edit-btn';
-  editBtn.title = 'Editar favoritos';
-  editBtn.textContent = '✦';
-  editBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    const open = mgr.classList.toggle('open');
-    if (open) {
-      renderMgrPopup();
-      const r = editBtn.getBoundingClientRect();
-      mgr.style.left = r.left + 'px';
-      mgr.style.top = (r.bottom + 4) + 'px';
-    }
-  });
-  bar.appendChild(editBtn);
-
-  document.addEventListener('mousedown', e => {
-    if (mgr.classList.contains('open') && !mgr.contains(e.target) && e.target !== editBtn) {
-      mgr.classList.remove('open');
-    }
-  }, true);
-
   function renderFavBar(){
     bar.querySelectorAll('.fav-tool-btn').forEach(b => b.remove());
-    editBtn.remove(); // se re-agrega al final
     const favs = getFavs();
     if (!favs.length){ bar.classList.remove('visible'); return; }
     bar.classList.add('visible');
@@ -18111,7 +18062,6 @@ function _initGridFavBar(toolBtns){
       });
       bar.appendChild(btn);
     });
-    bar.appendChild(editBtn);
     const pos = getFavPos();
     if (pos){ bar.style.left = pos.x + 'px'; bar.style.top = pos.y + 'px'; }
     else { bar.style.left = '80px'; bar.style.top = '100px'; }
@@ -18157,6 +18107,7 @@ function _initGridFavBar(toolBtns){
     if (e.key === 'zentinel_tool_favs') renderFavBar();
   });
 
+  window._reRenderGridFavBar = renderFavBar;
   renderFavBar();
 }
 
