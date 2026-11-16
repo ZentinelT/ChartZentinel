@@ -18054,9 +18054,10 @@ function _initGridFavBar(toolBtns){
       });
       btn.addEventListener('click', () => {
         thawIframes();
-        const f = _pendingFrame || (window._gridActiveFrame && window._gridActiveFrame());
         _pendingFrame = null;
-        if (f){ try{ f.contentWindow.setTool(null, tool); }catch(e){} }
+        // Activar en todos los paneles para que el primer click en cualquier
+        // panel dibuje directamente, sin necesitar un click extra para activarlo
+        getIframes().forEach(f => { try{ f.contentWindow.setTool(null, tool); }catch(e){} });
         bar.querySelectorAll('.fav-tool-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
       });
