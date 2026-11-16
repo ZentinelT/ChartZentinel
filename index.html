@@ -3155,6 +3155,11 @@ function renderLayoutGrid(n){
       el.style.borderColor = active ? 'var(--pane-active)' : 'transparent';
       el.style.boxShadow = active ? '0 0 0 1px var(--pane-active), 0 0 10px var(--pane-active-glow)' : 'none';
     });
+    // Propagar la herramienta de la fav bar al nuevo panel activo
+    const f = iframeEls[idx-1];
+    if (f && window._favActiveTool) {
+      try { f.contentWindow.setTool(null, window._favActiveTool); } catch(e){}
+    }
     syncShellControls();
     renderShellStatus();
   }
@@ -3855,6 +3860,7 @@ function renderLayoutGrid(n){
     if (ctWrap && ctWrap._setCurrent && ct) ctWrap._setCurrent(ct);
     syncShellTfActiveClass();
     closeTfFavPopupShell();
+    if (!tool) window._favActiveTool = null;
     if (window._syncGridFavBarActive) window._syncGridFavBarActive(tool);
   }
 
@@ -18054,10 +18060,10 @@ function _initGridFavBar(toolBtns){
       });
       btn.addEventListener('click', () => {
         thawIframes();
+        const f = _pendingFrame || (window._gridActiveFrame && window._gridActiveFrame());
         _pendingFrame = null;
-        // Activar en todos los paneles para que el primer click en cualquier
-        // panel dibuje directamente, sin necesitar un click extra para activarlo
-        getIframes().forEach(f => { try{ f.contentWindow.setTool(null, tool); }catch(e){} });
+        window._favActiveTool = tool;
+        if (f){ try{ f.contentWindow.setTool(null, tool); }catch(e){} }
         bar.querySelectorAll('.fav-tool-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
       });
