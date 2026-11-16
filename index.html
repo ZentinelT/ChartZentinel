@@ -3078,6 +3078,20 @@ function renderLayoutGrid(n){
   // drag del título) corrió UNA vez al cargar la página, sobre los
   // elementos viejos que este innerHTML='' recién borró.
   document.body.insertAdjacentHTML('beforeend', _sharedModalsHtml);
+  // body.innerHTML='' destruyó los event listeners de attachColorPalette.
+  // El outerHTML capturado puede traer data-pal-attached y color-pal-wrap del
+  // DOM original, así que el MutationObserver los saltea. Se deshacen los
+  // wraps y se resetea data-pal-attached para que scanForColorInputs los
+  // procese de nuevo limpiamente.
+  document.querySelectorAll('.color-pal-wrap').forEach(wrap => {
+    const inp = wrap.querySelector('input[type="color"]');
+    if (!inp) return;
+    wrap.parentNode.insertBefore(inp, wrap);
+    wrap.parentNode.removeChild(wrap);
+    delete inp.dataset.palAttached;
+  });
+  document.querySelectorAll('input[type="color"][data-pal-attached]').forEach(inp => { delete inp.dataset.palAttached; });
+  if (window.scanForColorInputs) scanForColorInputs();
   document.querySelectorAll('.modal-overlay').forEach(el => { if (window._wireModalOverlay) window._wireModalOverlay(el); });
   initLogoCropDrag(); // re-wire sobre la copia de #logo-crop-frame recién insertada
 
