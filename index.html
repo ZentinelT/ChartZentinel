@@ -724,6 +724,7 @@
   }
   .tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .tool-btn.active { background-color: var(--gold-glow); color: var(--gold); }
+  .theme-toggle-btn { color: var(--text-secondary); }
   .tool-btn.weak-active { background-color: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--gold-dim); }
   .tool-btn svg { width: 15px; height: 15px; }
   .tool-sep { width: 20px; height: 1px; background: var(--sep-color); margin: 4px 0; }
@@ -2041,7 +2042,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"></button>
+    <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>
   </div>
 
   <!-- ── SIDEBAR TOGGLE ─────────────────────────────────── -->
@@ -3559,7 +3560,7 @@ function renderLayoutGrid(n){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>
     <div class="tool-sep"></div>
-    <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"></button>`;
+    <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>`;
 
   // Inject favorite-star badges into shell toolbar buttons
   (function(){
