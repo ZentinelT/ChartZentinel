@@ -18095,13 +18095,14 @@ function _initGridFavBar(toolBtns){
       btn.innerHTML = info.svg;
       let _pendingFrame = null;
       btn.addEventListener('pointerdown', () => {
-        // Overlay bloquea los iframes para que no cambien activePane
-        // con paneFocused antes de que nuestro click handler corra
-        showOverlay();
+        // pointer-events:none en iframes es la única forma confiable en
+        // Chromium de impedir que el iframe bajo la barra reciba mousedown
+        // y envíe paneFocused antes de que nuestro click handler corra.
+        freezeIframes();
         _pendingFrame = window._gridActiveFrame && window._gridActiveFrame();
       });
       btn.addEventListener('click', () => {
-        hideOverlay();
+        thawIframes();
         const f = _pendingFrame || (window._gridActiveFrame && window._gridActiveFrame());
         _pendingFrame = null;
         if (f){ try{ f.contentWindow.setTool(null, tool); }catch(e){} }
@@ -18116,35 +18117,33 @@ function _initGridFavBar(toolBtns){
     else { bar.style.left = '80px'; bar.style.top = '100px'; }
   }
 
-  // Overlay transparente que cubre todos los iframes durante drag/click,
-  // para que los paneles no intercepten eventos de puntero.
-  const dragOverlay = document.createElement('div');
-  dragOverlay.style.cssText = 'position:fixed;inset:0;z-index:499;display:none;';
-  document.body.appendChild(dragOverlay);
-
-  function showOverlay(){ dragOverlay.style.display = 'block'; }
-  function hideOverlay(){ dragOverlay.style.display = 'none'; }
-  document.addEventListener('pointerup', hideOverlay);
+  // Chromium bug: position:fixed sobre iframes NO bloquea eventos de puntero.
+  // La única forma confiable es pointer-events:none directamente en los iframes.
+  function getIframes(){ return Array.from(document.querySelectorAll('iframe:not(#calendar-iframe)')); }
+  function freezeIframes(){ getIframes().forEach(f => { f.style.pointerEvents = 'none'; }); }
+  function thawIframes(){ getIframes().forEach(f => { f.style.pointerEvents = ''; }); }
+  document.addEventListener('pointerup', thawIframes);
 
   const handle = bar.querySelector('#tool-fav-bar-handle');
-  let ox = 0, oy = 0;
+  let _dragging = false, ox = 0, oy = 0;
   handle.addEventListener('pointerdown', e => {
-    showOverlay();
+    freezeIframes();
+    _dragging = true;
     ox = e.clientX - bar.getBoundingClientRect().left;
     oy = e.clientY - bar.getBoundingClientRect().top;
-    handle.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
-  handle.addEventListener('pointermove', e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
+  // Listener en document para que el drag funcione sobre cualquier panel
+  document.addEventListener('pointermove', e => {
+    if (!_dragging) return;
     const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - bar.offsetWidth));
     const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - bar.offsetHeight));
     bar.style.left = x + 'px'; bar.style.top = y + 'px';
   });
-  handle.addEventListener('pointerup', e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    handle.releasePointerCapture(e.pointerId);
-    hideOverlay();
+  document.addEventListener('pointerup', e => {
+    if (!_dragging) return;
+    _dragging = false;
+    thawIframes();
     setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
   });
 
