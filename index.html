@@ -195,13 +195,11 @@
   #price-countdown-badge.soon { background: var(--gold-bright); }
 
   /* ─── BUY/SELL rápidos (ver quickMarketOrder) ────────────────── */
-  /* Centro-arriba del chart, pedido explícito 2026-10-28 (antes vivían en
-     la barra de herramientas — el usuario los quiere acá, sobre el chart
-     mismo). .qt-pane-hidden: en la grilla, solo el panel 1 los muestra
-     (ver boot más abajo) — el resto de los paneles no los dibuja. */
+  /* Centro-abajo del chart. .qt-pane-hidden: en la grilla, solo el panel
+     activo los muestra (ver boot más abajo) — el resto no los dibuja. */
   #quick-trade-overlay {
     position: absolute;
-    top: 8px;
+    bottom: 28px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
