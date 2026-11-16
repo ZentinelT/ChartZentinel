@@ -3857,6 +3857,7 @@ function renderLayoutGrid(n){
     if (ctWrap && ctWrap._setCurrent && ct) ctWrap._setCurrent(ct);
     syncShellTfActiveClass();
     closeTfFavPopupShell();
+    if (window._syncGridFavBarActive) window._syncGridFavBarActive(tool);
   }
 
   row.appendChild(shellToolbar);
@@ -4533,6 +4534,8 @@ function renderLayoutGrid(n){
       renderTradesModalIfOpen();
     }, 1000);
   };
+
+  _initGridFavBar(SHARED_ICON.toolBtns);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -18120,6 +18123,16 @@ function _initGridFavBar(toolBtns){
     if (!handle.hasPointerCapture(e.pointerId)) return;
     handle.releasePointerCapture(e.pointerId);
     setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
+  });
+
+  window._syncGridFavBarActive = function(tool){
+    bar.querySelectorAll('.fav-tool-btn').forEach(b => {
+      b.classList.toggle('active', b.title === (toolMap[tool] && toolMap[tool].tip));
+    });
+  };
+
+  window.addEventListener('storage', e => {
+    if (e.key === 'zentinel_tool_favs') renderFavBar();
   });
 
   renderFavBar();
