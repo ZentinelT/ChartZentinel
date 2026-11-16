@@ -18031,7 +18031,7 @@ function _initGridFavBar(toolBtns){
   const bar = document.createElement('div');
   bar.id = 'tool-fav-bar';
   bar.innerHTML = '<div id="tool-fav-bar-handle" title="Drag to move">⣿</div>';
-  bar.classList.add('visible'); // siempre visible en modo grilla (mínimo el botón de edición)
+  // visible solo si hay favoritos (renderFavBar lo gestiona)
   document.body.appendChild(bar);
 
   const mgr = document.createElement('div');
@@ -18095,11 +18095,13 @@ function _initGridFavBar(toolBtns){
       btn.innerHTML = info.svg;
       let _pendingFrame = null;
       btn.addEventListener('pointerdown', () => {
-        // Capturar el frame activo en pointerdown, antes de que paneFocused
-        // (que llega por postMessage asíncrono) pueda cambiar activePane
+        // Overlay bloquea los iframes para que no cambien activePane
+        // con paneFocused antes de que nuestro click handler corra
+        showOverlay();
         _pendingFrame = window._gridActiveFrame && window._gridActiveFrame();
       });
       btn.addEventListener('click', () => {
+        hideOverlay();
         const f = _pendingFrame || (window._gridActiveFrame && window._gridActiveFrame());
         _pendingFrame = null;
         if (f){ try{ f.contentWindow.setTool(null, tool); }catch(e){} }
@@ -18114,17 +18116,23 @@ function _initGridFavBar(toolBtns){
     else { bar.style.left = '80px'; bar.style.top = '100px'; }
   }
 
-  function iframeEls(){ return Array.from(document.querySelectorAll('iframe:not(#calendar-iframe)')); }
+  // Overlay transparente que cubre todos los iframes durante drag/click,
+  // para que los paneles no intercepten eventos de puntero.
+  const dragOverlay = document.createElement('div');
+  dragOverlay.style.cssText = 'position:fixed;inset:0;z-index:499;display:none;';
+  document.body.appendChild(dragOverlay);
+
+  function showOverlay(){ dragOverlay.style.display = 'block'; }
+  function hideOverlay(){ dragOverlay.style.display = 'none'; }
+  document.addEventListener('pointerup', hideOverlay);
 
   const handle = bar.querySelector('#tool-fav-bar-handle');
   let ox = 0, oy = 0;
   handle.addEventListener('pointerdown', e => {
+    showOverlay();
     ox = e.clientX - bar.getBoundingClientRect().left;
     oy = e.clientY - bar.getBoundingClientRect().top;
     handle.setPointerCapture(e.pointerId);
-    // Deshabilitar pointer-events en iframes para que pointermove
-    // no se pierda al arrastrar sobre otro panel
-    iframeEls().forEach(f => { f.style.pointerEvents = 'none'; });
     e.preventDefault();
   });
   handle.addEventListener('pointermove', e => {
@@ -18136,7 +18144,7 @@ function _initGridFavBar(toolBtns){
   handle.addEventListener('pointerup', e => {
     if (!handle.hasPointerCapture(e.pointerId)) return;
     handle.releasePointerCapture(e.pointerId);
-    iframeEls().forEach(f => { f.style.pointerEvents = ''; });
+    hideOverlay();
     setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
   });
 
