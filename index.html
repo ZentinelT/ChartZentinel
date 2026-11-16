@@ -114,8 +114,8 @@
     height: var(--topbar-h);
     display: flex;
     align-items: center;
-    padding: 0 14px;
-    gap: 12px;
+    padding: 0 8px;
+    gap: 6px;
     flex-shrink: 0;
     z-index: 100;
   }
@@ -133,7 +133,7 @@
     gap: 0;
     text-shadow: 0 0 24px rgba(255,255,255,0.18), 0 1px 0 rgba(255,255,255,0.08);
   }
-  .logo-sep { width: 1px; height: 24px; background: var(--sep-color); margin: 0 4px; }
+  .logo-sep { width: 1px; height: 24px; background: var(--sep-color); margin: 0 2px; }
 
   #symbol-search-wrap { position: relative; display: flex; align-items: center; }
   /* Clase compartida: la usan tanto #symbol-input (modo 1 gráfico) como el
@@ -405,9 +405,9 @@
     font-family: var(--font-ui);
     font-size: 12px;
     font-weight: 500;
-    padding: 6px 10px;
+    padding: 4px 7px;
     cursor: pointer;
-    display: flex; align-items: center; gap: 6px;
+    display: flex; align-items: center; gap: 4px;
     transition: background .15s, color .15s;
   }
   /* Como en TV: el hover es solo un relleno redondeado, sin borde — el
@@ -540,7 +540,7 @@
      chart de ESE panel gana esa altura, llegando hasta su propio eje de
      tiempo en vez de dejar una franja repetida debajo de cada uno. */
   html.embed-mode #statusbar { display: none !important; }
-  #tf-bar-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  #tf-bar-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
   #api-badge {
     font-family: var(--font-mono);
@@ -567,8 +567,8 @@
     height: var(--tf-bar-h);
     display: flex;
     align-items: center;
-    padding: 0 8px;
-    gap: 10px;
+    padding: 0 4px;
+    gap: 4px;
     flex: 1 1 auto;
     min-width: 0;
   }
@@ -628,7 +628,7 @@
     #gc-symbol { width: 90px !important; }
   }
   @media (max-width: 1100px) {
-    #tf-bar { gap: 6px; }
+    #tf-bar { gap: 3px; }
     #tf-bar-tfs-wrap { min-width: 50px; }
     #symbol-search-wrap .topbar-input,
     #gc-symbol { width: 70px !important; }
@@ -647,7 +647,7 @@
        reportado como un "salto" de la barra entera. Con el mismo peso
        siempre, solo cambian color/fondo, nunca el ancho. */
     font-weight: 600;
-    padding: 5px 7px;
+    padding: 4px 5px;
     border-radius: 6px;
     cursor: pointer;
     letter-spacing: 0;
@@ -655,7 +655,7 @@
   }
   .tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
   .tf-btn.active { background: var(--gold-glow); color: var(--gold); }
-  .tf-sep { width: 1px; height: 16px; background: var(--sep-color); margin: 0 6px; flex-shrink: 0; }
+  .tf-sep { width: 1px; height: 16px; background: var(--sep-color); margin: 0 3px; flex-shrink: 0; }
 
   /* ─── Favoritos de TF (popup tipo TV, lista completa + estrella) ─ */
   #tf-fav-wrap { position: relative; flex-shrink: 0; }
