@@ -1850,7 +1850,7 @@
   </button>
   <div id="goto-date-wrap" class="goto-date-wrap">
     <button class="topbar-btn" id="goto-date-trigger" title="Go to date/time">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="2.3"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="15" x2="15" y2="15"/><polyline points="12,12 15,15 12,18"/></svg>
     </button>
     <div id="goto-date-popup" class="tf-fav-popup goto-date-popup">
       <div class="goto-date-row"><label>Date</label><input type="date" id="goto-date-input"></div>
@@ -1883,7 +1883,6 @@
       <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
     </div>
 
-    <button class="topbar-btn theme-toggle-btn" title="Cambiar a modo claro" onclick="toggleTheme()"></button>
     <div class="alerts-wrap" id="alerts-wrap">
       <button class="topbar-btn" id="btn-alerts" title="Alertas de precio" onclick="toggleAlertsPanel()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -1923,7 +1922,7 @@
 
     <div class="tf-sep"></div>
     <button class="topbar-btn" id="btn-calendar" title="Economic Calendar" onclick="openCalendarModal()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><rect x="8" y="14" width="2" height="2" rx=".5"/><rect x="13" y="14" width="2" height="2" rx=".5"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><polyline points="7,18 10,14 13,16 17,12"/></svg>
     </button>
     <button class="topbar-btn" id="btn-trades" title="Trades (paper trading)" onclick="openTradesModal()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -2041,6 +2040,8 @@
     <button class="tool-btn" id="btn-quick-trade-toggle" data-tip="Mostrar/ocultar Buy/Sell" onclick="toggleQuickTradeButtons()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
     </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"></button>
   </div>
 
   <!-- ── SIDEBAR TOGGLE ─────────────────────────────────── -->
@@ -3379,7 +3380,6 @@ function renderLayoutGrid(n){
         </button>
         <div id="layout-picker-popup" class="tf-fav-popup layout-picker-popup"></div>
       </div>
-      <button class="topbar-btn theme-toggle-btn" id="gc-theme-toggle" title="Cambiar tema"></button>
       <div class="alerts-wrap" id="gc-alerts-wrap">
         <button class="topbar-btn" id="gc-alerts" title="Alertas de precio" onclick="toggleAlertsPanel()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -3557,7 +3557,9 @@ function renderLayoutGrid(n){
     <div class="tool-sep"></div>
     <button class="tool-btn" id="btn-quick-trade-toggle" data-tip="Mostrar/ocultar Buy/Sell" onclick="toggleQuickTradeButtons()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
-    </button>`;
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"></button>`;
 
   // Inject favorite-star badges into shell toolbar buttons
   (function(){
@@ -3871,8 +3873,7 @@ function renderLayoutGrid(n){
   // origin (todo sirve desde http://localhost:8787), así que no hace
   // falta mensajería para esto: se llama applyTheme() DIRECTO sobre el
   // contentWindow de cada iframe, síncrono, en el mismo tick que acá.
-  gbar.querySelector('#gc-theme-toggle').addEventListener('click', () => {
-    toggleTheme();
+  shellToolbar.querySelector('.theme-toggle-btn').addEventListener('click', () => {
     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
     iframeEls.forEach(el => { try { el.contentWindow.applyTheme(theme); } catch(e){} });
   });
