@@ -1382,6 +1382,8 @@
      navegador — el picker nativo sigue estando a un click, como opción
      "personalizado" (círculo arcoíris) adentro de la grilla. */
   input[type="color"].color-pal-input-active { outline: 2px solid var(--gold-dim); outline-offset: 1px; }
+  .color-pal-wrap { position: relative; display: inline-block; flex-shrink: 0; line-height: 0; }
+  .color-pal-overlay { position: absolute; inset: 0; padding: 0; border: 0; background: transparent; cursor: pointer; z-index: 2; border-radius: inherit; }
   .color-pal-popup {
     position: fixed; z-index: 600; display: none;
     background: var(--bg-panel); border: 1px solid var(--border);
@@ -16120,16 +16122,23 @@ function attachColorPalette(input){
     + '</div>';
   document.body.appendChild(popup);
 
-  // En Electron/macOS el color panel nativo del SO se dispara en mousedown,
-  // no en click — por eso e.preventDefault() en 'click' no alcanzaba para
-  // bloquearlo. Handler movido a mousedown para interceptarlo a tiempo.
-  // El picker nativo sigue disponible vía la opción "personalizado" (círculo
-  // arcoíris) dentro de la grilla; esa ruta usa palBypass para saltear este
-  // guard y dejar pasar el click real.
-  input.addEventListener('mousedown', (e) => {
-    if (input.dataset.palBypass) return;
-    e.preventDefault();
-    e.stopPropagation();
+  // Envolvemos el input en un span y ponemos un <button> overlay transparente
+  // encima. El overlay captura todos los clicks antes de que lleguen al input,
+  // lo que impide que el picker nativo del SO se abra (en Electron/macOS el
+  // NSColorPanel se dispara a nivel de sistema y no se puede bloquear con
+  // preventDefault en mousedown/click sobre el propio input).
+  const wrap = document.createElement('span');
+  wrap.className = 'color-pal-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const overlay = document.createElement('button');
+  overlay.type = 'button';
+  overlay.className = 'color-pal-overlay';
+  overlay.setAttribute('tabindex', '-1');
+  overlay.setAttribute('aria-hidden', 'true');
+  wrap.appendChild(overlay);
+
+  const openPalette = () => {
     const wasOpen = popup.classList.contains('open');
     closeColorPalette();
     if (wasOpen) return;
@@ -16148,17 +16157,25 @@ function attachColorPalette(input){
     popup.style.visibility = '';
     input.classList.add('color-pal-input-active');
     _colorPalOpenPopup = { popup, trigger: input };
+  };
+
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openPalette();
   });
-  input.addEventListener('click', (e) => {
-    if (input.dataset.palBypass) { delete input.dataset.palBypass; return; }
-    e.preventDefault(); e.stopPropagation();
-  });
+
   popup.addEventListener('click', (e) => {
     const sw = e.target.closest('[data-color]');
     if (!sw) return;
     e.stopPropagation();
     closeColorPalette();
-    if (sw.dataset.color === 'custom') { input.dataset.palBypass = '1'; input.click(); return; }
+    if (sw.dataset.color === 'custom') {
+      // Ocultar overlay momentáneamente para dejar pasar el click nativo
+      overlay.style.display = 'none';
+      input.click();
+      requestAnimationFrame(() => { overlay.style.display = ''; });
+      return;
+    }
     input.value = sw.dataset.color;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
