@@ -18093,8 +18093,15 @@ function _initGridFavBar(toolBtns){
       btn.className = 'fav-tool-btn';
       btn.title = info.tip;
       btn.innerHTML = info.svg;
+      let _pendingFrame = null;
+      btn.addEventListener('pointerdown', () => {
+        // Capturar el frame activo en pointerdown, antes de que paneFocused
+        // (que llega por postMessage asíncrono) pueda cambiar activePane
+        _pendingFrame = window._gridActiveFrame && window._gridActiveFrame();
+      });
       btn.addEventListener('click', () => {
-        const f = window._gridActiveFrame && window._gridActiveFrame();
+        const f = _pendingFrame || (window._gridActiveFrame && window._gridActiveFrame());
+        _pendingFrame = null;
         if (f){ try{ f.contentWindow.setTool(null, tool); }catch(e){} }
         bar.querySelectorAll('.fav-tool-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -18107,12 +18114,17 @@ function _initGridFavBar(toolBtns){
     else { bar.style.left = '80px'; bar.style.top = '100px'; }
   }
 
+  function iframeEls(){ return Array.from(document.querySelectorAll('iframe:not(#calendar-iframe)')); }
+
   const handle = bar.querySelector('#tool-fav-bar-handle');
   let ox = 0, oy = 0;
   handle.addEventListener('pointerdown', e => {
     ox = e.clientX - bar.getBoundingClientRect().left;
     oy = e.clientY - bar.getBoundingClientRect().top;
     handle.setPointerCapture(e.pointerId);
+    // Deshabilitar pointer-events en iframes para que pointermove
+    // no se pierda al arrastrar sobre otro panel
+    iframeEls().forEach(f => { f.style.pointerEvents = 'none'; });
     e.preventDefault();
   });
   handle.addEventListener('pointermove', e => {
@@ -18124,6 +18136,7 @@ function _initGridFavBar(toolBtns){
   handle.addEventListener('pointerup', e => {
     if (!handle.hasPointerCapture(e.pointerId)) return;
     handle.releasePointerCapture(e.pointerId);
+    iframeEls().forEach(f => { f.style.pointerEvents = ''; });
     setFavPos({ x: parseInt(bar.style.left), y: parseInt(bar.style.top) });
   });
 
