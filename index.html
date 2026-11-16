@@ -3785,12 +3785,18 @@ function renderLayoutGrid(n){
   // shellToggleVolume de arriba: llama a la función del panel ACTIVO y
   // resincroniza el botón del shell con lo que haya quedado.
   window.shellToggleAllIndicators = function(){
-    const f = iframeEls[activePane-1];
-    if (!f) return;
-    try {
-      f.contentWindow.toggleAllIndicatorsVisibility();
-      shellToolbar.querySelector('#btn-ind-legend').classList.toggle('active', !paneEval(f, 'allIndicatorsHidden()'));
-    } catch(e){}
+    const frames = targetFrames();
+    if (!frames.length) return;
+    // Determinar nuevo estado basándose en el panel activo
+    const activeF = iframeEls[activePane-1];
+    const shouldHide = activeF ? !paneEval(activeF, 'allIndicatorsHidden()') : true;
+    frames.forEach(f => {
+      try {
+        const hidden = paneEval(f, 'allIndicatorsHidden()');
+        if (hidden !== shouldHide) f.contentWindow.toggleAllIndicatorsVisibility();
+      } catch(e){}
+    });
+    if (activeF) shellToolbar.querySelector('#btn-ind-legend').classList.toggle('active', !paneEval(activeF, 'allIndicatorsHidden()'));
   };
   function syncMagnetBtn(f){
     const btn = shellToolbar.querySelector('#btn-magnet');
