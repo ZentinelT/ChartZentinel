@@ -14563,7 +14563,14 @@ function addPriceAlert(price, symbol){
   const list = getPriceAlerts();
   const n = window._lastCandles ? window._lastCandles.length : 0;
   const createdBarTime = n > 0 ? window._lastCandles[n-1].time : 0;
-  list.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2,7), symbol: symbol || STATE.symbol, price, created: Date.now(), created_bar: createdBarTime, status: 'active' });
+  // created_side: de qué lado estaba el precio al crearla ('above' = el
+  // precio por encima de la línea). Lo usa checkPriceAlertsAgainstBar para
+  // poder disparar DENTRO de la vela de creación cuando el precio vivo
+  // cruza la línea, sin disparar retroactivamente por el rango que esa
+  // vela ya había recorrido antes de crear la alerta.
+  const lastClose = n > 0 ? window._lastCandles[n-1].close : null;
+  const createdSide = lastClose != null ? (lastClose >= price ? 'above' : 'below') : null;
+  list.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2,7), symbol: symbol || STATE.symbol, price, created: Date.now(), created_bar: createdBarTime, created_side: createdSide, status: 'active' });
   savePriceAlerts(list);
   renderAlertLines(); updateAlertBadge(); renderAlertsPanelList();
   showToast(`Alerta creada: ${symbol || STATE.symbol} en ${fmt(price)}`, 'success');
@@ -14610,6 +14617,14 @@ function alertBeep(){
 // dispararía alertas por velas viejas. "Tocó": el rango de la vela
 // incluye el precio; "gap": la vela anterior cerró de un lado y esta
 // quedó ENTERA del otro (el precio saltó el nivel sin tocarlo).
+// La vela de CREACIÓN (bar.time === created_bar) es un caso aparte: antes
+// se salteaba entera (time <= created_bar), así que la alerta no podía
+// disparar en toda esa vela — en 1H, hasta una hora muda aunque el precio
+// cruzara la línea; y si quedaba del otro lado, la vela siguiente tampoco
+// la tocaba con su rango y no disparaba NUNCA (reportado 2026-11-16).
+// Tampoco sirve chequearle el rango completo: incluiría movimiento ANTERIOR
+// a crear la alerta. Lo correcto: comparar el precio VIVO (close) contra el
+// lado en el que estaba al crearla (created_side) y disparar al cruzarla.
 function checkPriceAlertsAgainstBar(bar){
   if (window._replay || window._replayFollow) return;
   const list = getPriceAlerts();
@@ -14618,10 +14633,23 @@ function checkPriceAlertsAgainstBar(bar){
   const prev = n > 1 ? window._lastCandles[n-2] : null;
   for (const a of list){
     if (a.status !== 'active' || a.symbol !== STATE.symbol) continue;
-    if (a.created_bar && bar.time <= a.created_bar) continue;
-    const touched = bar.high >= a.price && bar.low <= a.price;
-    const gapped = prev && ((prev.close < a.price && bar.low > a.price) || (prev.close > a.price && bar.high < a.price));
-    if (touched || gapped){
+    let hit = false;
+    if (!a.created_bar || bar.time > a.created_bar){
+      const touched = bar.high >= a.price && bar.low <= a.price;
+      const gapped = prev && ((prev.close < a.price && bar.low > a.price) || (prev.close > a.price && bar.high < a.price));
+      hit = touched || gapped;
+    } else if (bar.time === a.created_bar){
+      if (!a.created_side){
+        // Alerta guardada por una versión vieja (sin created_side): se
+        // arma ahora con el lado actual del precio y dispara al cruzarlo.
+        a.created_side = bar.close >= a.price ? 'above' : 'below';
+        changed = true;
+        continue;
+      }
+      hit = (a.created_side === 'below' && bar.close >= a.price) ||
+            (a.created_side === 'above' && bar.close <= a.price);
+    }
+    if (hit){
       a.status = 'triggered'; a.triggered_at = Date.now(); changed = true;
       showToast(`Alerta: ${a.symbol} tocó ${fmt(a.price)}`, 'warn', 10000);
       if (alertSoundOn()) alertBeep();
