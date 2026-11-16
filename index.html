@@ -18161,7 +18161,7 @@ function _initGridFavBar(toolBtns){
 }
 
 (function(){
-  if (isGridShell()) return; // en el shell la barra vive en cada pane, no aquí
+  if (isGridShell() || EMBED_MODE) return; // en grilla: shell maneja la barra vía _initGridFavBar
   const FAV_KEY = 'zentinel_tool_favs';
   const FAV_POS_KEY = 'zentinel_tool_fav_pos';
 
