@@ -13295,6 +13295,18 @@ function applyChartSettings(){
   });
   applyMainSeriesColors(); // colores de la serie principal según su tipo (velas/línea/área/...)
   renderTradeMarkers(); // el modo (flechas solas / + texto) puede haber cambiado
+  // Apply visual settings to Vela (upColor/downColor/background/etc)
+  if (chart && typeof chart.setTheme === 'function') {
+    chart.setTheme({
+      background: cs.bgColor || '#0a0a0c',
+      textColor: cs.textColor || '#8888a8',
+      gridColor: cs.axisColor || '#222230',
+      borderColor: cs.axisColor || '#222230',
+      upColor: cs.upColor || '#26a69a',
+      downColor: cs.downColor || '#909090',
+      fontFamily: "'DM Mono', monospace",
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════════
