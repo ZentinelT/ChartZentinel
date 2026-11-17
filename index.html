@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="logo-unicorn-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Orbitron:wght@600;700&family=Archivo:wght@700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="vela.global.min.js"></script>
 <style>
   :root {
     --bg-primary:   #0a0a0c;
@@ -4821,11 +4821,11 @@ const STAT_MAP_2_DEFAULTS = {
   showLabels:true, labelSide:'right',
 };
 const STATE = {
-  dataSource: lsGet(lsKey('td_datasource')) || 'binance', // 'mt5' | 'binance'
+  dataSource: lsGet(lsKey('td_datasource')) || 'mt5', // 'mt5' | 'binance'
   // Tipo de gráfico de la serie principal — 'candles' | 'hollow' | 'bars'
   // | 'line' | 'area' | 'heikin'. Ver setChartType()/createMainSeries().
   chartType: lsGet(lsKey('td_charttype')) || 'candles',
-  symbol:     lsGet(lsKey('td_symbol')) || 'BTCUSDT',
+  symbol:     lsGet(lsKey('td_symbol')) || 'NAS100.fs',
   timeframe:  lsGet(lsKey('td_tf'))     || '1h',
   watchlist:  JSON.parse(lsGet(lsKey('td_watchlist')) || '[]'),
   indicators: JSON.parse(lsGet(lsKey('td_indicators')) || '[]'),
@@ -7583,369 +7583,202 @@ function applyDrawingZOrder(d) {
 
 function initChart() {
   const container = document.getElementById('chart-container');
-  chart = LightweightCharts.createChart(container, {
-    layout: { background: buildChartBackground(STATE.chartSettings), textColor:STATE.chartSettings.textColor, fontFamily:"'DM Mono', monospace", fontSize:11, attributionLogo:false },
-    grid:   { vertLines:{visible:false}, horzLines:{visible:false} },
-    crosshair: {
-      mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
-      horzLine: { color:STATE.chartSettings.crosshairColor, style:STATE.chartSettings.crosshairStyle, labelBackgroundColor:'#1e1e2a' },
-    },
-    rightPriceScale: { borderColor:STATE.chartSettings.axisColor, minimumWidth: RIGHT_PRICE_SCALE_MIN_WIDTH, scaleMargins:{
-      top: STATE.chartSettings.marginTop ?? CHART_SETTINGS_DEFAULTS.marginTop,
-      bottom: STATE.chartSettings.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom,
-    } },
-    timeScale: { borderColor:STATE.chartSettings.axisColor, timeVisible:true, secondsVisible:false, rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing:10 },
-    localization: { timeFormatter: fmtCrosshairTime },
-    watermark: { visible:false },
-  });
 
-  createMainSeries(); // crea candleSeries según STATE.chartType (ver TIPOS DE GRÁFICO)
-  applyChartSettings();
-  wireAlertContextMenu(); // click derecho → alerta de precio
-  wireAlertDrag();        // drag vertical → mover alerta
-  updateAlertBadge();
-
-  // Serie invisible, aparte de candleSeries: solo lleva los puntos fantasma
-  // a futuro (futureWhitespace) que antes iban pegados a candleSeries. Están
-  // en serie propia para que candleSeries SIEMPRE termine en la vela real
-  // más nueva — así candleSeries.update(bar) (que lightweight-charts solo
-  // permite sobre el ÚLTIMO punto de la serie) puede actualizar la vela en
-  // formación en cada tick sin reconstruir toda la serie con setData(). El
-  // eje de tiempo del chart es compartido entre todas sus series, así que
-  // estos fantasmas siguen habilitando el snap a futuro de safeLineTime()
-  // aunque vivan en otra serie — ver updateFormingCandleLive más abajo.
-  futureAxisSeries = chart.addLineSeries({
-    visible:false, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false,
-  });
-
-  // Otra serie invisible, con un único punto fijo CON VALOR (no whitespace,
-  // a diferencia de futureAxisSeries) 15 velas a futuro — probado a mano:
-  // un punto con valor reserva el eje de tiempo compartido de verdad, uno
-  // de whitespace (como los de futureAxisSeries) no alcanza por sí solo.
-  // Sin esto, extender una línea/rect/fib hacia la derecha y después
-  // desextenderla (o borrar el dibujo) hacía que el eje perdiera esas
-  // columnas al toque — el rango visible quedaba recortado exactamente esa
-  // cantidad de velas, y como setVisibleRange()/setVisibleLogicalRange()
-  // no pueden pedir más de lo que el eje realmente tiene reservado, ni
-  // guardar/restaurar el rango de antes alcanzaba para deshacerlo. Repetir
-  // Extender varias veces seguidas (reportado por el usuario) iba restando
-  // de a 10 velas cada vez que se apagaba, acumulado — un chart que
-  // terminaba mostrando una ventana de tiempo bastante más vieja. Esta
-  // reserva, siempre presente, evita que el eje dependa de que algún
-  // dibujo puntual la sostenga.
-  futureAnchorSeries = chart.addLineSeries({
-    visible:false, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false,
-    autoscaleInfoProvider: () => null,
-  });
-
-  // precision 0: el label del volumen ("654.59") se dibuja sobre el MISMO
-  // eje derecho (las escalas overlay no tienen eje propio) y era la
-  // etiqueta más ancha de todas — lightweight-charts dimensiona el eje por
-  // la más ancha, así que esos ".59" dejaban una franja vacía a la derecha
-  // de los precios (reporte del usuario). El decimal del volumen no aporta.
-  volumeSeries = chart.addHistogramSeries({
-    color:'#c9a84c22', priceFormat:{type:'volume', precision:0, minMove:1}, priceScaleId:'vol',
-    visible: volumeVisible, lastValueVisible: false, priceLineVisible: false,
-  });
-  chart.priceScale('vol').applyOptions({ scaleMargins:{top:0.82,bottom:0} });
-
-  let _suppressCrosshairBroadcast = false;
-  let _lastExternalCandleTime = undefined;
-  let _lastExternalPrice = undefined;
-  window.setExternalCrosshair = function(time, price){
-    if (!STATE.chartSettings.syncCrosshair) return;
-    try {
-      if (time == null) {
-        // Si ya estaba limpio, no hay nada que hacer — ver el comentario
-        // de más abajo sobre por qué una llamada redundante es un problema.
-        if (_lastExternalCandleTime === null) return;
-        _lastExternalCandleTime = null;
-        _lastExternalPrice = null;
-        _suppressCrosshairBroadcast = true;
-        chart.clearCrosshairPosition();
-        // clearCrosshairPosition() no dispara subscribeCrosshairMove (solo
-        // los "move" lo hacen), así que el cuadro de OHLC no se actualiza
-        // solo — hay que ocultarlo a mano acá.
-        const info = document.getElementById('crosshair-info');
-        if (info) info.style.display = 'none';
-        return;
-      }
-      // Búsqueda binaria (las velas vienen ordenadas) en vez de barrer todo
-      // el array — con Watchtower activo puede haber miles cargadas, y esto
-      // corre en cada movimiento del mouse del panel que SÍ se está
-      // moviendo, para cada uno de los demás paneles.
-      //
-      // "Vela más cercana por valor absoluto" (como estaba antes) está MAL
-      // para esto: cada vela representa un RANGO [time, time+barStep), no un
-      // punto — pertenece a esa vela cualquier horario adentro del rango,
-      // sin importar si cae más cerca del abierto de la vela SIGUIENTE. Con
-      // paneles en el MISMO TF nunca se nota (el horario que llega siempre
-      // coincide exacto con una vela propia). El bug aparecía al sincronizar
-      // un panel en TF CHICO (ej. M5) hacia uno en TF más grande (ej. H1):
-      // pasada la mitad de la hora, el horario M5 (ej. :35) queda más cerca
-      // en valor absoluto del PRÓXIMO H1 (que recién va a abrir) que del H1
-      // actual (que sí lo contiene) — el cursor del panel grande saltaba a
-      // la vela de al lado, las líneas de crosshair quedaban visiblemente
-      // desalineadas entre paneles. Corregido: la vela que CONTIENE ese
-      // horario es la última cuyo horario de apertura es <= time (floor),
-      // nunca la más próxima por distancia.
-      const candles = window._lastCandles || [];
-      let candle = null;
-      if (candles.length && candles[0].time <= time) {
-        let lo = 0, hi = candles.length - 1;
-        while (lo < hi) {
-          const mid = (lo + hi + 1) >> 1;
-          if (candles[mid].time <= time) lo = mid; else hi = mid - 1;
-        }
-        candle = candles[lo];
-      }
-      const resolvedTime = candle ? candle.time : null;
-      // Dos tiempos "crudos" distintos (p.ej. de dos TF distintos) pueden
-      // resolver a la MISMA vela acá — si ya está aplicada esa vela, salir
-      // sin tocar nada. Reaplicar setCrosshairPosition aunque sea con el
-      // mismo valor puede disparar otro subscribeCrosshairMove en ESTE
-      // panel, que viaja de vuelta al de origen si el timing no da justo
-      // con la bandera de supresión — eso es lo que se veía como el precio
-      // prendiéndose y apagándose entre dos valores sin tocar el mouse.
-      if (resolvedTime === _lastExternalCandleTime && price === _lastExternalPrice) return;
-      _lastExternalCandleTime = resolvedTime;
-      _lastExternalPrice = price;
-      _suppressCrosshairBroadcast = true;
-      // Precio real recibido del panel de origen (mismo nivel en los dos,
-      // en vez del close de la vela de ESTE panel — ver el comentario en
-      // subscribeCrosshairMove, lado emisor). Si por lo que sea no vino
-      // (versión vieja de otro pane, o null), cae en el close como antes.
-      if (candle) chart.setCrosshairPosition(price != null ? price : candle.close, candle.time, candleSeries);
-      else chart.clearCrosshairPosition();
-    } finally {
-      requestAnimationFrame(() => { _suppressCrosshairBroadcast = false; });
-    }
+  // — VELA HEADLESS ENGINE —
+  const _BRIDGE = 'http://localhost:8787';
+  // Vela timeframe (minutes string / 'D'/'W'/'M') → MT5 bridge interval
+  const _VELA_TO_BRIDGE = {
+    '1':'1min','3':'3min','5':'5min','15':'15min','30':'30min',
+    '60':'1h','120':'2h','240':'4h','360':'6h','480':'8h','720':'12h',
+    'D':'1day','1D':'1day','W':'1week','1W':'1week','M':'1month','1M':'1month',
   };
+  // MT5 bridge interval → Vela timeframe (used by loadChart)
+  function _bridgeTfToVela(bridgeTf){
+    const m={'1min':'1','3min':'3','5min':'5','15min':'15','30min':'30',
+      '1h':'60','2h':'120','4h':'240','6h':'360','8h':'480','12h':'720',
+      '1day':'D','1week':'W','1month':'M'};
+    return m[bridgeTf]??'60';
+  }
+  window._bridgeTfToVela = _bridgeTfToVela;
 
-  // subscribeCrosshairMove dispara en CADA mousemove sobre el chart, sin
-  // límite de frecuencia — con el mouse quieto sobre una vela real (donde
-  // sí hay trabajo: formatear OHLC, pisar textContent del topbar, y en la
-  // grilla multi-chart además transmitir a los demás paneles) eso puede
-  // llegar a varias decenas de veces por segundo, muy por encima de los
-  // ~60/seg que la pantalla puede pintar — se sentía como que el cursor
-  // "se trababa" cuando pasaba por encima de las velas (y no en el espacio
-  // vacío después de la última, donde no hay vela y este trabajo ni corre).
-  // Igual que en el resize de los paneles y el scroll-fade del TF bar: se
-  // guarda solo el ÚLTIMO param y se aplica una vez por frame.
-  // Si el mouse REAL no está físicamente encima de ESTE chart, cualquier
-  // 'crosshair move' que llegue es un eco — del refresco de precio en vivo
-  // (cada 1s) reescribiendo la vela en formación bajo una posición de
-  // crosshair que quedó puesta por sync externo, no por el usuario — y
-  // jamás debe retransmitirse. Sin esto, un panel que SOLO está mirando
-  // (no el que el usuario está moviendo) podía reenviar ese eco de vuelta
-  // al panel activo, empujando SU crosshair a otro nivel sin que nadie lo
-  // tocara — "como buscando un nivel cercano, se sale del puntero".
-  let _realMouseOverChart = false;
-  container.addEventListener('mousemove', () => { _realMouseOverChart = true; }, { passive:true, capture:true });
-  container.addEventListener('mouseleave', () => { _realMouseOverChart = false; }, { passive:true, capture:true });
-  let _chmPending = null, _chmRaf = null, _lastBroadcastTime = undefined, _lastBroadcastPrice = undefined;
-  function _applyChmLocal(){
-    _chmRaf = null;
-    const param = _chmPending; _chmPending = null;
-    if (!param) return;
-    const info = document.getElementById('crosshair-info');
-    if (!param.time || !param.seriesData) { info.style.display='none'; }
-    else {
-      let d = param.seriesData.get(candleSeries);
-      // En modo línea/área la serie principal solo trae {value} — el OHLC
-      // del legend sale de la vela real. (Heikin sí trae OHLC propio y se
-      // muestra ese, como TV: el legend refleja lo que se ve dibujado.)
-      if (d && d.open === undefined) {
-        const cs = window._lastCandles || [];
-        // Búsqueda desde el final: el crosshair casi siempre anda cerca
-        // de las velas recientes, y esto corre 1 vez por frame como mucho.
-        for (let i = cs.length - 1; i >= 0; i--) { if (cs[i].time === param.time) { d = cs[i]; break; } if (cs[i].time < param.time) { d = null; break; } }
-        if (d && d.open === undefined) d = null;
-      }
-      if (!d) { info.style.display='none'; }
-      else {
-        info.style.display='block';
-        info.innerHTML = `O <span>${fmt(d.open)}</span>  H <span>${fmt(d.high)}</span>  L <span>${fmt(d.low)}</span>  C <span>${fmt(d.close)}</span>`;
-        updateTopbarOHLCV(d);
-      }
+  class _Mt5Provider {
+    info(){ return { name:'mt5', label:'MT5 Bridge' }; }
+    async getBars(ticker, timeframe, range){
+      const interval = _VELA_TO_BRIDGE[timeframe]??'1h';
+      const limit = range.limit??500;
+      const before = range.to ? Math.floor(range.to/1000) : undefined;
+      let url = `${_BRIDGE}/ohlcv?symbol=${encodeURIComponent(ticker)}&interval=${interval}&bars=${limit}`;
+      if (before) url += `&before=${before}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Bridge ${res.status}`);
+      const json = await res.json();
+      return (json.bars??[]).map(b=>({time:b.time*1000,open:b.open,high:b.high,low:b.low,close:b.close,volume:b.volume}));
+    }
+    subscribe(ticker, timeframe, onBar){
+      const interval = _VELA_TO_BRIDGE[timeframe]??'1h';
+      let stopped=false, timer;
+      const poll = async()=>{
+        if(stopped)return;
+        try{
+          const url=`${_BRIDGE}/ohlcv?symbol=${encodeURIComponent(ticker)}&interval=${interval}&bars=2`;
+          const res=await fetch(url); const json=await res.json();
+          const bars=json.bars??[];
+          if(bars.length){const b=bars[bars.length-1]; onBar({time:b.time*1000,open:b.open,high:b.high,low:b.low,close:b.close,volume:b.volume});}
+        }catch{}
+        if(!stopped) timer=setTimeout(poll,2000);
+      };
+      poll();
+      return ()=>{ stopped=true; clearTimeout(timer); };
+    }
+    async listSymbols(){
+      try{ const res=await fetch(`${_BRIDGE}/symbols`); const names=await res.json(); return names.map(s=>({ticker:s,name:s,description:s})); }
+      catch{ return []; }
     }
   }
-  chart.subscribeCrosshairMove(param => {
-    // Solo lo visual (texto OHLC/topbar) se acota a 1 vez por frame — eso
-    // es puro DOM local, no le importa a nadie más el orden exacto.
-    _chmPending = param;
-    if (_chmRaf === null) _chmRaf = requestAnimationFrame(_applyChmLocal);
-    // El broadcast a los demás paneles, en cambio, tiene que seguir
-    // disparando SÍNCRONO, en el mismo tick que el evento nativo — de eso
-    // depende que _suppressCrosshairBroadcast (que se resetea en SU PROPIO
-    // rAF, adentro de setExternalCrosshair) vea el valor correcto cuando
-    // haga falta frenar el eco de vuelta. Diferirlo acá un frame rompía
-    // ese orden y era lo que hacía que el cursor se "pegara" en la línea
-    // de precio al pasar por una vela con el sync prendido.
-    if (_suppressCrosshairBroadcast || !EMBED_MODE || !STATE.chartSettings.syncCrosshair || !window.top.zentinelCrosshairBroadcast) return;
-    const nextTime = param.point ? param.time : null;
-    // Precio REAL bajo el cursor (coordenada Y → precio de ESTE panel), no
-    // el close de la vela resueltas — antes cada panel sincronizado dibujaba
-    // su línea de precio en el close de SU PROPIA vela (casi nunca el mismo
-    // número que lo que el mouse está señalando en el panel de origen), así
-    // que la línea horizontal no quedaba alineada entre paneles aunque la
-    // vertical (tiempo) sí. Con el precio real, cada panel sincronizado
-    // apunta al MISMO nivel de precio, no a uno arbitrario de su propia vela.
-    const nextPrice = param.point ? candleSeries.coordinateToPrice(param.point.y) : null;
-    // El "se fue" (null) siempre se deja pasar — recién al dejar el chart
-    // es cuando más importa que el eco llegue y limpie el synced de los
-    // demás paneles. El bloqueo de abajo es solo para un nivel CONCRETO
-    // (eco con tiempo real pero sin mouse físicamente acá).
-    if (nextTime !== null && !_realMouseOverChart) return;
-    // subscribeCrosshairMove puede refirear con el MISMO punto (mouse
-    // quieto) cuando los datos de abajo cambian — p.ej. el refresco de
-    // precio en vivo cada 1s pisa la vela en formación y la librería
-    // vuelve a notificar el crosshair aunque nadie lo haya movido. Sin
-    // este chequeo, eso reenviaba el mismo valor una y otra vez; si otro
-    // panel estaba en un TF distinto y el "más cercano" le resolvía a una
-    // vela vecina distinta a la que tenía antes por un pelo, el precio de
-    // ESE panel terminaba prendiéndose/apagándose entre dos velas al
-    // compás del refresco de 1s, sin que nadie tocara el mouse. Ahora
-    // también se compara el precio: moverse VERTICALMENTE sin cambiar de
-    // vela (tiempo igual) sí tiene que reenviar, para que la línea de
-    // precio siga al mouse dentro de la misma vela.
-    if (nextTime === _lastBroadcastTime && nextPrice === _lastBroadcastPrice) return;
-    _lastBroadcastTime = nextTime;
-    _lastBroadcastPrice = nextPrice;
+
+  // Create WITHOUT symbol so Vela doesn't attempt a load before the provider is registered.
+  // loadChart() will call chart.setMarket() once the provider is ready.
+  chart = new window.Vela.Vela(container, {
+    live:true, theme:'dark', volume:true, drawings:true,
+  });
+  chart.data.registerProvider('mt5', new _Mt5Provider());
+
+  // — LightweightCharts COMPATIBILITY STUBS —
+  // The rest of the codebase calls LW-style APIs on `chart`. Stub them so they
+  // don't crash; Vela renders its own data independently via the Mt5Provider.
+  function _makeSeriesStub(){
+    return {
+      setData:()=>{}, update:()=>{}, setOptions:()=>{}, applyOptions:()=>{},
+      priceToCoordinate:()=>null, coordinateToPrice:()=>null,
+      setMarkers:()=>{}, options:()=>({}), barsInLogicalRange:()=>null,
+    };
+  }
+  chart.applyOptions = ()=>{};
+  chart.removeSeries = ()=>{};
+  chart.addLineSeries = ()=>_makeSeriesStub();
+  chart.addHistogramSeries = ()=>_makeSeriesStub();
+  chart.addCandlestickSeries = ()=>_makeSeriesStub();
+  chart.addBarSeries = ()=>_makeSeriesStub();
+  chart.addAreaSeries = ()=>_makeSeriesStub();
+  chart.subscribeCrosshairMove = ()=>{};  // replaced by chart.onCrosshairMove below
+  chart.setCrosshairPosition = ()=>{};
+  chart.clearCrosshairPosition = ()=>{};
+  chart.priceScale = ()=>({ applyOptions:()=>{}, options:()=>({}), width:()=>50 });
+  const _tsStub = {
+    applyOptions:()=>{}, subscribeVisibleLogicalRangeChange:()=>{},
+    unsubscribeVisibleLogicalRangeChange:()=>{}, getVisibleLogicalRange:()=>null,
+    setVisibleLogicalRange:()=>{}, timeToCoordinate:()=>null, scrollToRealTime:()=>{},
+    scrollToPosition:()=>{}, getVisibleRange:()=>null, setVisibleRange:()=>{},
+    fitContent:()=>{}, width:()=>0, height:()=>0, coordinateToTime:()=>null,
+    logicalToCoordinate:()=>null, coordinateToLogical:()=>null, getRightOffset:()=>0,
+    subscribeVisibleRangeChange:()=>{}, unsubscribeVisibleRangeChange:()=>{},
+  };
+  chart.timeScale = ()=>_tsStub;
+
+  // Global series stubs (the codebase uses these as module-level variables)
+  candleSeries   = _makeSeriesStub();
+  volumeSeries   = _makeSeriesStub();
+  futureAxisSeries   = _makeSeriesStub();
+  futureAnchorSeries = _makeSeriesStub();
+
+  // Override custom indicator render functions — replaced by Vela native indicators
+  renderWatchtower=renderSniper=renderSweeps=renderFractalModel=renderStatMap2=renderRsi=()=>{};
+  createRsiChart=()=>{};
+
+  // — RESIZE —
+  new ResizeObserver(()=>chart.resize()).observe(container);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') chart.resize(); });
+
+  // — CROSSHAIR —
+  let _realMouseOverChart = false;
+  container.addEventListener('mousemove', ()=>{ _realMouseOverChart=true; }, {passive:true,capture:true});
+  container.addEventListener('mouseleave', ()=>{ _realMouseOverChart=false; }, {passive:true,capture:true});
+  let _chmPending=null, _chmRaf=null, _lastBroadcastTime=undefined, _lastBroadcastPrice=undefined;
+  function _applyChmLocal(){
+    _chmRaf=null;
+    const param=_chmPending; _chmPending=null;
+    if(!param) return;
+    const info=document.getElementById('crosshair-info');
+    if(!param.time||!param.ohlc){ if(info) info.style.display='none'; return; }
+    const d=param.ohlc;
+    if(!d||d.open===undefined){ if(info) info.style.display='none'; return; }
+    if(info){
+      info.style.display='block';
+      info.innerHTML=`O <span>${fmt(d.open)}</span>  H <span>${fmt(d.high)}</span>  L <span>${fmt(d.low)}</span>  C <span>${fmt(d.close)}</span>`;
+      updateTopbarOHLCV(d);
+    }
+  }
+  // Vela fires onCrosshairMove with param.time in MILLISECONDS (via chart.renderer)
+  chart.renderer.onCrosshairMove(param=>{
+    _chmPending=param;
+    if(_chmRaf===null) _chmRaf=requestAnimationFrame(_applyChmLocal);
+    if(!EMBED_MODE||!STATE.chartSettings.syncCrosshair||!window.top.zentinelCrosshairBroadcast) return;
+    const nextTime = param.time ? Math.floor(param.time/1000) : null; // broadcast expects seconds
+    const nextPrice = param.price??null;
+    if(nextTime!==null&&!_realMouseOverChart) return;
+    if(nextTime===_lastBroadcastTime&&nextPrice===_lastBroadcastPrice) return;
+    _lastBroadcastTime=nextTime; _lastBroadcastPrice=nextPrice;
     window.top.zentinelCrosshairBroadcast(nextTime, PANE_ID, nextPrice);
   });
 
-  function _forceFullRedraw(){
-    invalidateContainerWidthCache();
-    chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
-    clearSvgHighlights();
-    if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
-    renderWatchtower();
-    renderSniper();
-    renderSweeps();
-    renderFractalModel();
-    syncOverlayPositions();
-  }
-  new ResizeObserver(_forceFullRedraw).observe(container);
-  // Chrome (y otros) frenan los timers de una pestaña en segundo plano —
-  // el countdown de 1s que dispara los refrescos en vivo puede quedar
-  // atascado a ~1 vuelta por minuto mientras la pestaña no está activa.
-  // Las velas ya están cargadas en memoria (setData ya corrió), pero el
-  // canvas no se repinta hasta el próximo tick real — se siente como "el
-  // gráfico quedó colgado/vacío" hasta volver a la pestaña. Forzar un
-  // repintado completo apenas la pestaña vuelve a estar visible evita esa
-  // espera (detectado probando con fuentes de datos externas: cada pedido
-  // real por internet, aunque sea rápido, ya no es instantáneo como el
-  // bridge local, y con la pestaña en segundo plano el primer resultado
-  // podía tardar minutos en verse en pantalla aunque ya estuviera listo).
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') _forceFullRedraw();
-  });
+  // setExternalCrosshair: called by other grid panels for crosshair sync.
+  // Vela has a native setExternalCrosshair(timeMs, price) — we route into it.
+  let _lastExternalCandleTime=undefined;
+  window.setExternalCrosshair=function(time, price){
+    if(!STATE.chartSettings.syncCrosshair) return;
+    const info=document.getElementById('crosshair-info');
+    if(time==null){
+      if(_lastExternalCandleTime===null) return;
+      _lastExternalCandleTime=null;
+      chart.renderer.setExternalCrosshair(null);
+      if(info) info.style.display='none';
+      return;
+    }
+    const candles=window._lastCandles||[];
+    let candle=null;
+    if(candles.length&&candles[0].time<=time){
+      let lo=0,hi=candles.length-1;
+      while(lo<hi){const mid=(lo+hi+1)>>1; if(candles[mid].time<=time) lo=mid; else hi=mid-1;}
+      candle=candles[lo];
+    }
+    const resolvedTime=candle?candle.time:null;
+    if(resolvedTime===_lastExternalCandleTime) return;
+    _lastExternalCandleTime=resolvedTime;
+    // time is in seconds from broadcast; Vela needs milliseconds
+    chart.renderer.setExternalCrosshair(time*1000, price??null);
+    if(candle&&info){
+      info.style.display='block';
+      info.innerHTML=`O <span>${fmt(candle.open)}</span>  H <span>${fmt(candle.high)}</span>  L <span>${fmt(candle.low)}</span>  C <span>${fmt(candle.close)}</span>`;
+      updateTopbarOHLCV(candle);
+    } else if(info){ info.style.display='none'; }
+  };
 
-  chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
-    // 50 antes: a 8px/vela típico eso es apenas ~400px de margen — con el
-    // ida-y-vuelta al bridge (que a su vez le pide a MT5 y puede tardar)
-    // el usuario llegaba al borde y se quedaba ESPERANDO ahí antes de que
-    // aparecieran las velas nuevas, sintiéndose "a tramos". Disparando el
-    // pedido bastante antes (300 velas de margen) da tiempo a que la
-    // respuesta ya esté lista cuando el usuario realmente llega al borde.
-    if (range && range.from < 800) loadMoreHistory();
-    renderWatchtower();
-    renderSniper();
-    renderSweeps();
-    renderFractalModel();
-    syncOverlayPositions();
-  });
-
-  // El zoom vertical (arrastrar el eje de precio) cambia el rango de
-  // precios visible, no el de tiempo — subscribeVisibleLogicalRangeChange
-  // no se entera, así que Watchtower se quedaba "congelado" hasta el
-  // próximo evento que sí dispare un redibujo. Mientras el mouse esté
-  // apretado en cualquier parte del chart (arrastrando precio, tiempo, o
-  // lo que sea) lo seguimos en vivo; se corta apenas se suelta el click.
-  //
-  // La rueda del mouse/trackpad tiene el mismo problema pero al revés: no
-  // hay mousedown, y encima dispara MUCHOS eventos 'wheel' seguidos (sobre
-  // todo con scroll por inercia), cada uno disparando un redibujo completo
-  // — eso hacía que las cajas se "amontonaran" y recién se acomodaran un
-  // rato después de parar de scrollear. Por eso el loop también se prende
-  // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
-  let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); } }
-
-  let _wtMouseDown = false;
-  container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
-  window.addEventListener('mouseup', () => { _wtMouseDown = false; if (!_wtWheelTimer) _wtStopLoop(); });
-
-  let _wtWheelTimer = null;
-  container.addEventListener('wheel', () => {
-    _wtStartLoop();
-    clearTimeout(_wtWheelTimer);
-    _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
-  }, { passive:true });
-
-  initWatchtowerLayer();
-  initSniperLayer();
-  initSweepsLayer();
-  initFractalModelLayer();
-  initStatMap2Layer();
-
-  // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
-  // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
-  // para siempre (60-120 veces por segundo, sin parar nunca, incluso con el
-  // chart totalmente quieto), igual que le pasaba a Watchtower antes de que
-  // se corrigiera (ver comentario de _wtDragLoop más arriba: "hacerlo 60
-  // veces por segundo todo el tiempo es lo que hacía sentir lento"). Mismo
-  // diagnóstico, mismo arreglo acá: solo hace falta reposicionar esto
-  // cuando algo realmente cambia — pan/zoom, drag/wheel activo, resize —
-  // no en un loop perpetuo de fondo todo el tiempo que el chart esté abierto.
+  // syncOverlayPositions: positions countdown badge and order badges.
+  // Custom SVG drawings are hidden (priceToCoordinate returns null with stubs).
   function syncOverlayPositions(){
-    if (window._lastCandles){ const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open); }
+    if(window._lastCandles){const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open);}
     drawings.forEach(d=>{
-      if (window._dragSession && window._dragSession.drawing===d) return;
-      if (d.type==='text' && d.label) {
-        // safeLineTime: un texto escrito en un TF (p.ej. M5) trae un
-        // d.p1.time crudo que puede no caer en ninguna vela/whitespace real
-        // de OTRO panel/TF (p.ej. al cambiarlo a 1H) — timeToCoordinate()
-        // devuelve null ahí y el cartel quedaba oculto (display:none) apenas
-        // se cambiaba de timeframe, aunque el dibujo siguiera existiendo.
-        // Mismo resguardo que ya usan hline/trendline/vline.
-        const x=chart.timeScale().timeToCoordinate(safeLineTime(d.p1.time)), y=candleSeries.priceToCoordinate(d.p1.price);
-        d.label.style.display = (x===null||y===null) ? 'none' : 'block';
-        if (x!==null&&y!==null){ d.label.style.left=(x+6)+'px'; d.label.style.top=(y-10)+'px'; }
-      } else if (d.type==='vline') {
-        syncVLine(d);
-      } else if (d.type==='rect') {
-        syncRectFill(d);
-      } else if (d.type==='vp') {
-        syncVolumeProfileBars(d);
-      } else if (d.type==='fib') {
-        syncFibLabels(d);
-      } else if (d.type==='long' || d.type==='short') {
-        syncPositionTool(d);
-      }
-      if (d.type==='hline' || d.type==='trendline') {
-        syncExtendedLineSvg(d);
-      }
+      if(window._dragSession&&window._dragSession.drawing===d) return;
+      if(d.type==='text'&&d.label){ d.label.style.display='none'; }
+      else if(d.type==='vline') syncVLine(d);
+      else if(d.type==='rect') syncRectFill(d);
+      else if(d.type==='vp') syncVolumeProfileBars(d);
+      else if(d.type==='fib') syncFibLabels(d);
+      else if(d.type==='long'||d.type==='short') syncPositionTool(d);
+      if(d.type==='hline'||d.type==='trendline') syncExtendedLineSvg(d);
     });
-    // Las manijas (círculos) del dibujo SELECCIONADO no se reposicionan
-    // solas durante un pan/zoom — highlightSelectedSvg() es lo único que
-    // las reconstruye, y antes solo se llamaba desde unos pocos lugares
-    // puntuales (resize, fin de un drag), nunca desde acá. Resultado
-    // reportado: zoomear in/out con un dibujo seleccionado dejaba sus
-    // puntos "congelados" en la posición vieja hasta el próximo click.
-    // highlightSelectedSvg ya debounces con su propio requestAnimationFrame
-    // (ver _highlightSvgRaf), así que llamarla en cada tick de acá —
-    // incluido el loop de arrastre/wheel de más arriba — no duplica trabajo.
-    if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
+    if(selectedDrawingId&&!window._dragSession) highlightSelectedSvg(selectedDrawingId);
     positionOrderPositionBadges();
     positionOrderLineBadges();
   }
-  window._syncOverlayPositions = syncOverlayPositions;
+  window._syncOverlayPositions=syncOverlayPositions;
+
+  wireAlertContextMenu();
+  wireAlertDrag();
+  updateAlertBadge();
+  initDrawingLayer();
   syncOverlayPositions();
+  chart.ready().then(()=>console.log('[Vela] ready'));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -14899,12 +14732,6 @@ function renderSeries(timeframe){
   futureAnchorSeries.setData([{ time: last.time + _barStep*15, value: last.close }]);
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
-  renderRsi();
-  renderWatchtower();
-  renderSniper();
-  renderSweeps();
-  renderFractalModel();
-  renderStatMap2();
   renderTradeMarkers();
   renderAlertLines();
 }
@@ -14943,12 +14770,6 @@ function updateFormingCandleLive(bar){
   }
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
-  renderRsi();
-  renderWatchtower();
-  renderSniper();
-  renderSweeps();
-  renderFractalModel();
-  renderStatMap2();
   renderTradeMarkers();
 }
 
@@ -15773,6 +15594,8 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // precio viejo en vez de reacomodarse a los datos nuevos.
     chart.priceScale('right').applyOptions({ autoScale: true });
     renderSeries(timeframe);
+    // Tell Vela to load the new symbol/timeframe (fire and forget — Vela fetches via Mt5Provider)
+    chart.setMarket({ symbol: 'mt5:'+symbol, timeframe: window._bridgeTfToVela(timeframe) }).catch(()=>{});
     chart.timeScale().applyOptions({ rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing: 8 });
     scrollToRealTimeReliably();
     // El resync de más arriba lee clientWidth/clientHeight EN ESE INSTANTE —
