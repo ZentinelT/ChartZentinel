@@ -708,6 +708,25 @@
     flex-shrink: 0;
     z-index: 50;
   }
+  /* Vela has its own drawing toolbar — hide ChartZentinel's drawing tools,
+     keep only the 4 bottom toggles (volume, indicators, buy/sell, theme).
+     Pull #toolbar out of the flex flow so it overlays Vela's toolbar column
+     at the bottom instead of adding a second column next to it. */
+  #toolbar > .tool-btn[data-tool],
+  #toolbar > #btn-magnet,
+  #toolbar > .tool-btn:not([id]):not(.theme-toggle-btn),
+  #toolbar > .tool-sep { display: none; }
+  #toolbar {
+    position: absolute;
+    bottom: 32px; /* above #statusbar */
+    left: 0;
+    width: 44px; /* match Vela's toolbar width */
+    background: transparent;
+    border: none;
+    z-index: 60;
+    padding: 4px 0;
+  }
+  #toolbar > #btn-volume { margin-top: 0; }
 
   .tool-btn {
     width: 30px; height: 30px;
@@ -9111,7 +9130,11 @@ function closeTfFavPopup(){
 let volumeVisible = lsGet(lsKey('td_volume_visible')) === '1';
 function toggleVolume() {
   volumeVisible = !volumeVisible;
-  volumeSeries.applyOptions({ visible: volumeVisible });
+  if (chart && typeof chart.addNativeIndicator === 'function') {
+    chart.addNativeIndicator('volume').setVisible(volumeVisible);
+  } else {
+    volumeSeries.applyOptions({ visible: volumeVisible });
+  }
   document.getElementById('btn-volume').classList.toggle('active', volumeVisible);
   lsSet(lsKey('td_volume_visible'), volumeVisible ? '1' : '0');
 }
