@@ -1935,7 +1935,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
 
-    <button class="topbar-btn" id="btn-settings" title="Settings" onclick="chart ? chart.renderer.openSettings() : openChartSettingsModal()">
+    <button class="topbar-btn" id="btn-settings" title="Settings" onclick="chart&&chart.renderer?chart.renderer.openSettings():null">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -4088,7 +4088,10 @@ function renderLayoutGrid(n){
   // (compartida con el modo 1 gráfico) ya sabe detectar que está corriendo
   // acá (ver isGridShell()) y leer/escribir el panel activo vía paneEval
   // en vez de un chart propio — ningún iframe se toca.
-  gbar.querySelector('#gc-settings').addEventListener('click', openChartSettingsModal);
+  gbar.querySelector('#gc-settings').addEventListener('click', () => {
+    const f = window._gridActiveFrame ? window._gridActiveFrame() : null;
+    if (f) window._gridPaneEval(f, 'chart&&chart.renderer&&chart.renderer.openSettings()');
+  });
   // Snapshot: la grilla ENTERA en una sola imagen (pedido del usuario —
   // la primera versión capturaba solo el panel activo). Compone el canvas
   // de cada pane en su posición real y descarga/copia desde el shell.
@@ -7713,13 +7716,23 @@ function initChart() {
 
   // Price↔pixel calibration: Vela no expone priceToCoordinate, así que derivamos
   // la relación a partir de eventos de crosshair (precio) + mousemove (y px).
-  let _velaCalPts = [], _velaRatio = null, _velaCalRef = null;
+  let _velaCalPts = [], _velaRatio = null, _velaCalRef = null, _velaCalGood = false;
   let _velaMouseY = null;
   container.addEventListener('mousemove', e => {
     const r = container.getBoundingClientRect();
     _velaMouseY = e.clientY - r.top;
   }, {passive:true, capture:true});
+  // Acumular pares precio+Y del crosshair. Solo actualizar el ratio si
+  // cambia más del 5% — evita que micro-movimientos del mouse desplacen
+  // todos los overlays en cada frame (bug: dibujos "moviéndose solos").
+  // Filtra precios fuera del rango de velas (RSI/Stoch dan valores 0-100
+  // que corrompen la calibración cuando el mouse pasa por sus paneles).
   function _velaCal(price, y) {
+    if (window._lastCandles && window._lastCandles.length) {
+      const closes = window._lastCandles.map(c=>c.close);
+      const mn = Math.min(...closes) * 0.90, mx = Math.max(...closes) * 1.10;
+      if (price < mn || price > mx) return;
+    }
     _velaCalPts.push({price, y});
     if (_velaCalPts.length > 20) _velaCalPts.shift();
     let best = null, bestSpread = 0;
@@ -7729,17 +7742,22 @@ function initChart() {
         if (dp > bestSpread) { bestSpread = dp; best = {a:_velaCalPts[i], b:_velaCalPts[j]}; }
       }
     }
-    if (best && bestSpread > 0) {
-      _velaRatio = (best.b.y - best.a.y) / (best.b.price - best.a.price);
-      _velaCalRef = best.a;
-    }
+    if (!best || bestSpread < 1) return;
+    const newRatio = (best.b.y - best.a.y) / (best.b.price - best.a.price);
+    if (_velaRatio !== null && _velaCalGood && Math.abs(newRatio - _velaRatio) / Math.abs(_velaRatio) < 0.05) return;
+    _velaRatio = newRatio;
+    _velaCalRef = best.a;
+    _velaCalGood = true;
   }
+  // _velaCalGood=true solo cuando hay pares reales del crosshair (no seed).
+  // Así el countdown badge y el overlay no aparecen en posición errónea al
+  // arrancar con el seed (que usa todas las velas en vez del rango visible).
   function _velaPriceToCoord(price) {
-    if (_velaCalRef == null || !_velaRatio) return null;
+    if (!_velaCalGood || _velaCalRef == null || !_velaRatio) return null;
     return _velaCalRef.y + (price - _velaCalRef.price) * _velaRatio;
   }
   function _velaCoordToPrice(y) {
-    if (_velaCalRef == null || !_velaRatio) return null;
+    if (!_velaCalGood || _velaCalRef == null || !_velaRatio) return null;
     return _velaCalRef.price + (y - _velaCalRef.y) / _velaRatio;
   }
   // Siembra la calibración sin esperar movimiento del mouse.
@@ -7811,7 +7829,21 @@ function initChart() {
   chart.subscribeCrosshairMove = ()=>{};  // replaced by chart.onCrosshairMove below
   chart.setCrosshairPosition = ()=>{};
   chart.clearCrosshairPosition = ()=>{};
-  chart.priceScale = ()=>({ applyOptions:()=>{}, options:()=>({}), width:()=>50 });
+  // width() intenta medir el eje de precios real del DOM de Vela.
+  // Vela renderiza el price axis como el elemento más ancho a la derecha
+  // del canvas principal — comparar el canvas más ancho con el contenedor.
+  function _velaPriceScaleWidth() {
+    try {
+      const canvases = container.querySelectorAll('canvas');
+      let maxW = 0;
+      canvases.forEach(c => { if (c.offsetWidth > maxW) maxW = c.offsetWidth; });
+      if (maxW > 0 && maxW < container.clientWidth - 10) {
+        return container.clientWidth - maxW;
+      }
+    } catch(e){}
+    return 60; // fallback razonable para Vela (el eje de Vela es ~60px)
+  }
+  chart.priceScale = ()=>({ applyOptions:()=>{}, options:()=>({}), width:()=>_velaPriceScaleWidth() });
   const _tsStub = {
     applyOptions:()=>{}, subscribeVisibleLogicalRangeChange:()=>{},
     unsubscribeVisibleLogicalRangeChange:()=>{}, getVisibleLogicalRange:()=>null,
@@ -7934,7 +7966,7 @@ function initChart() {
   // en wheel (zoom) y pointermove (pan), via RAF para no saturar.
   let _syncRaf = null;
   function _queueSync(){ if(!_syncRaf) _syncRaf=requestAnimationFrame(()=>{ _syncRaf=null; syncOverlayPositions(); }); }
-  container.addEventListener('wheel', _queueSync, {passive:true});
+  container.addEventListener('wheel', () => { _velaCalPts = []; _queueSync(); }, {passive:true});
   container.addEventListener('pointermove', _queueSync, {passive:true});
   // Vela dispara 'bar' en cada frame de pan/zoom — usarlo para sincronizar
   try { chart.on('bar', _queueSync); } catch(e){}
@@ -16063,7 +16095,17 @@ function wtApproxNow(){
 function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
   clearInterval(_countdownTimer);
   const badge=document.getElementById('price-countdown-badge');
-  const close=nextCloseTime(timeframe, lastBarTime);
+  let close=nextCloseTime(timeframe, lastBarTime);
+  // Si el bridge no devolvió la vela en formación (sólo cerradas), nextClose
+  // ya pasó. Calculamos el cierre real de la vela actual desde serverTime
+  // para que el badge muestre el countdown correcto igual.
+  if (close !== null && close <= serverTimeAtLoad) {
+    const tfSec = tfToSeconds(timeframe);
+    if (tfSec > 0) {
+      const formingStart = Math.floor(serverTimeAtLoad / tfSec) * tfSec;
+      close = formingStart + tfSec;
+    }
+  }
   const loadedAtMs=performance.now();
   _wtNowAnchorServerTime = serverTimeAtLoad;
   _wtNowAnchorPerfMs = loadedAtMs;
