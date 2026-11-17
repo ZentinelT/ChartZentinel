@@ -4118,9 +4118,11 @@ function renderLayoutGrid(n){
   // (compartida con el modo 1 gráfico) ya sabe detectar que está corriendo
   // acá (ver isGridShell()) y leer/escribir el panel activo vía paneEval
   // en vez de un chart propio — ningún iframe se toca.
+  // Settings en multi-panel: abre el modal del shell (flota sobre toda la grilla,
+  // sin tocar los iframes). openChartSettingsModal ya sabe leer/escribir el panel
+  // activo via paneEval cuando isGridShell() === true.
   gbar.querySelector('#gc-settings').addEventListener('click', () => {
-    const f = window._gridActiveFrame ? window._gridActiveFrame() : null;
-    if (f) window._gridPaneEval(f, 'chart&&chart.renderer&&chart.renderer.openSettings()');
+    openChartSettingsModal();
   });
   // Workspace popup del grid shell
   gbar.querySelector('#gc-workspaces').addEventListener('click', (e) => {
@@ -8026,7 +8028,14 @@ function initChart() {
   initStatMap2Layer();
   initDrawingLayer();
   syncOverlayPositions();
-  chart.ready().then(()=>console.log('[Vela] ready'));
+  chart.ready().then(()=>{
+    console.log('[Vela] ready');
+    // Aplicar config de Vela guardado (herencia al abrir desde multi-panel)
+    const savedVelaCfg = lsGet(lsKey('td_vela_config'));
+    if (savedVelaCfg) {
+      try { chart.renderer.applyConfig(JSON.parse(savedVelaCfg)); } catch(e) {}
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -9410,7 +9419,7 @@ if (_ordersCollapsedSaved === '0') {
 // _p2, _p3, etc. — vacías la primera vez → se ven como defaults. Al pasar
 // de 1 gráfico a N paneles, copiamos el estado actual a _p2.._pN para que
 // todos partan del mismo símbolo/TF que tenías.
-const PANE_CLONE_KEYS = ['td_symbol','td_tf','td_watchlist','td_indicators','td_watchtower','td_sniper','td_chart_settings','td_ind_styles','td_sidebar_collapsed'];
+const PANE_CLONE_KEYS = ['td_symbol','td_tf','td_watchlist','td_indicators','td_watchtower','td_sniper','td_chart_settings','td_ind_styles','td_sidebar_collapsed','td_vela_config'];
 function clonePaneState(fromSuffix, toSuffix){
   PANE_CLONE_KEYS.forEach(k=>{
     const v = lsGet(k+fromSuffix);
@@ -9430,6 +9439,10 @@ const LAYOUT_LABELS = { 1:'1 chart', 2:'2 charts', 3:'3 charts', 4:'4 charts' };
 function goToLayout(v){
   if (v!=='1' && !EMBED_MODE && LAYOUT_N===1) {
     const n = parseInt(v);
+    // Guardar la config visual de Vela para que los nuevos paneles la hereden.
+    if (chart?.renderer) {
+      try { lsSet('td_vela_config', JSON.stringify(chart.renderer.getConfig())); } catch(e) {}
+    }
     // pane=1 ya usa LS_SUFFIX='' — no necesita copia. Solo 2..N.
     for (let i = 2; i <= n; i++) clonePaneState('', '_p'+i);
   }
@@ -13663,6 +13676,7 @@ function captureWorkspace(){
     drawings: serializeDrawings(),
     sidebarCollapsed: !!document.getElementById('sidebar')?.classList.contains('collapsed'),
     ordersOpen: !!document.getElementById('orders-panel')?.classList.contains('open'),
+    velaConfig: (chart?.renderer ? (() => { try { return chart.renderer.getConfig(); } catch(e) { return null; } })() : null),
   };
 }
 
@@ -13990,6 +14004,14 @@ async function applyWorkspace(name){
   await loadChart(STATE.symbol, STATE.timeframe);
   document.getElementById('symbol-input').value = STATE.symbol;
   setActiveTF(STATE.timeframe);
+
+  // Configuración visual de Vela (colores, fondo, crosshair, etc.) — se
+  // aplica después de loadChart porque setMarket resetea el renderer.
+  if (w.velaConfig && chart?.renderer) {
+    chart.ready().then(() => {
+      try { chart.renderer.applyConfig(w.velaConfig); } catch(e) {}
+    });
+  }
 
   // Dibujos: solo si el workspace los trae — uno guardado antes de esto
   // no tiene drawings, y aplicarlo no debería borrar los que el usuario ya
