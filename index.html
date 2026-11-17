@@ -4925,7 +4925,6 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map 2') renderStatMap2();
-  else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].setVisible(!isIndicatorHidden(name));
 }
 // Ojo de la toolbar (antes ocultaba la LISTA, ver toggleIndicatorLegend —
@@ -7246,9 +7245,14 @@ function chartGutterWidth(){
 function chartGutterHeight(){
   try { return chart.timeScale().height() || 0; } catch(e){ return 0; }
 }
+function chartGutterLeft(){
+  // Vela sidebar (vela-dtb) está pegada al borde izquierdo del contenedor
+  const dtb = document.querySelector('.vela-dtb');
+  return dtb ? (dtb.offsetWidth || 44) : 0;
+}
 function overlayClipPath(){
-  const g = chartGutterWidth(), h = chartGutterHeight();
-  return (g > 0 || h > 0) ? `inset(0 ${g}px ${h}px 0)` : 'none';
+  const g = chartGutterWidth(), h = chartGutterHeight(), l = chartGutterLeft();
+  return (g > 0 || h > 0 || l > 0) ? `inset(0 ${g}px ${h}px ${l}px)` : 'none';
 }
 function syncOverlaySvgSize(svg, container){
   svg.setAttribute('width', container.clientWidth);
@@ -7706,14 +7710,98 @@ function initChart() {
   // — LightweightCharts COMPATIBILITY STUBS —
   // The rest of the codebase calls LW-style APIs on `chart`. Stub them so they
   // don't crash; Vela renders its own data independently via the Mt5Provider.
+
+  // Price↔pixel calibration: Vela no expone priceToCoordinate, así que derivamos
+  // la relación a partir de eventos de crosshair (precio) + mousemove (y px).
+  let _velaCalPts = [], _velaRatio = null, _velaCalRef = null;
+  let _velaMouseY = null;
+  container.addEventListener('mousemove', e => {
+    const r = container.getBoundingClientRect();
+    _velaMouseY = e.clientY - r.top;
+  }, {passive:true, capture:true});
+  function _velaCal(price, y) {
+    _velaCalPts.push({price, y});
+    if (_velaCalPts.length > 20) _velaCalPts.shift();
+    let best = null, bestSpread = 0;
+    for (let i=0; i<_velaCalPts.length; i++) {
+      for (let j=i+1; j<_velaCalPts.length; j++) {
+        const dp = Math.abs(_velaCalPts[i].price - _velaCalPts[j].price);
+        if (dp > bestSpread) { bestSpread = dp; best = {a:_velaCalPts[i], b:_velaCalPts[j]}; }
+      }
+    }
+    if (best && bestSpread > 0) {
+      _velaRatio = (best.b.y - best.a.y) / (best.b.price - best.a.price);
+      _velaCalRef = best.a;
+    }
+  }
+  function _velaPriceToCoord(price) {
+    if (_velaCalRef == null || !_velaRatio) return null;
+    return _velaCalRef.y + (price - _velaCalRef.price) * _velaRatio;
+  }
+  function _velaCoordToPrice(y) {
+    if (_velaCalRef == null || !_velaRatio) return null;
+    return _velaCalRef.price + (y - _velaCalRef.y) / _velaRatio;
+  }
+  // Siembra la calibración sin esperar movimiento del mouse.
+  // Usa el rango de precios de las velas cargadas + altura del contenedor
+  // con ~10% de padding (lo que Vela aplica por defecto al autoescalar).
+  function _velaSeedCalFromCandles(candles) {
+    if (!candles || candles.length < 2) return;
+    const ch = container.clientHeight - 24; // restar altura del timescale (stub: 24px)
+    if (ch <= 0) return;
+    const closes = candles.map(c => c.close);
+    const mn = Math.min(...closes), mx = Math.max(...closes);
+    if (mx <= mn) return;
+    const pad = (mx - mn) * 0.10;
+    const displayedRange = (mx - mn) + 2 * pad;
+    _velaRatio = ch / displayedRange * -1; // Y crece hacia abajo, precio hacia arriba
+    // punto de referencia: precio máximo en el borde superior del área de plot (con padding)
+    _velaCalRef = { price: mx + pad, y: 0 };
+    _velaCalPts = [];
+  }
+  window._velaSeedCal = _velaSeedCalFromCandles;
+
+  function _velaTimeToCoord(t) {
+    if (t == null) return null;
+    const tMs = t * 1000;
+    const range = chart.getVisibleRange ? chart.getVisibleRange() : null;
+    if (!range || range.to <= range.from) return null;
+    const w = container.clientWidth || 0;
+    if (!w) return null;
+    return (tMs - range.from) / (range.to - range.from) * w;
+  }
+  function _velaCoordToTime(x) {
+    const range = chart.getVisibleRange ? chart.getVisibleRange() : null;
+    if (!range || range.to <= range.from) return null;
+    const w = container.clientWidth || 0;
+    if (!w) return null;
+    return Math.round((range.from + (x / w) * (range.to - range.from)) / 1000);
+  }
+
   function _makeSeriesStub(){
     return {
       setData:()=>{}, update:()=>{}, setOptions:()=>{}, applyOptions:()=>{},
-      priceToCoordinate:()=>null, coordinateToPrice:()=>null,
-      setMarkers:()=>{}, options:()=>({}), barsInLogicalRange:()=>null,
+      priceToCoordinate:(p)=>_velaPriceToCoord(p),
+      coordinateToPrice:(y)=>_velaCoordToPrice(y),
+      setMarkers:(markers)=>{
+        if (!chart || !chart.marks) return;
+        try {
+          const velaMarks = (markers||[]).map((m,i)=>({
+            id: 'trade-'+(m.time||0)+'-'+i,
+            time: (m.time||0)*1000,
+            glyph: { color: m.color||'#888', shape: 'circle' },
+          }));
+          chart.marks.set(velaMarks);
+        } catch(e){}
+      },
+      options:()=>({}), barsInLogicalRange:()=>null,
+      attachPrimitive:()=>{}, detachPrimitive:()=>{},
+      createPriceLine:()=>({update:()=>{}, remove:()=>{}}),
+      removePriceLine:()=>{},
     };
   }
   chart.applyOptions = ()=>{};
+  chart.options = ()=>({});
   chart.removeSeries = ()=>{};
   chart.addLineSeries = ()=>_makeSeriesStub();
   chart.addHistogramSeries = ()=>_makeSeriesStub();
@@ -7727,11 +7815,15 @@ function initChart() {
   const _tsStub = {
     applyOptions:()=>{}, subscribeVisibleLogicalRangeChange:()=>{},
     unsubscribeVisibleLogicalRangeChange:()=>{}, getVisibleLogicalRange:()=>null,
-    setVisibleLogicalRange:()=>{}, timeToCoordinate:()=>null, scrollToRealTime:()=>{},
+    setVisibleLogicalRange:()=>{},
+    timeToCoordinate:(t)=>_velaTimeToCoord(t),
+    scrollToRealTime:()=>{},
     scrollToPosition:()=>{}, getVisibleRange:()=>null, setVisibleRange:()=>{},
-    fitContent:()=>{}, width:()=>0, height:()=>0, coordinateToTime:()=>null,
+    fitContent:()=>{}, width:()=>0, height:()=>24,
+    coordinateToTime:(x)=>_velaCoordToTime(x),
     logicalToCoordinate:()=>null, coordinateToLogical:()=>null, getRightOffset:()=>0,
     subscribeVisibleRangeChange:()=>{}, unsubscribeVisibleRangeChange:()=>{},
+    options:()=>({barSpacing:10, rightOffset:5}),
   };
   chart.timeScale = ()=>_tsStub;
 
@@ -7741,8 +7833,9 @@ function initChart() {
   futureAxisSeries   = _makeSeriesStub();
   futureAnchorSeries = _makeSeriesStub();
 
-  // Override custom indicator render functions — replaced by Vela native indicators
-  renderWatchtower=renderSniper=renderSweeps=renderFractalModel=renderStatMap2=renderRsi=()=>{};
+  // RSI: ahora es un indicador nativo de Vela (addNativeIndicator) — no hay
+  // subpanel propio, LightweightCharts no está disponible para createRsiChart.
+  renderRsi=()=>{};
   createRsiChart=()=>{};
 
   // — RESIZE —
@@ -7771,7 +7864,10 @@ function initChart() {
   // Vela fires onCrosshairMove with param.time in MILLISECONDS (via chart.renderer)
   chart.renderer.onCrosshairMove(param=>{
     _chmPending=param;
-    if(param.price!=null) window._lastCrosshairPrice=param.price;
+    if(param.price!=null){
+      window._lastCrosshairPrice=param.price;
+      if(_velaMouseY!=null) _velaCal(param.price, _velaMouseY);
+    }
     if(_chmRaf===null) _chmRaf=requestAnimationFrame(_applyChmLocal);
     if(!EMBED_MODE||!STATE.chartSettings.syncCrosshair||!window.top.zentinelCrosshairBroadcast) return;
     const nextTime = param.time ? Math.floor(param.time/1000) : null; // broadcast expects seconds
@@ -7834,9 +7930,23 @@ function initChart() {
   }
   window._syncOverlayPositions=syncOverlayPositions;
 
+  // Vela no tiene subscribeVisibleRangeChange — disparar syncOverlayPositions
+  // en wheel (zoom) y pointermove (pan), via RAF para no saturar.
+  let _syncRaf = null;
+  function _queueSync(){ if(!_syncRaf) _syncRaf=requestAnimationFrame(()=>{ _syncRaf=null; syncOverlayPositions(); }); }
+  container.addEventListener('wheel', _queueSync, {passive:true});
+  container.addEventListener('pointermove', _queueSync, {passive:true});
+  // Vela dispara 'bar' en cada frame de pan/zoom — usarlo para sincronizar
+  try { chart.on('bar', _queueSync); } catch(e){}
+
   wireAlertContextMenu();
   wireAlertDrag();
   updateAlertBadge();
+  initWatchtowerLayer();
+  initSniperLayer();
+  initSweepsLayer();
+  initFractalModelLayer();
+  initStatMap2Layer();
   initDrawingLayer();
   syncOverlayPositions();
   chart.ready().then(()=>console.log('[Vela] ready'));
@@ -15625,6 +15735,7 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     if (_myGen !== _loadChartGen) return; // superado por un loadChart() más nuevo — descartar
 
     window._lastCandles=candles;
+    if (window._velaSeedCal) window._velaSeedCal(candles);
     // El único lugar que corría checkOpenTradesAgainstBar() era el polling
     // incremental (de a 3 velas, abajo) — esta carga completa (loadChart:
     // primer load, cambio de símbolo/TF, Refresh si falla el polling) nunca
