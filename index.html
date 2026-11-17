@@ -263,7 +263,7 @@
   #chart-indicator-chips {
     position: absolute;
     top: 32px;
-    left: 8px;
+    left: 52px;
     z-index: 17;
     display: flex;
     flex-direction: column;
@@ -1114,7 +1114,7 @@
      oscuro sobre fondo oscuro — símbolo y OHLCV ilegibles, reportado por
      el usuario. */
   #ohlcv-bar {
-    position: absolute; top: 8px; left: 8px;
+    position: absolute; top: 8px; left: 52px;
     display: flex; align-items: baseline; gap: 7px;
     font-family: var(--font-mono); font-size: 9.5px; color: #8888a8;
     background: rgba(10,10,12,.55);
@@ -7771,6 +7771,7 @@ function initChart() {
   // Vela fires onCrosshairMove with param.time in MILLISECONDS (via chart.renderer)
   chart.renderer.onCrosshairMove(param=>{
     _chmPending=param;
+    if(param.price!=null) window._lastCrosshairPrice=param.price;
     if(_chmRaf===null) _chmRaf=requestAnimationFrame(_applyChmLocal);
     if(!EMBED_MODE||!STATE.chartSettings.syncCrosshair||!window.top.zentinelCrosshairBroadcast) return;
     const nextTime = param.time ? Math.floor(param.time/1000) : null; // broadcast expects seconds
@@ -14739,10 +14740,9 @@ function wireAlertContextMenu(){
   if (!cont) return;
   let menu = null;
   cont.addEventListener('contextmenu', (e) => {
-    if (!chart || !candleSeries) return;
+    if (!chart) return;
     e.preventDefault();
-    const rect = cont.getBoundingClientRect();
-    const price = candleSeries.coordinateToPrice(e.clientY - rect.top);
+    const price = window._lastCrosshairPrice ?? null;
     if (price == null || !isFinite(price)) return;
     if (!menu){
       menu = document.createElement('div');
@@ -14751,7 +14751,6 @@ function wireAlertContextMenu(){
       document.addEventListener('click', () => { menu.classList.remove('open'); });
       document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') menu.classList.remove('open'); });
     }
-    // minMove del símbolo para redondear el precio a algo prolijo
     let minMove = 0.01; try { minMove = candleSeries.options().priceFormat.minMove || 0.01; } catch(err){}
     const rounded = Math.round(price / minMove) * minMove;
     menu.innerHTML = `<button class="alert-ctx-item">Alerta en ${fmt(rounded)}</button>`;
