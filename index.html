@@ -7627,7 +7627,8 @@ function initChart() {
         }catch{}
         if(!stopped) timer=setTimeout(poll,2000);
       };
-      poll();
+      // Delay first poll to avoid flooding during Vela's init burst (setMarket triggers many subscribes)
+      timer = setTimeout(poll, 5000);
       return ()=>{ stopped=true; clearTimeout(timer); };
     }
     async listSymbols(){
