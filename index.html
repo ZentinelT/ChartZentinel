@@ -673,6 +673,10 @@
     max-height: 340px; overflow-y: auto; min-width: 150px;
   }
   .tf-fav-popup.open { display: block; }
+  #ws-popup, #gc-ws-popup { min-width: 210px; padding: 8px; }
+  #ws-popup select, #gc-ws-popup select { width: 100%; margin-bottom: 8px; }
+  .ws-popup-btns { display: flex; gap: 4px; }
+  .ws-popup-btns button { flex: 1; font-size: 11px; padding: 4px 2px; }
   .tf-fav-row {
     display: flex; align-items: center; gap: 8px;
     padding: 5px 8px; border-radius: 5px; cursor: pointer;
@@ -1941,6 +1945,19 @@
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
     </button>
+    <div style="position:relative;" id="ws-popup-wrap">
+      <button class="topbar-btn" id="btn-workspaces" title="Workspaces" onclick="toggleWsPopup()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </button>
+      <div id="ws-popup" class="tf-fav-popup">
+        <select id="ws-popup-select" class="dtb-select"></select>
+        <div class="ws-popup-btns">
+          <button class="btn-ghost" onclick="wsPopupApply('ws-popup-select','ws-popup')">Load</button>
+          <button class="btn-ghost" onclick="wsPopupSave('ws-popup-select')">Save as…</button>
+          <button class="btn-ghost" style="color:var(--red)" onclick="wsPopupDelete('ws-popup-select')">Delete</button>
+        </div>
+      </div>
+    </div>
 
     <div class="tf-sep"></div>
     <button class="topbar-btn" id="btn-calendar" title="Economic Calendar" onclick="openCalendarModal()">
@@ -3448,6 +3465,19 @@ function renderLayoutGrid(n){
       <button class="topbar-btn" id="gc-settings" title="Active panel settings">
         ${SHARED_ICON.settings}
       </button>
+      <div style="position:relative;" id="gc-ws-popup-wrap">
+        <button class="topbar-btn" id="gc-workspaces" title="Workspaces">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </button>
+        <div id="gc-ws-popup" class="tf-fav-popup">
+          <select id="gc-ws-popup-select" class="dtb-select"></select>
+          <div class="ws-popup-btns">
+            <button class="btn-ghost" id="gc-ws-apply">Load</button>
+            <button class="btn-ghost" id="gc-ws-save">Save as…</button>
+            <button class="btn-ghost" style="color:var(--red)" id="gc-ws-delete">Delete</button>
+          </div>
+        </div>
+      </div>
       <div class="tf-sep"></div>
       <button class="topbar-btn" id="gc-calendar" title="Economic Calendar">
         ${SHARED_ICON.calendar}
@@ -4092,6 +4122,21 @@ function renderLayoutGrid(n){
     const f = window._gridActiveFrame ? window._gridActiveFrame() : null;
     if (f) window._gridPaneEval(f, 'chart&&chart.renderer&&chart.renderer.openSettings()');
   });
+  // Workspace popup del grid shell
+  gbar.querySelector('#gc-workspaces').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const p = gbar.querySelector('#gc-ws-popup');
+    const open = p.classList.toggle('open');
+    if (open) _renderWsSelect('gc-ws-popup-select');
+  });
+  gbar.querySelector('#gc-ws-apply').addEventListener('click', () => wsPopupApply('gc-ws-popup-select','gc-ws-popup'));
+  gbar.querySelector('#gc-ws-save').addEventListener('click', () => wsPopupSave('gc-ws-popup-select'));
+  gbar.querySelector('#gc-ws-delete').addEventListener('click', () => wsPopupDelete('gc-ws-popup-select'));
+  document.addEventListener('click', (e) => {
+    const wrap = gbar.querySelector('#gc-ws-popup-wrap');
+    const p = gbar.querySelector('#gc-ws-popup');
+    if (p && p.classList.contains('open') && wrap && !wrap.contains(e.target)) p.classList.remove('open');
+  }, true);
   // Snapshot: la grilla ENTERA en una sola imagen (pedido del usuario —
   // la primera versión capturaba solo el panel activo). Compone el canvas
   // de cada pane en su posición real y descarga/copia desde el shell.
@@ -13664,6 +13709,67 @@ function renderWorkspaceSelect(){
     + names.map(n => `<option value="${n}">${n}</option>`).join('');
   if (names.includes(current)) sel.value = current;
 }
+
+function _renderWsSelect(selId){
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const cur = sel.value;
+  try { STATE.workspaces = JSON.parse(lsGet('td_workspaces') || '{}'); } catch(e){}
+  const names = Object.keys(STATE.workspaces).sort();
+  sel.innerHTML = '<option value="">— choose workspace —</option>'
+    + names.map(n=>`<option value="${n}">${n}</option>`).join('');
+  if (names.includes(cur)) sel.value = cur;
+}
+
+function toggleWsPopup(){
+  const p = document.getElementById('ws-popup');
+  if (!p) return;
+  const open = p.classList.toggle('open');
+  if (open) _renderWsSelect('ws-popup-select');
+}
+
+function wsPopupApply(selId, popupId){
+  const name = document.getElementById(selId)?.value;
+  if (!name) return;
+  document.getElementById(popupId)?.classList.remove('open');
+  applyWorkspace(name);
+}
+
+function wsPopupSave(selId){
+  const existing = Object.keys(STATE.workspaces||{}).sort();
+  promptSaveAsName('Save workspace as…', existing, (name) => {
+    try { STATE.workspaces = JSON.parse(lsGet('td_workspaces')||'{}'); } catch(e){}
+    let w;
+    if (isGridShell() && window._gridActiveFrame) {
+      const f = window._gridActiveFrame();
+      try { w = f ? JSON.parse(window._gridPaneEval(f,'JSON.stringify(captureWorkspace())')||'null') : null; } catch(e){ w=null; }
+    } else {
+      w = captureWorkspace();
+    }
+    if (!w) return;
+    STATE.workspaces[name] = w;
+    saveWorkspacesState();
+    _renderWsSelect(selId);
+    const sel = document.getElementById(selId);
+    if (sel) sel.value = name;
+  });
+}
+
+async function wsPopupDelete(selId){
+  const sel = document.getElementById(selId);
+  const name = sel?.value;
+  if (!name) return;
+  if (!(await zConfirm(`Delete workspace "${name}"?`,{danger:true,confirmText:'Delete',noAskKey:'td_no_confirm_delete_workspace'}))) return;
+  delete STATE.workspaces[name];
+  saveWorkspacesState();
+  _renderWsSelect(selId);
+}
+
+document.addEventListener('click', (e)=>{
+  const wrap = document.getElementById('ws-popup-wrap');
+  const p = document.getElementById('ws-popup');
+  if (p && p.classList.contains('open') && wrap && !wrap.contains(e.target)) p.classList.remove('open');
+}, true);
 
 function saveCurrentAsWorkspace(){
   const existing = Object.keys(STATE.workspaces).sort();
