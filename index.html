@@ -7644,6 +7644,42 @@ function initChart() {
   });
   chart.data.registerProvider('mt5', new _Mt5Provider());
 
+  // Providers for external exchanges — reuse the existing fetchOhlcv* functions.
+  // getBars receives Vela-format timeframe ('60','D'…); _VELA_TO_BRIDGE converts to bridge format.
+  // fetchOhlcv* return bars with time in NY-fake-epoch-seconds; Vela needs ms → ×1000.
+  function _makeExchangeProvider(source, fetchFn) {
+    return {
+      info(){ return { name: source, label: source.charAt(0).toUpperCase()+source.slice(1) }; },
+      async getBars(ticker, timeframe, range){
+        const interval = _VELA_TO_BRIDGE[timeframe] ?? '1h';
+        const limit = range.limit ?? 500;
+        const before = range.to ? Math.floor(range.to / 1000) : undefined;
+        try {
+          const json = await fetchFn(ticker, interval, limit, before);
+          return (json.bars ?? []).map(b => ({ time: b.time * 1000, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }));
+        } catch { return []; }
+      },
+      subscribe(ticker, timeframe, onBar){
+        const interval = _VELA_TO_BRIDGE[timeframe] ?? '1h';
+        let stopped = false, timer;
+        const poll = async () => {
+          if (stopped) return;
+          try {
+            const json = await fetchFn(ticker, interval, 2, undefined);
+            const bars = json.bars ?? [];
+            if (bars.length) { const b = bars[bars.length - 1]; onBar({ time: b.time * 1000, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }); }
+          } catch {}
+          if (!stopped) timer = setTimeout(poll, 5000);
+        };
+        timer = setTimeout(poll, 5000);
+        return () => { stopped = true; clearTimeout(timer); };
+      },
+    };
+  }
+  chart.data.registerProvider('binance',     _makeExchangeProvider('binance',     fetchOhlcvBinance));
+  chart.data.registerProvider('bybit',       _makeExchangeProvider('bybit',       fetchOhlcvBybit));
+  chart.data.registerProvider('hyperliquid', _makeExchangeProvider('hyperliquid', fetchOhlcvHyperliquid));
+
   // — LightweightCharts COMPATIBILITY STUBS —
   // The rest of the codebase calls LW-style APIs on `chart`. Stub them so they
   // don't crash; Vela renders its own data independently via the Mt5Provider.
@@ -15595,8 +15631,9 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     // precio viejo en vez de reacomodarse a los datos nuevos.
     chart.priceScale('right').applyOptions({ autoScale: true });
     renderSeries(timeframe);
-    // Tell Vela to load the new symbol/timeframe (fire and forget — Vela fetches via Mt5Provider)
-    chart.setMarket({ symbol: 'mt5:'+symbol, timeframe: window._bridgeTfToVela(timeframe) }).catch(()=>{});
+    // Tell Vela to load the new symbol/timeframe (fire and forget)
+    const _velaDs = STATE.dataSource || 'mt5';
+    chart.setMarket({ symbol: _velaDs+':'+symbol, timeframe: window._bridgeTfToVela(timeframe) }).catch(()=>{});
     chart.timeScale().applyOptions({ rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing: 8 });
     scrollToRealTimeReliably();
     // El resync de más arriba lee clientWidth/clientHeight EN ESE INSTANTE —
