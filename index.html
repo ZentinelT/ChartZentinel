@@ -1557,6 +1557,8 @@
   .alert-ctx-item:hover { background: var(--bg-hover); color: var(--gold); }
 
   .ind-picker-list { max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; margin-bottom: 14px; }
+  .ind-pick-category { padding: 6px 10px 3px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 4px; }
+  .ind-pick-category:first-child { border-top: none; margin-top: 0; }
   .ind-pick-row { display: flex; align-items: center; padding: 8px 10px; border-radius: 5px; cursor: pointer; gap: 10px; transition: background .12s; }
   .ind-pick-row:hover { background: var(--bg-hover); }
   .ind-pick-row.selected { background: var(--gold-glow); }
@@ -9340,31 +9342,116 @@ function backToCursor() {
 //  INDICATORS
 // ══════════════════════════════════════════════════════════
 const INDICATOR_DEFS = [
-  { name:'EMA 9',   desc:'Exponential MA 9',    color:'#f0c060', velaType:'ema',  velaInputs:{length:9}   },
-  { name:'EMA 20',  desc:'Exponential MA 20',   color:'#60c0f0', velaType:'ema',  velaInputs:{length:20}  },
-  { name:'EMA 50',  desc:'Exponential MA 50',   color:'#a060f0', velaType:'ema',  velaInputs:{length:50}  },
-  { name:'EMA 200', desc:'Exponential MA 200',  color:'#f06060', velaType:'ema',  velaInputs:{length:200} },
-  { name:'SMA 20',  desc:'Simple MA 20',        color:'#60f0a0', velaType:'sma',  velaInputs:{length:20}  },
-  { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', velaType:'sma',  velaInputs:{length:50}  },
-  { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', velaType:'vwap', velaInputs:{}           },
-  { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
-  { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
-  { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
-  { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
-  { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
-  { name:'Stat Map 2', desc:'Port del OHLC StatMap Multi-Timeframe — 4 TFs configurables con niveles Manip/Dist/AvgHL', color:'#aa44ff', custom:true },
+  // ── Moving Averages ──────────────────────────────────────────────────────
+  { name:'Simple Moving Average',       cat:'Moving Averages', color:'#60b0ff', velaType:'sma' },
+  { name:'Exponential Moving Average',  cat:'Moving Averages', color:'#f0c060', velaType:'ema' },
+  { name:'Moving Average',              cat:'Moving Averages', color:'#80d080', velaType:'moving-average' },
+  { name:'Smoothed Moving Average',     cat:'Moving Averages', color:'#c060ff', velaType:'rma' },
+  { name:'Zero-Lag EMA',                cat:'Moving Averages', color:'#ff8060', velaType:'zlema' },
+  { name:'VIDYA',                       cat:'Moving Averages', color:'#60e0c0', velaType:'vidya' },
+  { name:'MA Envelope',                 cat:'Moving Averages', color:'#a0a0ff', velaType:'ma-envelope' },
+  { name:'Least Squares MA',            cat:'Moving Averages', color:'#ffa060', velaType:'lsma' },
+  { name:'Linear Regression Slope',     cat:'Moving Averages', color:'#e060a0', velaType:'linear-regression-slope' },
+  // ── Bands & Channels ────────────────────────────────────────────────────
+  { name:'Bollinger Bands',             cat:'Bands', color:'#80a0ff', velaType:'bollinger-bands' },
+  { name:'Bollinger Bands %B',          cat:'Bands', color:'#9090ff', velaType:'percent-b' },
+  { name:'Bollinger Bands Width',       cat:'Bands', color:'#a080ff', velaType:'bandwidth' },
+  { name:'Keltner Channels',            cat:'Bands', color:'#c090ff', velaType:'keltner-channels' },
+  { name:'Donchian Channels',           cat:'Bands', color:'#b070ff', velaType:'donchian-channels' },
+  { name:'Chandelier Exit',             cat:'Bands', color:'#ff9090', velaType:'chandelier-exit' },
+  { name:'Chande Kroll Stop',           cat:'Bands', color:'#ff80c0', velaType:'chande-kroll-stop' },
+  { name:'SuperTrend',                  cat:'Bands', color:'#80ff80', velaType:'supertrend' },
+  { name:'Williams Alligator',          cat:'Bands', color:'#60d0a0', velaType:'williams-alligator' },
+  { name:'Gator Oscillator',            cat:'Bands', color:'#50c090', velaType:'gator-oscillator' },
+  // ── Oscillators ─────────────────────────────────────────────────────────
+  { name:'RSI',                         cat:'Oscillators', color:'#f0c060', velaType:'rsi' },
+  { name:'Stochastic',                  cat:'Oscillators', color:'#60d060', velaType:'stochastic' },
+  { name:'Stochastic RSI',              cat:'Oscillators', color:'#80e080', velaType:'stochastic-rsi' },
+  { name:'MACD',                        cat:'Oscillators', color:'#60b0ff', velaType:'macd' },
+  { name:'PPO',                         cat:'Oscillators', color:'#80c0ff', velaType:'ppo' },
+  { name:'Awesome Oscillator',          cat:'Oscillators', color:'#f09040', velaType:'awesome-oscillator' },
+  { name:'CCI',                         cat:'Oscillators', color:'#e08030', velaType:'commodity-channel-index' },
+  { name:'Williams %R',                 cat:'Oscillators', color:'#d07020', velaType:'williams-percent-r' },
+  { name:'Chande Momentum Oscillator',  cat:'Oscillators', color:'#c06010', velaType:'chande-momentum-oscillator' },
+  { name:'Connors RSI',                 cat:'Oscillators', color:'#ff9060', velaType:'connors-rsi' },
+  { name:'Fisher Transform',            cat:'Oscillators', color:'#ffa080', velaType:'fisher-transform' },
+  { name:'TRIX',                        cat:'Oscillators', color:'#ffb090', velaType:'trix' },
+  { name:'True Strength Index',         cat:'Oscillators', color:'#ffc0a0', velaType:'true-strength-index' },
+  { name:'SMI Ergodic',                 cat:'Oscillators', color:'#ffd0b0', velaType:'smi-ergodic' },
+  { name:'Schaff Trend Cycle',          cat:'Oscillators', color:'#60c0d0', velaType:'schaff-trend-cycle' },
+  { name:'Know Sure Thing',             cat:'Oscillators', color:'#70d0e0', velaType:'know-sure-thing' },
+  { name:'Coppock Curve',               cat:'Oscillators', color:'#80e0f0', velaType:'coppock-curve' },
+  { name:'Detrended Price Oscillator',  cat:'Oscillators', color:'#90f0ff', velaType:'detrended-price-oscillator' },
+  { name:'Rate of Change',              cat:'Oscillators', color:'#a0e0e0', velaType:'rate-of-change' },
+  { name:'Ultimate Oscillator',         cat:'Oscillators', color:'#b0d0d0', velaType:'ultimate-oscillator' },
+  { name:'Relative Vigor Index',        cat:'Oscillators', color:'#c0e0c0', velaType:'relative-vigor-index' },
+  { name:'Relative Volatility Index',   cat:'Oscillators', color:'#d0f0d0', velaType:'relative-volatility-index' },
+  { name:'Balance of Power',            cat:'Oscillators', color:'#c0d0a0', velaType:'balance-of-power' },
+  { name:'Elder Ray',                   cat:'Oscillators', color:'#b0c090', velaType:'elder-ray' },
+  { name:'TTM Squeeze',                 cat:'Oscillators', color:'#a0b080', velaType:'ttm-squeeze' },
+  // ── Trend ───────────────────────────────────────────────────────────────
+  { name:'Aroon',                       cat:'Trend', color:'#80ff80', velaType:'aroon' },
+  { name:'ADX',                         cat:'Trend', color:'#60d060', velaType:'average-directional-index' },
+  { name:'Vortex Indicator',            cat:'Trend', color:'#40b040', velaType:'vortex-indicator' },
+  // ── Volatility ──────────────────────────────────────────────────────────
+  { name:'ATR',                         cat:'Volatility', color:'#ff8080', velaType:'average-true-range' },
+  { name:'Historical Volatility',       cat:'Volatility', color:'#ff9090', velaType:'historical-volatility' },
+  { name:'Chaikin Volatility',          cat:'Volatility', color:'#ffa0a0', velaType:'chaikin-volatility' },
+  { name:'Mass Index',                  cat:'Volatility', color:'#ffb0b0', velaType:'mass-index' },
+  { name:'Standard Deviation',          cat:'Volatility', color:'#ffc0c0', velaType:'standard-deviation' },
+  { name:'Ulcer Index',                 cat:'Volatility', color:'#ffd0d0', velaType:'ulcer-index' },
+  { name:'Choppiness Index',            cat:'Volatility', color:'#ffe0e0', velaType:'choppiness-index' },
+  // ── Volume ──────────────────────────────────────────────────────────────
+  { name:'Volume',                      cat:'Volume', color:'#60d0d0', velaType:'volume' },
+  { name:'Volume Profile (Range)',      cat:'Volume', color:'#50c0c0', velaType:'vpvr' },
+  { name:'On Balance Volume',           cat:'Volume', color:'#40b0b0', velaType:'on-balance-volume' },
+  { name:'Accumulation/Distribution',   cat:'Volume', color:'#30a0a0', velaType:'accumulation-distribution' },
+  { name:'Chaikin Money Flow',          cat:'Volume', color:'#209090', velaType:'chaikin-money-flow' },
+  { name:'Chaikin Oscillator',          cat:'Volume', color:'#108080', velaType:'chaikin-oscillator' },
+  { name:'Ease of Movement',            cat:'Volume', color:'#009090', velaType:'ease-of-movement' },
+  { name:'Force Index',                 cat:'Volume', color:'#00a0a0', velaType:'force-index' },
+  { name:'Klinger Oscillator',          cat:'Volume', color:'#00b0b0', velaType:'klinger-oscillator' },
+  { name:'Money Flow Index',            cat:'Volume', color:'#70c0c0', velaType:'money-flow-index' },
+  { name:'Negative Volume Index',       cat:'Volume', color:'#80d0d0', velaType:'negative-volume-index' },
+  { name:'Positive Volume Index',       cat:'Volume', color:'#90e0e0', velaType:'positive-volume-index' },
+  { name:'Price Volume Trend',          cat:'Volume', color:'#a0f0f0', velaType:'price-volume-trend' },
+  { name:'Volume Oscillator',           cat:'Volume', color:'#b0ffff', velaType:'volume-oscillator' },
+  { name:'PVO',                         cat:'Volume', color:'#60c0c8', velaType:'pvo' },
+  { name:'Volume Flow Indicator',       cat:'Volume', color:'#70b0b8', velaType:'volume-flow-indicator' },
+  { name:'Intraday Intensity',          cat:'Volume', color:'#80c0c0', velaType:'intraday-intensity' },
+  // ── Overlays ────────────────────────────────────────────────────────────
+  { name:'Parabolic SAR',               cat:'Overlays', color:'#c9a84c', velaType:'parabolic-sar' },
+  { name:'VWAP',                        cat:'Overlays', color:'#c9d060', velaType:'vwap' },
+  { name:'Pivot Points',                cat:'Overlays', color:'#a070c0', velaType:'pivot-points' },
+  { name:'52-Week High/Low',            cat:'Overlays', color:'#c09060', velaType:'52-week-high-low' },
+  { name:'ZigZag',                      cat:'Overlays', color:'#d0d060', velaType:'zigzag' },
+  { name:'Williams Fractal',            cat:'Overlays', color:'#d0a060', velaType:'williams-fractal' },
+  // ── Custom (overlays SVG — código propio del usuario) ───────────────────
+  { name:'Watchtower',    cat:'Custom', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
+  { name:'Sniper',        cat:'Custom', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
+  { name:'Sweeps',        cat:'Custom', desc:'Liquidity sweeps on the current TF', color:'#e8a33d', custom:true },
+  { name:'Fractal Model', cat:'Custom', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
+  { name:'Stat Map 2',    cat:'Custom', desc:'OHLC StatMap Multi-Timeframe', color:'#aa44ff', custom:true },
 ];
 
 function openIndicatorModal() {
   const picker = document.getElementById('ind-picker');
   picker.innerHTML = '';
-  INDICATOR_DEFS.forEach(def => {
-    const row = document.createElement('div');
-    const sel = STATE.indicators.includes(def.name);
-    row.className = 'ind-pick-row'+(sel?' selected':'');
-    row.innerHTML = `<div class="ind-dot" style="background:${def.color}"></div><div class="ind-pick-name">${def.name}</div><div class="ind-pick-desc">${def.desc}</div><div class="ind-pick-check">${sel?'✓':''}</div>`;
-    row.addEventListener('click', ()=>{ row.classList.toggle('selected'); row.querySelector('.ind-pick-check').textContent=row.classList.contains('selected')?'✓':''; });
-    picker.appendChild(row);
+  const cats = [...new Set(INDICATOR_DEFS.map(d => d.cat || 'Other'))];
+  cats.forEach(cat => {
+    const defs = INDICATOR_DEFS.filter(d => (d.cat || 'Other') === cat);
+    const hdr = document.createElement('div');
+    hdr.className = 'ind-pick-category';
+    hdr.textContent = cat;
+    picker.appendChild(hdr);
+    defs.forEach(def => {
+      const row = document.createElement('div');
+      const sel = STATE.indicators.includes(def.name);
+      row.className = 'ind-pick-row'+(sel?' selected':'');
+      row.innerHTML = `<div class="ind-dot" style="background:${def.color}"></div><div class="ind-pick-name">${def.name}</div><div class="ind-pick-desc">${def.desc||''}</div><div class="ind-pick-check">${sel?'✓':''}</div>`;
+      row.addEventListener('click', ()=>{ row.classList.toggle('selected'); row.querySelector('.ind-pick-check').textContent=row.classList.contains('selected')?'✓':''; });
+      picker.appendChild(row);
+    });
   });
   openModal('modal-indicators');
 }
@@ -9409,8 +9496,7 @@ function addIndicatorSeries(name) {
   }
   if(overlays[name])return;
   if(!chart || !def.velaType) return;
-  const style=getIndicatorStyle(name, def);
-  const handle = chart.addNativeIndicator(def.velaType, { inputs: { ...def.velaInputs, color: style.color } });
+  const handle = chart.addNativeIndicator(def.velaType);
   overlays[name] = handle;
   if(isIndicatorHidden(name)) handle.setVisible(false);
 }
@@ -15400,11 +15486,11 @@ function refreshChart(){
   const btn = document.getElementById('btn-refresh');
   if (!chart) return;
   btn.classList.add('spinning');
-  // Vela: resetear la vista al presente relanzando el market
   const _ds = STATE.dataSource || 'mt5';
   window._velaBarsLoaded = 1500;
   chart.setMarket({ symbol: _ds+':'+STATE.symbol, timeframe: window._bridgeTfToVela(STATE.timeframe), bars: 1500 })
-    .catch(()=>{})
+    .then(() => { scrollToRealTimeReliably(); })
+    .catch(() => { scrollToRealTimeReliably(); })
     .finally(() => setTimeout(() => btn.classList.remove('spinning'), 400));
 }
 
