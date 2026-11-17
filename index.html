@@ -1935,7 +1935,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
 
-    <button class="topbar-btn" id="btn-settings" title="Settings" onclick="openChartSettingsModal()">
+    <button class="topbar-btn" id="btn-settings" title="Settings" onclick="chart ? chart.renderer.openSettings() : openChartSettingsModal()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -9528,7 +9528,13 @@ function renderIndicatorChips() {
     chip.innerHTML = `<span>${name}</span><button class="ind-eye-btn" title="${hidden ? 'Mostrar' : 'Ocultar'} ${name}">${hidden ? IND_EYE_OFF_SVG : IND_EYE_SVG}</button>${IND_GEAR_SVG}<button class="ind-close-btn" title="Remove ${name}">${IND_CLOSE_SVG}</button>`;
     chip.querySelector('.ind-eye-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleIndicatorVisibility(name); });
     chip.querySelector('.ind-close-btn').addEventListener('click', (e) => { e.stopPropagation(); removeIndicator(name); });
-    chip.addEventListener('click', () => openIndicatorSettings(name));
+    chip.addEventListener('click', () => {
+      if (!def.custom && overlays[name] && chart && chart.rendererPort) {
+        chart.rendererPort.openIndicatorSettings(overlays[name].id);
+      } else {
+        openIndicatorSettings(name);
+      }
+    });
     el.appendChild(chip);
   });
   // Última fila, debajo del último indicador activo — colapsa/expande la
@@ -9555,7 +9561,14 @@ function renderIndList() {
     const def=INDICATOR_DEFS.find(d=>d.name===name);
     const dotColor = def && !def.custom ? getIndicatorStyle(name, def).color : (def?.color||'#888');
     const item=document.createElement('div'); item.className='ind-item';
-    item.innerHTML=`<div class="ind-dot" style="background:${dotColor}"></div><span>${name}</span><button class="ind-settings-btn" title="Settings" onclick="openIndicatorSettings('${name}')">${IND_GEAR_SVG}</button><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
+    item.innerHTML=`<div class="ind-dot" style="background:${dotColor}"></div><span>${name}</span><button class="ind-settings-btn" title="Settings">${IND_GEAR_SVG}</button><button class="ind-remove" onclick="removeIndicator('${name}')">×</button>`;
+    item.querySelector('.ind-settings-btn').addEventListener('click', () => {
+      if (!def?.custom && overlays[name] && chart && chart.rendererPort) {
+        chart.rendererPort.openIndicatorSettings(overlays[name].id);
+      } else {
+        openIndicatorSettings(name);
+      }
+    });
     el.appendChild(item);
   });
 }
@@ -14638,18 +14651,21 @@ function checkPriceAlertsAgainstBar(bar){
 // patrón que _orderPriceLines: tirar y recrear. Se llama desde
 // renderSeries (así sobrevive a cambios de símbolo/TF/tipo de serie) y
 // tras cada mutación de alertas.
-let _alertPriceLines = [];
+// Vela price lines — se mergean en un solo setNativeData para evitar
+// que alerts y orders se pisen entre sí.
+let _velaAlertLines = [];
+let _velaOrderLines = [];
+function _syncVelaPriceLines(){
+  if (!chart || !chart.rendererPort) return;
+  chart.rendererPort.setNativeData('price', { priceLines: [..._velaAlertLines, ..._velaOrderLines] });
+}
+
 function renderAlertLines(){
-  if (!candleSeries || !candleSeries.createPriceLine) return;
-  _alertPriceLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
-  _alertPriceLines = [];
+  _velaAlertLines = [];
   getPriceAlerts().filter(a => a.status === 'active' && a.symbol === STATE.symbol).forEach(a => {
-    _alertPriceLines.push(candleSeries.createPriceLine({
-      price: a.price, color: '#c9a84c', lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: true, title: '',
-    }));
+    _velaAlertLines.push({ id:'alert-'+a.id, paneId:'price', price:a.price, color:'#c9a84c', lineStyle:1, width:1, title:'' });
   });
+  _syncVelaPriceLines();
   renderAlertZones();
 }
 
@@ -16892,55 +16908,37 @@ function renderTradeMarkers(){
 // MT5/TradingView. Las reales (t.real) quedan con editable:false a
 // propósito: ese SL/TP se cambia solo desde el botón ✎ (confirmación
 // explícita), no con un arrastre que se puede disparar sin querer.
-let _orderPriceLines = [];
+let _orderPriceLines = []; // metadata array (kind/id/field) — sin objetos LW
 function renderOrderPriceLines(){
-  if (!candleSeries || !candleSeries.createPriceLine) return;
-  // Mientras se está arrastrando una de estas líneas, NO reconstruir —
-  // el tick de precio en vivo llama a esto cada ~1s vía renderTradeMarkers(),
-  // y reconstruir desde el storage (que todavía tiene el precio VIEJO,
-  // recién se guarda al soltar) pisaría el movimiento en curso y se vería
-  // la línea "saltar" de vuelta a su lugar a mitad del arrastre.
   if (window._orderLineDragSession) return;
-  _orderPriceLines.forEach(e => { try { candleSeries.removePriceLine(e.line); } catch(err){} });
+  _velaOrderLines = [];
   _orderPriceLines = [];
-  // 'off' apaga TODO lo de P&L en el chart, no solo el número — pedido
-  // explícito del usuario ("pastillas y líneas y valores"): sin líneas de
-  // entrada/SL/TP ni pastillas, nada más que los markers de entrada/salida
-  // (candleSeries.setMarkers, aparte de acá) y el panel de Operar de
-  // siempre siguen mostrando las operaciones.
   if ((STATE.chartSettings.orderPnlMode || 'points') === 'off') {
+    _syncVelaPriceLines();
     renderOrderPositionBadges();
     renderOrderLineBadges();
     return;
   }
   const sym = normalizeSymbolForJournal(STATE.symbol);
-  const addLine = (price, opts, meta) => {
-    const line = candleSeries.createPriceLine({ price, ...opts });
-    _orderPriceLines.push({ line, price, ...meta });
+  const addLine = (price, lineStyle, color, title, meta) => {
+    const id = 'order-' + meta.kind + '-' + meta.id + '-' + meta.field;
+    _velaOrderLines.push({ id, paneId:'price', price, color, lineStyle, width:1, title: title||'' });
+    _orderPriceLines.push({ price, ...meta });
   };
-
   getOpenTrades().filter(t => t.symbol === sym).forEach(t => {
     const color = t.side === 'long' ? '#26a69a' : '#ef5350';
-    // Sin title acá en NINGUNA de las 3 (entry/SL/TP) a propósito — eso lo
-    // pone la badge propia (ver renderOrderPositionBadges/
-    // renderOrderLineBadges), que no se mueve sola cuando el precio en
-    // vivo se acerca a una de estas líneas (ver comentario en el CSS de
-    // .order-pos-badge), y de paso deja limpiar un SL/TP con su × — estilo
-    // TradingView/MT5, pedido explícito del usuario.
-    addLine(t.entry_price, { color, lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '' }, { kind:'trade', id:t.id, field:'entry', editable:false });
-    if (t.stop_loss != null) addLine(t.stop_loss, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' }, { kind:'trade', id:t.id, field:'sl', editable:true });
-    if (t.take_profit != null) addLine(t.take_profit, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' }, { kind:'trade', id:t.id, field:'tp', editable:true });
+    addLine(t.entry_price, 0, color, '', { kind:'trade', id:t.id, field:'entry', editable:false });
+    if (t.stop_loss != null) addLine(t.stop_loss, 1, '#ef5350', '', { kind:'trade', id:t.id, field:'sl', editable:true });
+    if (t.take_profit != null) addLine(t.take_profit, 1, '#26a69a', '', { kind:'trade', id:t.id, field:'tp', editable:true });
   });
-
   getPendingOrders().filter(o => o.symbol === sym).forEach(o => {
     const color = o.side === 'long' ? '#26a69a' : '#ef5350';
     const label = (o.side === 'long' ? 'Buy ' : 'Sell ') + (o.type === 'limit' ? 'Limit' : 'Stop') + ' ' + o.volume + 'L';
-    // LargeDashed (3) en vez de Dashed (2, que ya usan SL/TP de arriba) —
-    // para distinguir de un vistazo "todavía no entró" de "ya está abierta".
-    addLine(o.price, { color, lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: label }, { kind:'pending', id:o.id, field:'price', editable:true });
-    if (o.sl != null) addLine(o.sl, { color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' }, { kind:'pending', id:o.id, field:'sl', editable:true });
-    if (o.tp != null) addLine(o.tp, { color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' }, { kind:'pending', id:o.id, field:'tp', editable:true });
+    addLine(o.price, 2, color, label, { kind:'pending', id:o.id, field:'price', editable:true });
+    if (o.sl != null) addLine(o.sl, 1, '#ef5350', '', { kind:'pending', id:o.id, field:'sl', editable:true });
+    if (o.tp != null) addLine(o.tp, 1, '#26a69a', '', { kind:'pending', id:o.id, field:'tp', editable:true });
   });
+  _syncVelaPriceLines();
   renderOrderPositionBadges();
   renderOrderLineBadges();
 }
