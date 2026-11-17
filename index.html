@@ -7624,7 +7624,7 @@ function initChart() {
     info(){ return { name:'mt5', label:'MT5 Bridge' }; }
     async getBars(ticker, timeframe, range){
       const interval = _VELA_TO_BRIDGE[timeframe]??'1h';
-      const limit = range.limit??500;
+      const limit = range.limit ?? 1500;
       const before = range.to ? Math.floor(range.to/1000) : undefined;
       let url = `${_BRIDGE}/ohlcv?symbol=${encodeURIComponent(ticker)}&interval=${interval}&bars=${limit}`;
       if (before) url += `&before=${before}`;
@@ -15668,7 +15668,42 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     renderSeries(timeframe);
     // Tell Vela to load the new symbol/timeframe (fire and forget)
     const _velaDs = STATE.dataSource || 'mt5';
-    chart.setMarket({ symbol: _velaDs+':'+symbol, timeframe: window._bridgeTfToVela(timeframe) }).catch(()=>{});
+    window._velaBarsLoaded = 1500;
+    chart.setMarket({ symbol: _velaDs+':'+symbol, timeframe: window._bridgeTfToVela(timeframe), bars: 1500 }).catch(()=>{});
+    // Infinite history: when user scrolls to left edge, load more bars.
+    // Vela's internal heal path only fires from real pointer events (not from JS),
+    // so we monitor getVisibleRange() and call setMarket({bars: N+1500}) to trigger
+    // Vela's backfillHistory (which calls getBars with {to: oldest_bar}).
+    if (window._velaHistoryWatcher) clearInterval(window._velaHistoryWatcher);
+    let _vhMinFrom = Infinity, _vhPrevFrom = null, _vhWasScrollingLeft = false, _vhStable = 0;
+    window._velaHistoryWatcher = setInterval(() => {
+      if (!chart || typeof chart.getVisibleRange !== 'function') return;
+      const vr = chart.getVisibleRange();
+      if (!vr) return;
+      if (vr.from < _vhPrevFrom) {
+        // User is scrolling left → track the minimum
+        if (vr.from < _vhMinFrom) _vhMinFrom = vr.from;
+        _vhWasScrollingLeft = true;
+        _vhStable = 0;
+      } else if (vr.from === _vhPrevFrom && _vhWasScrollingLeft) {
+        // Was scrolling left, now paused
+        _vhStable++;
+        if (_vhStable === 3 && vr.from <= _vhMinFrom + 2 * 60 * 60 * 1000) {
+          // Paused at the leftmost position seen → load more
+          window._velaBarsLoaded += 1500;
+          const _ds = STATE.dataSource || 'mt5';
+          chart.setMarket({ symbol: _ds+':'+STATE.symbol, timeframe: window._bridgeTfToVela(STATE.timeframe), bars: window._velaBarsLoaded }).catch(()=>{});
+          _vhMinFrom = Infinity;
+          _vhWasScrollingLeft = false;
+          _vhStable = 0;
+        }
+      } else {
+        // Scrolling right or sitting still without prior left-scroll
+        _vhWasScrollingLeft = false;
+        _vhStable = 0;
+      }
+      _vhPrevFrom = vr.from;
+    }, 500);
     chart.timeScale().applyOptions({ rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing: 8 });
     scrollToRealTimeReliably();
     // El resync de más arriba lee clientWidth/clientHeight EN ESE INSTANTE —
