@@ -4924,7 +4924,7 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map 2') renderStatMap2();
   else if (name === 'RSI') renderRsi();
-  else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
+  else if (overlays[name]) overlays[name].setVisible(!isIndicatorHidden(name));
 }
 // Ojo de la toolbar (antes ocultaba la LISTA, ver toggleIndicatorLegend —
 // eso se movió a una fila debajo del último chip): ahora oculta/muestra de
@@ -4987,7 +4987,9 @@ function setIndSettingsObject(name, obj){
   } else {
     STATE.indicatorStyles[name] = obj;
     saveIndicatorStylesState();
-    if (overlays[name]) overlays[name].applyOptions({ color: obj.color, lineWidth: obj.lineWidth });
+    if (overlays[name] && typeof overlays[name].setInputs === 'function') {
+      overlays[name].setInputs({ color: obj.color });
+    }
   }
 }
 function getIndicatorStyle(name, def){ return Object.assign({ color: def.color, lineWidth: 1 }, STATE.indicatorStyles[name] || {}); }
@@ -9338,13 +9340,13 @@ function backToCursor() {
 //  INDICATORS
 // ══════════════════════════════════════════════════════════
 const INDICATOR_DEFS = [
-  { name:'EMA 9',   desc:'Exponential MA 9',    color:'#f0c060', calc:d=>ema(d,9)   },
-  { name:'EMA 20',  desc:'Exponential MA 20',   color:'#60c0f0', calc:d=>ema(d,20)  },
-  { name:'EMA 50',  desc:'Exponential MA 50',   color:'#a060f0', calc:d=>ema(d,50)  },
-  { name:'EMA 200', desc:'Exponential MA 200',  color:'#f06060', calc:d=>ema(d,200) },
-  { name:'SMA 20',  desc:'Simple MA 20',        color:'#60f0a0', calc:d=>sma(d,20)  },
-  { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', calc:d=>sma(d,50)  },
-  { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
+  { name:'EMA 9',   desc:'Exponential MA 9',    color:'#f0c060', velaType:'ema',  velaInputs:{length:9}   },
+  { name:'EMA 20',  desc:'Exponential MA 20',   color:'#60c0f0', velaType:'ema',  velaInputs:{length:20}  },
+  { name:'EMA 50',  desc:'Exponential MA 50',   color:'#a060f0', velaType:'ema',  velaInputs:{length:50}  },
+  { name:'EMA 200', desc:'Exponential MA 200',  color:'#f06060', velaType:'ema',  velaInputs:{length:200} },
+  { name:'SMA 20',  desc:'Simple MA 20',        color:'#60f0a0', velaType:'sma',  velaInputs:{length:20}  },
+  { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', velaType:'sma',  velaInputs:{length:50}  },
+  { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', velaType:'vwap', velaInputs:{}           },
   { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
@@ -9380,7 +9382,7 @@ function applyIndicators() {
       else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); }
       else if(name==='RSI'){ destroyRsiChart(); }
     }
-    else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
+    else if(overlays[name]){ try { overlays[name].remove(); } catch(e){} delete overlays[name]; }
   });
   STATE.indicators=selected; saveState();
   selected.forEach(name=>addIndicatorSeries(name));
@@ -9406,12 +9408,11 @@ function addIndicatorSeries(name) {
     return;
   }
   if(overlays[name])return;
-  const rawData=window._lastCandles||[]; if(!rawData.length)return;
-  const calcData=def.calc(rawData);
+  if(!chart || !def.velaType) return;
   const style=getIndicatorStyle(name, def);
-  const series=chart.addLineSeries({color:style.color,lineWidth:style.lineWidth,priceLineVisible:false,lastValueVisible:true,visible:!isIndicatorHidden(name),
-    priceFormat:autoPriceFormatFor(rawData[rawData.length-1].close)}); // mismo formato que el resto del eje, ver applyAutoPriceFormat
-  series.setData(calcData); overlays[name]=series;
+  const handle = chart.addNativeIndicator(def.velaType, { inputs: { ...def.velaInputs, color: style.color } });
+  overlays[name] = handle;
+  if(isIndicatorHidden(name)) handle.setVisible(false);
 }
 
 const IND_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
@@ -10109,11 +10110,8 @@ function applyIndSettingsForm() {
         lineWidth: Math.max(1, Math.min(5, Number(widthEl.value) || 1)),
       };
       saveIndicatorStylesState();
-      if (overlays[_indSettingsTarget]) {
-        overlays[_indSettingsTarget].applyOptions({
-          color: STATE.indicatorStyles[_indSettingsTarget].color,
-          lineWidth: STATE.indicatorStyles[_indSettingsTarget].lineWidth,
-        });
+      if (overlays[_indSettingsTarget] && typeof overlays[_indSettingsTarget].setInputs === 'function') {
+        overlays[_indSettingsTarget].setInputs({ color: STATE.indicatorStyles[_indSettingsTarget].color });
       }
     }
   }
@@ -10129,7 +10127,7 @@ function removeIndicator(name){
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); renderStatMap2(); }
     else if(name==='RSI'){ destroyRsiChart(); }
   }
-  else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
+  else if(overlays[name]){ try { overlays[name].remove(); } catch(e){} delete overlays[name]; }
   STATE.indicators=STATE.indicators.filter(n=>n!==name);saveState();renderIndList();
 }
 
@@ -12466,7 +12464,7 @@ function renderStatMap2() {
 //  reutiliza tal cual, sin tocar nada de Watchtower/Sniper/Sweeps: para
 //  ellos, esas son simplemente "las velas que hay".
 // ══════════════════════════════════════════════════════════
-let _replayClickHandler = null;
+let _replayClickHandler = null, _replayClickUnsub = null;
 
 function toggleReplayPicker(){
   if (window._replay) { exitReplay(); return; } // ya activo -> "Replay" de nuevo = salir
@@ -12481,11 +12479,11 @@ function startReplayPicking(){
   document.getElementById('btn-replay').classList.add('active');
   document.getElementById('chart-container').style.cursor = 'crosshair';
   document.getElementById('replay-pick-hint').classList.remove('hidden');
-  _replayClickHandler = (param) => {
-    if (!param.time) return; // click afuera del área de velas (eje, etc.)
-    finishReplayPick(param.time);
+  _replayClickHandler = (e) => {
+    if (!e.time) return;
+    finishReplayPick(Math.round(e.time / 1000)); // Vela da ms, el resto del código usa segundos
   };
-  chart.subscribeClick(_replayClickHandler);
+  _replayClickUnsub = chart.renderer.onClick(_replayClickHandler);
   document.addEventListener('keydown', _replayEscHandler);
 }
 
@@ -12494,7 +12492,8 @@ function _replayEscHandler(e){
 }
 
 function cancelReplayPicking(){
-  if (_replayClickHandler) { chart.unsubscribeClick(_replayClickHandler); _replayClickHandler = null; }
+  if (_replayClickUnsub) { _replayClickUnsub(); _replayClickUnsub = null; }
+  _replayClickHandler = null;
   document.removeEventListener('keydown', _replayEscHandler);
   document.getElementById('btn-replay').classList.remove('active');
   document.getElementById('chart-container').style.cursor = '';
@@ -14262,35 +14261,21 @@ function setChartType(type){
   saveState();
   const wrap = document.getElementById('chart-type-wrap');
   if (wrap && wrap._setCurrent) wrap._setCurrent(type);
-  if (!chart) return; // shell de la grilla: sin chart propio, los panes se encargan
-  Object.keys(overlays).forEach(n => { try { chart.removeSeries(overlays[n]); } catch(e){} delete overlays[n]; });
-  createMainSeries();
-  const candles = window._lastCandles;
-  if (candles && candles.length) {
-    // Mismo priceFormat auto que decide loadChart (enteros para índices,
-    // 2 decimales para el resto) — la serie nueva arranca con el default.
-    applyAutoPriceFormat();
-    renderSeries(STATE.timeframe);
-    STATE.indicators.forEach(n => addIndicatorSeries(n));
-  }
+  if (!chart) return;
+  const velaStyle = type === 'heikin' ? 'heikinashi' : type;
+  chart.renderer.applyConfig({ series: { style: velaStyle } });
 }
 
 // ══════════════════════════════════════════════════════════
 //  SNAPSHOT — exporta el chart como PNG (botón cámara del topbar).
-//  chart.takeScreenshot() de lightweight-charts entrega solo SUS canvas
-//  (velas/series/ejes) — las capas SVG que flotan encima (dibujos,
-//  Watchtower, Sniper, Sweeps, FM, StatMap) se rasterizan aparte
-//  (serializar → blob → Image → drawImage) y se componen en el mismo
-//  canvas, cada una en su posición real dentro del contenedor. Los
-//  textos que son HTML suelto (labels editables de dibujos, badges) no
-//  entran en la captura — limitación conocida de esta v1, por eso se
-//  estampa símbolo · TF a mano arriba a la izquierda.
+//  Vela tiene chart.screenshotCanvas() que devuelve un HTMLCanvasElement
+//  ya compuesto (WebGL + indicadores + dibujos). Las capas SVG propias
+//  (Watchtower, Sniper, etc.) se componen encima igual que antes.
 // ══════════════════════════════════════════════════════════
 async function buildChartSnapshotCanvas(){
   const cont = document.getElementById('chart-container');
-  const src = chart.takeScreenshot();
-  // takeScreenshot devuelve el canvas en resolución física (devicePixelRatio)
-  // — todo lo que se compone encima se escala con el mismo ratio.
+  const src = chart.renderer.screenshotCanvas();
+  if (!src) throw new Error('screenshotCanvas() devolvió null');
   const ratio = cont.clientWidth ? (src.width / cont.clientWidth) : 1;
   const out = document.createElement('canvas');
   out.width = src.width; out.height = src.height;
@@ -14869,25 +14854,15 @@ function refreshOverlays(candles){
 // reflow interno de la librería, no de un número fijo de frames) — en vez
 // de adivinar cuántos hacen falta, verificamos el resultado de verdad: si
 // la última vela real no quedó visible, reintentamos un frame más.
-function scrollToRealTimeReliably(maxAttempts){
-  let attempts = 0;
-  function attempt(){
-    chart.timeScale().scrollToRealTime();
-    // setTimeout, no requestAnimationFrame: varios rAF encadenados (uno
-    // agendado desde el callback del anterior) pueden correr prácticamente
-    // pegados, sin que pase tiempo de reloj real de por medio — probado a
-    // mano, no alcanzaba. Un timeout corto sí le da lugar al reflow interno
-    // de la librería entre intento e intento.
-    setTimeout(() => {
-      const candles = window._lastCandles;
-      const cc = document.getElementById('chart-container');
-      const lastX = (candles && candles.length && cc)
-        ? chart.timeScale().timeToCoordinate(candles[candles.length-1].time) : null;
-      const visible = lastX != null && lastX >= -5 && lastX <= cc.clientWidth + 5;
-      if (!visible && ++attempts < (maxAttempts || 10)) attempt();
-    }, 60);
-  }
-  attempt();
+function scrollToRealTimeReliably(){
+  if (!chart || typeof chart.getVisibleRange !== 'function') return;
+  // En Vela no hay scrollToRealTime(); scrollar al presente significa mover
+  // la vista al extremo derecho de los datos cargados.
+  const vr = chart.getVisibleRange();
+  if (!vr) return;
+  const width = vr.to - vr.from;
+  const now = Date.now();
+  chart.setVisibleRange({ from: now - width * 0.95, to: now + width * 0.05 });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -14926,74 +14901,13 @@ async function goToDateTime(dateStr, timeStr){
   if (!dateStr) return;
   const [y,m,day] = dateStr.split('-').map(Number);
   const [hh,mm] = (timeStr||'00:00').split(':').map(Number);
-  const target = Date.UTC(y, m-1, day, hh, mm, 0) / 1000;
-  // En Replay, "ir a fecha" tiene que mover el CORTE (revelar/ocultar
-  // velas), no solo panear la vista — ver goToReplayTarget.
-  if (window._replay) { await goToReplayTarget(target, dateStr, timeStr); return; }
-  let candles = window._lastCandles;
-  if (!candles || !candles.length) return;
-
-  // Capturado ANTES de tocar window._lastCandles — si target está fuera de
-  // lo cargado y hace falta traer un lote nuevo (más abajo), ESE reemplazo
-  // reacomoda el rango visible solo al tamaño nuevo de datos, así que leer
-  // el ancho DESPUÉS daba un ancho sin relación con el zoom que tenía el
-  // usuario antes de pedir el salto. Por índice (logical range), no por
-  // tiempo: setVisibleRange({from,to}) quedaba pisado por el propio
-  // acomodo interno de candleSeries.setData() después de reemplazar
-  // window._lastCandles (probado a mano — terminaba centrado en la vela
-  // más nueva del lote, no en target) — setVisibleLogicalRange() es el
-  // mismo mecanismo ya probado confiable en ensureWeeklyHistoryForWatchtower
-  // y loadMoreHistory más arriba.
-  const prevLogicalRange = chart.timeScale().getVisibleLogicalRange();
-  const logicalHalfWidth = prevLogicalRange ? (prevLogicalRange.to - prevLogicalRange.from) / 2 : 60;
-
-  if (target < candles[0].time) {
-    // Más atrás de lo que este panel tiene cargado — pedir un lote nuevo
-    // centrado ahí en vez de encadenar loadMoreHistory() de a 1500 velas
-    // hasta llegar (mismo endpoint, un solo pedido con "before" apuntando
-    // bien pasado el target para que quede holgado a la izquierda).
-    showLoader(`Going to ${dateStr} ${timeStr||''}…`); showOverlay(true);
-    try {
-      // Lote grande (2000, target cerca del medio) a propósito: uno chico
-      // dejaba el target pegado al borde recién cargado, lo que disparaba
-      // DE NUEVO el prefetch automático de loadMoreHistory (ver su umbral
-      // de 800 velas más abajo) apenas terminaba de posicionar la vista —
-      // ese segundo fetch encima del primero era lo que terminaba
-      // descuadrando el rango visible que esta función recién había
-      // calculado.
-      const margin = fetchMarginSeconds(STATE.timeframe);
-      const json = await fetchOhlcvData(STATE.symbol, STATE.timeframe, 2000, target + margin);
-      if (!json.error && Array.isArray(json.bars) && json.bars.length) {
-        window._lastCandles = json.bars;
-        renderSeries(STATE.timeframe);
-        refreshAllDrawingsGeometry(); // ver su comentario
-        candles = window._lastCandles;
-      }
-    } catch(e) {
-    } finally {
-      showOverlay(false);
-    }
-  }
-
-  // Centra la vista en el índice de la vela más cercana a target,
-  // conservando el ancho lógico que ya tenía la ventana antes del salto
-  // — así no cambia el nivel de zoom, solo pana.
-  const idx = nearestCandleIndex(candles, target);
-  // Mismo problema (y misma solución) que scrollToRealTimeReliably más
-  // abajo: posicionar la vista en el MISMO tick síncrono que acaba de
-  // reemplazar window._lastCandles no siempre "prende" — probado a mano,
-  // quedaba pisado por el propio acomodo interno de la librería después
-  // del setData(), terminando en la vela más nueva del lote en vez del
-  // índice pedido. Se reintenta verificando el resultado real, no un
-  // número fijo de frames.
-  (function applyReliably(attempts){
-    chart.timeScale().setVisibleLogicalRange({ from: idx - logicalHalfWidth, to: idx + logicalHalfWidth });
-    setTimeout(() => {
-      const r = chart.timeScale().getVisibleLogicalRange();
-      const onTarget = r && Math.abs((r.from+r.to)/2 - idx) < Math.max(5, logicalHalfWidth*0.1);
-      if (!onTarget && attempts < 10) applyReliably(attempts+1);
-    }, 60);
-  })(0);
+  const targetSec = Date.UTC(y, m-1, day, hh, mm, 0) / 1000;
+  if (window._replay) { await goToReplayTarget(targetSec, dateStr, timeStr); return; }
+  if (!chart) return;
+  const targetMs = targetSec * 1000;
+  const vr = chart.getVisibleRange();
+  const halfWidthMs = vr ? (vr.to - vr.from) / 2 : 60 * 60 * 1000 * 30; // default ~30h
+  chart.setVisibleRange({ from: targetMs - halfWidthMs, to: targetMs + halfWidthMs });
 }
 // ══════════════════════════════════════════════════════════
 //  GO TO DATE/TIME — modo REPLAY. window._replay.full es el historial que
@@ -15484,23 +15398,14 @@ async function appendNewBar(symbol, timeframe){
 // pedir nada.
 function refreshChart(){
   const btn = document.getElementById('btn-refresh');
-  if (!chart || !candleSeries) return;
-  const last = window._lastCandles && window._lastCandles[window._lastCandles.length - 1];
-  const stale = last && (Date.now()/1000 - last.time) > Math.max(3*86400, 3*tfToSeconds(STATE.timeframe));
-  if (stale) {
-    btn.classList.add('spinning');
-    loadChart(STATE.symbol, STATE.timeframe).finally(() => btn.classList.remove('spinning'));
-    return;
-  }
+  if (!chart) return;
   btn.classList.add('spinning');
-  chart.priceScale('right').applyOptions({ autoScale: true });
-  // Antes esto traía un rightOffset:15 fijo, pisando siempre el margen
-  // derecho configurado en Chart Settings (cs-margin-right) — con el
-  // usuario puesto en 0, el refresh igual dejaba 15 barras de aire. Usar
-  // el valor guardado en vez del número mágico.
-  chart.timeScale().applyOptions({ rightOffset: STATE.chartSettings.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars, barSpacing: 8 });
-  scrollToRealTimeReliably();
-  setTimeout(() => btn.classList.remove('spinning'), 400); // ya no hay fetch que esperar — spin breve, solo de feedback
+  // Vela: resetear la vista al presente relanzando el market
+  const _ds = STATE.dataSource || 'mt5';
+  window._velaBarsLoaded = 1500;
+  chart.setMarket({ symbol: _ds+':'+STATE.symbol, timeframe: window._bridgeTfToVela(STATE.timeframe), bars: 1500 })
+    .catch(()=>{})
+    .finally(() => setTimeout(() => btn.classList.remove('spinning'), 400));
 }
 
 // Ver uso en loadChart: reaplica el tamaño real del contenedor (y re-scrollea
