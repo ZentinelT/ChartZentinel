@@ -13723,27 +13723,25 @@ function applyChartSettings(){
   // color de CSS (var(--text-secondary)/var(--text-dim)), que sí se ajusta
   // por tema y da buen contraste en los dos.
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
-  chart.applyOptions({
-    layout: { background: buildChartBackground(cs), textColor: cs.textColor },
-    crosshair: {
-      vertLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
-      horzLine: { color: cs.crosshairColor, style: cs.crosshairStyle },
-    },
-    // Las líneas que "encuadran" los niveles de precio (borde derecho) y de
-    // tiempo (borde inferior) — antes venían fijas en '#222230' (ver la
-    // creación del chart más abajo), sin ningún toggle para cambiarlas.
-    rightPriceScale: {
-      borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor,
-      scaleMargins: {
-        top: cs.marginTop ?? CHART_SETTINGS_DEFAULTS.marginTop,
-        bottom: cs.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom,
+  // Vela: crosshair, márgenes y price line — equivalente al chart.applyOptions() de LightweightCharts.
+  // Vela LineStyle es 'solid'|'dashed'|'dotted'; LightweightCharts usaba 0-4.
+  if (chart?.renderer) {
+    const _lsMap = ['solid','dotted','dashed','dashed','dotted'];
+    try { chart.renderer.applyConfig({
+      crosshair: {
+        color: cs.crosshairColor || CHART_SETTINGS_DEFAULTS.crosshairColor,
+        style: _lsMap[cs.crosshairStyle] || 'dashed',
       },
-    },
-    timeScale: {
-      borderColor: cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor,
-      rightOffset: cs.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars,
-    },
-  });
+      margins: {
+        top:    cs.marginTop    ?? CHART_SETTINGS_DEFAULTS.marginTop,
+        bottom: cs.marginBottom ?? CHART_SETTINGS_DEFAULTS.marginBottom,
+        right:  cs.marginRightBars ?? CHART_SETTINGS_DEFAULTS.marginRightBars,
+      },
+      priceScale: {
+        currentPriceLine: cs.priceLineVisible !== false,
+      },
+    }); } catch(e) {}
+  }
   applyMainSeriesColors(); // colores de la serie principal según su tipo (velas/línea/área/...)
   renderTradeMarkers(); // el modo (flechas solas / + texto) puede haber cambiado
   // Apply visual settings to Vela (upColor/downColor/background/etc)
@@ -14719,32 +14717,31 @@ function createMainSeries(){
 // theme. Hueca = velas alcistas sin relleno (fill transparente, queda el
 // borde), bajistas llenas — como TV.
 function applyMainSeriesColors(){
-  if (!candleSeries) return;
+  if (!chart?.renderer) return;
   const cs = STATE.chartSettings;
   const t = STATE.chartType || 'candles';
-  const common = {
-    priceLineVisible: cs.priceLineVisible,
-    priceLineColor: cs.priceLineColor || undefined,
-    priceLineStyle: cs.priceLineStyle,
-  };
-  if (t === 'line') {
-    candleSeries.applyOptions(Object.assign({ color: cs.upColor }, common));
-  } else if (t === 'area') {
-    candleSeries.applyOptions(Object.assign({
-      lineColor: cs.upColor,
-      topColor: cs.upColor + '55', bottomColor: cs.upColor + '08',
-    }, common));
-  } else if (t === 'bars') {
-    candleSeries.applyOptions(Object.assign({ upColor: cs.upColor, downColor: cs.downColor }, common));
-  } else {
-    candleSeries.applyOptions(Object.assign({
-      upColor: t === 'hollow' ? 'rgba(0,0,0,0)' : cs.upColor,
-      downColor: cs.downColor,
-      borderUpColor: t === 'hollow' ? cs.upColor : cs.borderUpColor,
-      borderDownColor: cs.borderDownColor,
-      wickUpColor: cs.wickUpColor, wickDownColor: cs.wickDownColor,
-    }, common));
-  }
+  try {
+    if (t === 'line') {
+      chart.renderer.applyConfig({ line: { color: cs.upColor || null } });
+    } else if (t === 'area') {
+      chart.renderer.applyConfig({ area: {
+        lineColor: cs.upColor || null,
+        topColor: cs.upColor ? cs.upColor + '55' : null,
+        bottomColor: cs.upColor ? cs.upColor + '08' : null,
+      }});
+    } else if (t === 'bars') {
+      chart.renderer.applyConfig({ bars: { upColor: cs.upColor || null, downColor: cs.downColor || null } });
+    } else {
+      // candles / heikin / hollow — upColor/downColor van por chart.setTheme(),
+      // acá solo los colores de borde y mecha que son independientes.
+      chart.renderer.applyConfig({ candles: {
+        borderUpColor:   cs.borderUpColor   || null,
+        borderDownColor: cs.borderDownColor || null,
+        wickUpColor:     cs.wickUpColor     || null,
+        wickDownColor:   cs.wickDownColor   || null,
+      }});
+    }
+  } catch(e) {}
 }
 
 // Cambiar de tipo recrea la serie principal — y como lightweight-charts
