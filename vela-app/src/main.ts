@@ -1,6 +1,7 @@
 import { Vela } from '@luxalgo/vela'
 import type { DataProvider, BarRange, OHLCV, ProviderInfo, SymbolDescriptor } from '@luxalgo/vela'
 import { createTheme } from '@luxalgo/vela/ui'
+import { PineWorkerEngine } from '@luxalgo/vela-pinets'
 
 const BRIDGE_URL = 'http://localhost:8787'
 
@@ -13,7 +14,7 @@ const TF_MAP: Record<string, string> = {
 
 class Mt5Provider implements DataProvider {
   info(): ProviderInfo {
-    return { name: 'mt5', label: 'MT5 Bridge' }
+    return { name: 'mt5', capabilities: { enumerate: true, stream: true, symbolInfo: false } }
   }
 
   async getBars(ticker: string, timeframe: string, range: BarRange): Promise<OHLCV[]> {
@@ -79,7 +80,8 @@ const chart = new Vela('#chart', {
 })
 
 chart.data.registerProvider('mt5', new Mt5Provider())
+chart.registerEngine('pine', new PineWorkerEngine())
 
 chart.ready().then(() => {
-  console.log('Vela headless + MT5 provider listo')
+  console.log('Vela headless + MT5 provider + PineTS engine listo')
 })

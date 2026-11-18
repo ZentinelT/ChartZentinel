@@ -8,7 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@luxalgo/vela": "latest"
+    "@luxalgo/vela": "latest",
+    "@luxalgo/vela-pinets": "^0.3.4",
+    "pinets": "^0.13.1"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Orbitron:wght@600;700&family=Archivo:wght@700&display=swap" rel="stylesheet">
 <script src="vela.global.min.js"></script>
+<script src="vela-pinets.global.min.js"></script>
 <style>
   :root {
     --bg-primary:   #0a0a0c;
@@ -1857,6 +1858,9 @@
     <span id="price-change" class="">—</span>
   </div>
 
+  <button class="topbar-btn" id="btn-pine" title="Pine Script" onclick="openPineModal()">
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="1" y="17" font-family="Georgia,'Times New Roman',serif" font-size="14" font-weight="700">PS</text></svg>
+  </button>
   <button class="topbar-btn" id="btn-indicators" title="Indicators" onclick="openIndicatorModal()">
     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="-1" y="20" font-family="Georgia,'Times New Roman',serif" font-size="22" font-style="italic" font-weight="700">ƒ</text><text x="13" y="21" font-family="Georgia,'Times New Roman',serif" font-size="12" font-style="italic" font-weight="700">x</text></svg>
   </button>
@@ -2816,6 +2820,27 @@
     <div class="modal-btns">
       <button class="btn-ghost" onclick="closeModal('modal-indicators')">Cancel</button>
       <button class="btn-primary" onclick="applyIndicators()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pine">
+  <div class="modal" style="width:520px;max-height:85vh;display:flex;flex-direction:column;">
+    <h2>Pine Script</h2>
+    <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label>Script</label>
+        <textarea id="pine-source" spellcheck="false" style="width:100%;height:200px;resize:vertical;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:'DM Mono',monospace;font-size:11px;line-height:1.5;box-sizing:border-box;"></textarea>
+        <div id="pine-error" style="display:none;margin-top:6px;font-size:11px;color:var(--red);white-space:pre-wrap;"></div>
+      </div>
+      <div id="pine-active-section" style="display:none;">
+        <label>Active</label>
+        <div id="pine-active-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal('modal-pine')">Close</button>
+      <button class="btn-primary" onclick="runPineFromModal()">Run</button>
     </div>
   </div>
 </div>
@@ -7757,6 +7782,11 @@ function initChart() {
   chart.data.registerProvider('bybit',       _makeExchangeProvider('bybit',       fetchOhlcvBybit));
   chart.data.registerProvider('hyperliquid', _makeExchangeProvider('hyperliquid', fetchOhlcvHyperliquid));
 
+  // Pine Script engine — disponible vía chart.addIndicator(pineSource) o chart.runIndicator(pineSource)
+  if (window.VelaPinets) {
+    chart.registerEngine('pine', new window.VelaPinets.PineWorkerEngine());
+  }
+
   // — LightweightCharts COMPATIBILITY STUBS —
   // The rest of the codebase calls LW-style APIs on `chart`. Stub them so they
   // don't crash; Vela renders its own data independently via the Mt5Provider.
@@ -9636,6 +9666,57 @@ const INDICATOR_DEFS = [
   { name:'Fractal Model', cat:'Custom', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
   { name:'Stat Map 2',    cat:'Custom', desc:'OHLC StatMap Multi-Timeframe', color:'#aa44ff', custom:true },
 ];
+
+// ── Pine Script modal ───────────────────────────────────────────────────────
+const _pineHandles = []; // { id, name, handle }
+
+function openPineModal() {
+  _renderPineActiveList();
+  document.getElementById('pine-error').style.display = 'none';
+  openModal('modal-pine');
+}
+
+function _renderPineActiveList() {
+  const section = document.getElementById('pine-active-section');
+  const list = document.getElementById('pine-active-list');
+  list.innerHTML = '';
+  if (!_pineHandles.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  _pineHandles.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-primary);';
+    row.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entry.name}</span><button class="btn-ghost" style="padding:2px 8px;font-size:10px;" onclick="_removePineIndicator(${i})">Remove</button>`;
+    list.appendChild(row);
+  });
+}
+
+function runPineFromModal() {
+  const src = document.getElementById('pine-source').value.trim();
+  const errEl = document.getElementById('pine-error');
+  errEl.style.display = 'none';
+  if (!src) return;
+  if (!window.VelaPinets) { errEl.textContent = 'PineTS engine not loaded.'; errEl.style.display = ''; return; }
+  try {
+    const handle = chart.addIndicator(src);
+    const nameMatch = src.match(/indicator\s*\(\s*["']([^"']+)["']/);
+    const name = nameMatch ? nameMatch[1] : `Pine ${_pineHandles.length + 1}`;
+    _pineHandles.push({ id: handle?.id, name, handle });
+    _renderPineActiveList();
+    document.getElementById('pine-source').value = '';
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  }
+}
+
+function _removePineIndicator(i) {
+  const entry = _pineHandles[i];
+  if (entry?.handle?.remove) { try { entry.handle.remove(); } catch(e){} }
+  else if (entry?.id && chart.removeIndicator) { try { chart.removeIndicator(entry.id); } catch(e){} }
+  _pineHandles.splice(i, 1);
+  _renderPineActiveList();
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 function openIndicatorModal() {
   const picker = document.getElementById('ind-picker');
