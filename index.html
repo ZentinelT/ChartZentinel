@@ -8077,6 +8077,26 @@ function initChart() {
     if (savedVelaCfg) {
       try { chart.renderer.applyConfig(JSON.parse(savedVelaCfg)); } catch(e) {}
     }
+    // Sincronizar STATE cuando el usuario usa la legend nativa de Vela para
+    // quitar u ocultar indicadores (que ya no tienen chip propio en ChartZentinel)
+    if (chart.rendererPort) {
+      chart.rendererPort.onRemoveIndicator((id) => {
+        const name = Object.keys(overlays).find(n => overlays[n]?.id === id);
+        if (!name) return;
+        delete overlays[name];
+        STATE.indicators = STATE.indicators.filter(n => n !== name);
+        renderIndList();
+        saveState();
+      });
+      chart.rendererPort.onToggleIndicatorVisible((id) => {
+        const name = Object.keys(overlays).find(n => overlays[n]?.id === id);
+        if (!name) return;
+        const i = STATE.hiddenIndicators.indexOf(name);
+        if (i === -1) STATE.hiddenIndicators.push(name);
+        else STATE.hiddenIndicators.splice(i, 1);
+        saveHiddenIndicatorsState();
+      });
+    }
   });
 }
 
@@ -9817,6 +9837,7 @@ function renderIndicatorChips() {
   STATE.indicators.forEach(name => {
     const def = INDICATOR_DEFS.find(d => d.name === name);
     if (!def) return;
+    if (def.velaType) return; // Vela muestra estos en su legend nativa (con valores y controles propios)
     const hidden = isIndicatorHidden(name);
     const chip = document.createElement('div');
     chip.className = 'ind-chip' + (hidden ? ' ind-chip-hidden' : '');
