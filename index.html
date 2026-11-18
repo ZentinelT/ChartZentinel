@@ -2906,6 +2906,18 @@
 </div>
 
 <script>
+// Vela usa doble requestAnimationFrame (yieldToPaint) antes de compilar cada
+// indicador. Si document.hidden=true el RAF nunca dispara y el indicador
+// queda como placeholder sin compilar ni dibujar. Esto parchea el caso hidden
+// para que use setTimeout como fallback (16ms ≈ 1 frame).
+(function(){
+  var _raf = window.requestAnimationFrame;
+  window.requestAnimationFrame = function(cb){
+    if (document.hidden) return window.setTimeout(cb, 16);
+    return _raf.call(window, cb);
+  };
+})();
+
 // ══════════════════════════════════════════════════════════
 //  MULTI-CHART LAYOUT
 //  ?layout=2|4 renders a grid of iframes (each one this same page with
@@ -9696,7 +9708,6 @@ function runPineFromModal() {
   errEl.style.display = 'none';
   if (!src) return;
   if (!window.VelaPinets) { errEl.textContent = 'PineTS engine not loaded.'; errEl.style.display = ''; return; }
-  if (document.hidden) { errEl.textContent = 'El chart necesita estar visible para cargar el indicador. Abrí esta ventana en primer plano y volvé a presionar Run.'; errEl.style.display = 'block'; return; }
   try {
     const handle = chart.addIndicator(src);
     const nameMatch = src.match(/indicator\s*\(\s*["']([^"']+)["']/);
