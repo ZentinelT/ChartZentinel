@@ -7859,9 +7859,10 @@ function initChart() {
     const style = getComputedStyle(container);
     const paneTopPx = parseFloat(style.getPropertyValue('--vela-price-pane-top')) || 0;
     const paneBottomInset = parseFloat(style.getPropertyValue('--vela-price-pane-bottom'));
+    const containerH = container.getBoundingClientRect().height || container.clientHeight;
     const paneH = paneBottomInset
-      ? (container.clientHeight - paneBottomInset - paneTopPx)
-      : (container.clientHeight - 24); // fallback si Vela no publicó la var
+      ? (containerH - paneBottomInset - paneTopPx)
+      : (containerH - 24); // fallback si Vela no publicó la var
     if (paneH <= 10) return;
     // Filtrar a las velas visibles usando getVisibleRange para mayor precisión.
     let vis = candles;
@@ -13772,13 +13773,14 @@ function applyChartSettings(){
         // Countdown nativo de Vela — el badge HTML custom queda oculto.
         countdown: true,
       },
-      // Líneas de grilla (setTheme establece el color del theme pero el
-      // ChartConfig puede tener un override fijo que lo pisa — setearlo
-      // explícito garantiza que el color del usuario se aplica siempre).
+      // Líneas de grilla y borde del eje de precio (setTheme establece el color
+      // del theme pero el ChartConfig puede tener un override fijo que lo pisa).
       grid: {
         vertLines: { color: axisColor },
         horzLines: { color: axisColor },
       },
+      // Borde derecho del área de precio (la línea vertical separadora).
+      borderColor: axisColor,
     }); } catch(e) {}
   }
   applyMainSeriesColors(); // colores de la serie principal según su tipo (velas/línea/área/...)
@@ -16283,10 +16285,20 @@ function nextCloseTime(timeframe, lastBarTime){
 }
 
 function positionCountdownBadge(lastClose, lastOpen){
-  // Vela tiene countdown nativo (priceScale.countdown:true en applyConfig) —
-  // ocultamos el badge HTML propio para evitar duplicado y el bug de posición.
   const badge=document.getElementById('price-countdown-badge');
-  if(badge) badge.style.display='none';
+  if(!badge||lastClose==null){ if(badge)badge.style.display='none'; return; }
+  const y=candleSeries.priceToCoordinate(lastClose);
+  if(y==null){ badge.style.display='none'; return; }
+  const container=document.getElementById('chart-container');
+  const priceScaleW=chart.priceScale('right').width();
+  const RIGHT_GAP=6, TAG_H=17;
+  badge.style.display='flex';
+  badge.style.left=(container.clientWidth-priceScaleW)+'px';
+  badge.style.width=(priceScaleW-RIGHT_GAP)+'px';
+  badge.style.height=TAG_H+'px';
+  badge.style.top=(y+11)+'px';
+  badge.classList.toggle('up', lastClose>=lastOpen);
+  badge.classList.toggle('dn', lastClose<lastOpen);
 }
 
 let _formingFetchInFlight=false;
