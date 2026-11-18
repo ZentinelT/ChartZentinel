@@ -2459,6 +2459,24 @@
               <button class="btn-ghost" style="flex:1;color:var(--red);" onclick="deleteSelectedWorkspace()">Delete</button>
             </div>
           </div>
+          <!-- Antes estaba al final del popup del selector de paneles, como
+               "Border, dividers & crosshair" — y además de pintar el borde
+               pisaba el crosshair y el eje de cada panel, que ya tienen su
+               propio control en Scales & Lines y en Canvas. Acá quedó uno
+               solo, y solo para el borde. Como el logo, se aplica al toque:
+               no pasa por el Save/Reset del modal (es una preferencia
+               global de la grilla, no parte de chartSettings). -->
+          <div class="cs-group" id="cs-grid-group">
+            <div class="cs-group-title">Multi-chart grid</div>
+            <div class="cs-field">
+              <input type="color" id="cs-grid-accent" class="cs-swatch" oninput="onGridAccentColorChange(this.value)">
+              <span class="cs-field-label">Active panel border</span>
+            </div>
+            <div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;line-height:1.45;">
+              Color del borde que marca el panel activo y de los divisores,
+              en los modos de 2, 3 y 4 gráficos.
+            </div>
+          </div>
         </div>
 
         <div class="cs-tab" data-cs-tab-content="canvas" hidden>
@@ -3106,19 +3124,13 @@ function renderLayoutGrid(n){
   const iframeEls = [];
   let activePane = 1;
 
-  // Color del anillo del panel activo, de los divisores entre paneles, Y
-  // (si el usuario lo pide explícitamente, ver #gc-accent-color más abajo)
-  // del crosshair de cada panel. El anillo/divisores son CSS vars de ESTE
-  // documento, siempre al día. El crosshair vive adentro de cada panel (su
-  // propio STATE.chartSettings.crosshairColor) y SOLO se empuja con
-  // paneEval cuando el usuario cambia el color a mano acá — nunca solo, ni
-  // al cargar un panel ni al abrir la grilla (antes sí, y eso pisaba en
-  // cada carga el color que cada panel tuviera guardado — pedido explícito
-  // 2026-10-28: que cada panel se quede con el suyo a menos que el usuario
-  // elija lo contrario). Se guarda sin sufijo de panel: una sola
-  // preferencia para toda la grilla, no por panel — pero ahora es un
-  // PUNTO DE PARTIDA que el usuario aplica cuando quiere, no algo que se
-  // reimponga solo.
+  // Color del anillo del panel activo y de los divisores entre paneles —
+  // nada más. Son CSS vars de ESTE documento (el shell), así que se aplican
+  // al instante y no dependen de ningún panel. Se guarda sin sufijo de
+  // panel: una sola preferencia para toda la grilla. El control está en
+  // Settings › Design › Multi-chart grid (ver refreshGridAccentField).
+  // NO toca el crosshair ni el eje de los paneles: eso es de cada panel y
+  // se configura en Scales & Lines y en Canvas respectivamente.
   function gridAccentRgba(hex, alpha){
     const h = hex.replace('#','');
     const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
@@ -3126,20 +3138,22 @@ function renderLayoutGrid(n){
   }
   const DEFAULT_GRID_ACCENT = '#5b9cf6';
   let gridAccentColor = lsGet('td_grid_accent_color') || DEFAULT_GRID_ACCENT;
+  // Solo el BORDE del panel activo (el anillo) y los divisores de la
+  // grilla — puro CSS del shell. Antes también empujaba crosshairColor y
+  // axisColor a cada panel, pisando sin aviso lo que el usuario hubiera
+  // elegido en Settings › Scales & Lines › Crosshair y en Settings ›
+  // Canvas › Axis lines (tres controles para lo mismo). Se quitó ese
+  // empuje: cada cosa la configura UN solo control (pedido 2026-11-18).
   function applyGridAccentColor(color){
     gridAccentColor = color;
     document.documentElement.style.setProperty('--pane-active', color);
     document.documentElement.style.setProperty('--pane-active-glow', gridAccentRgba(color, 0.3));
     lsSet('td_grid_accent_color', color);
-    iframeEls.forEach(el => pushAccentToPane(el));
-  }
-  // Separado de applyGridAccentColor para poder llamarlo también desde el
-  // 'load' de cada iframe (recién creado, todavía no estaba en iframeEls
-  // cuando se llamó applyGridAccentColor la primera vez).
-  function pushAccentToPane(el){
-    paneEval(el, `STATE.chartSettings.crosshairColor=${JSON.stringify(gridAccentColor)}; STATE.chartSettings.axisColor=${JSON.stringify(gridAccentColor)}; saveChartSettingsState(); applyChartSettings();`);
   }
   applyGridAccentColor(gridAccentColor);
+  // Lo usa el control de Settings › Design › Multi-chart grid, que vive
+  // fuera de esta clausura (ver onGridAccentColorChange).
+  window._applyGridAccentColor = applyGridAccentColor;
   let scope = 'active'; // 'active' | 'all' — a quién les llegan los controles globales
   // ─── Sync entre paneles (Símbolo/TF/Indicadores/Dibujos/Crosshair) ──
   // Distinto de `scope` de arriba: scope decide a quién le llegan las
@@ -3464,14 +3478,13 @@ function renderLayoutGrid(n){
           <span class="sync-row-label">${r.label}</span>
           <span class="sync-switch"><input type="checkbox" ${syncConfig[r.key]?'checked':''}><span class="track"><span class="thumb"></span></span></span>
         </label>`).join('')}
-    </div>
-    <div class="sync-section">
-      <div class="sync-section-label">Panel border color</div>
-      <label class="sync-row" style="cursor:default;">
-        <span class="sync-row-label">Border, dividers &amp; crosshair</span>
-        <input type="color" id="gc-accent-color" value="${gridAccentColor}" style="width:26px;height:20px;border:none;border-radius:4px;cursor:pointer;background:none;padding:0;">
-      </label>
     </div>`;
+    // El color del borde del panel activo vivía acá abajo ("Border,
+    // dividers & crosshair") y además pisaba el crosshair y el eje de CADA
+    // panel — justo lo que ya configuran Settings › Scales & Lines ›
+    // Crosshair y Settings › Canvas › Axis lines. Ahora es un control solo
+    // para el borde, y vive en Settings › Design › Multi-chart grid
+    // (pedido del usuario 2026-11-18).
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       popup.classList.toggle('open');
@@ -3493,9 +3506,6 @@ function renderLayoutGrid(n){
       syncConfig[key] = e.target.checked;
       saveSyncConfig();
       if (key === 'crosshair') pushCrosshairSyncToAllPanes();
-    });
-    popup.addEventListener('input', (e) => {
-      if (e.target.id === 'gc-accent-color') applyGridAccentColor(e.target.value);
     });
     document.addEventListener('click', (e) => {
       if (!gbar.querySelector('#layout-picker-wrap').contains(e.target)) {
@@ -4251,15 +4261,10 @@ function renderLayoutGrid(n){
         // puede no coincidir con el toggle central de Sync — alinearlo apenas
         // termina de cargar, no recién cuando alguien toque el toggle.
         paneEval(iframe, `STATE.chartSettings.syncCrosshair=${!!syncConfig.crosshair}; saveChartSettingsState();`);
-        // SIN pushAccentToPane(iframe) acá a propósito — antes esto pisaba el
-        // color de crosshair/eje guardado de CADA panel con el compartido de
-        // la grilla en CADA carga (abrir la grilla, agregar un panel, F5...),
-        // así que lo que configurabas en modo 1 gráfico (o lo que ya tenía
-        // guardado un panel 2/3/4 de antes) se perdía solo. Pedido explícito
-        // 2026-10-28: que cada panel se quede con lo que tiene guardado. El
-        // color compartido de la grilla (ver pushAccentToPane/
-        // applyGridAccentColor) ahora solo se empuja cuando el usuario lo
-        // cambia A MANO desde "Panel border color" — nunca automático.
+        // Acá NO se toca el crosshair ni el eje del panel: cada uno se queda
+        // con lo que tenga guardado (pedido 2026-10-28). El color de la
+        // grilla (applyGridAccentColor) ya no los pisa en ningún momento —
+        // solo pinta el borde del panel activo, que es CSS del shell.
       });
       grid.appendChild(iframe);
       iframeEls.push(iframe);
@@ -13149,7 +13154,29 @@ function openChartSettingsModal(){
   } else {
     fillChartSettingsForm(STATE.chartSettings);
   }
-  renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); csShowTab('design'); openModal('modal-chart-settings');
+  renderPresetSelect(); renderWorkspaceSelect(); refreshLogoPreview(); refreshGridAccentField(); csShowTab('design'); openModal('modal-chart-settings');
+}
+
+// ─── Borde del panel activo (modo 2/3/4 gráficos) ───────────────────────
+// Preferencia GLOBAL de la grilla, no parte de chartSettings: se guarda sin
+// sufijo de panel y se aplica al instante, igual que el logo — por eso no
+// entra en el Save/Reset del modal. En modo 1 gráfico el grupo se oculta:
+// no hay borde de panel activo que pintar, y un color que no hace nada
+// visible confunde más de lo que ayuda.
+const DEFAULT_GRID_ACCENT_COLOR = '#5b9cf6';
+function refreshGridAccentField(){
+  const group = document.getElementById('cs-grid-group');
+  const input = document.getElementById('cs-grid-accent');
+  if (!group || !input) return;
+  group.style.display = isGridShell() ? '' : 'none';
+  input.value = lsGet('td_grid_accent_color') || DEFAULT_GRID_ACCENT_COLOR;
+}
+function onGridAccentColorChange(color){
+  // _applyGridAccentColor lo expone renderLayoutGrid (solo existe con la
+  // grilla armada); el lsSet es el respaldo por si algún día se muestra el
+  // control sin ella.
+  if (window._applyGridAccentColor) window._applyGridAccentColor(color);
+  else lsSet('td_grid_accent_color', color);
 }
 
 // Logo propio del cliente — a diferencia del resto de Chart Settings (que es
