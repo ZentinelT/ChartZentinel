@@ -169,31 +169,7 @@
   #price-change.up { color: var(--green); }
   #price-change.dn { color: var(--red); }
 
-  /* ─── COUNTDOWN BADGE (pegado al precio actual, como TV) ────
-     Posición/ancho/alto se fijan por JS (positionCountdownBadge), medidos
-     pixel a pixel contra el tag de precio nativo que dibuja el chart: ese
-     tag NO ocupa todo el ancho de la escala de precio (deja ~6px de margen
-     a la derecha) y mide 17px de alto — por eso acá se replica ese mismo
-     tamaño en vez de adivinar. font-weight normal (no 500): en fuente
-     monoespaciada, el trazo más grueso hacía que se viera más grande que
-     el precio aunque el font-size nominal fuera menor. */
-  #price-countdown-badge {
-    position: absolute;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 400;
-    color: #0a0a0c;
-    border-radius: 0 0 3px 3px;
-    white-space: nowrap;
-    z-index: 5;
-    pointer-events: none;
-  }
-  #price-countdown-badge.up { background: var(--green); }
-  #price-countdown-badge.dn { background: var(--red); }
-  #price-countdown-badge.soon { background: var(--gold-bright); }
+  /* countdown nativo de Vela — el badge custom fue removido */
 
   /* ─── BUY/SELL rápidos (ver quickMarketOrder) ────────────────── */
   /* Centro-abajo del chart. .qt-pane-hidden: en la grilla, solo el panel
@@ -2122,7 +2098,7 @@
         <button class="qt-chart-btn qt-buy" id="btn-quick-buy" onclick="quickMarketOrder('long')">Buy</button>
         <button class="qt-chart-btn qt-sell" id="btn-quick-sell" onclick="quickMarketOrder('short')">Sell</button>
       </div>
-      <div id="price-countdown-badge">—</div>
+
       <div id="ohlcv-bar">
         <span id="pane-symbol-badge"></span>
         <span class="ohlcv-val"><b>O</b><span id="ohlc-o">—</span></span>
@@ -8064,7 +8040,6 @@ function initChart() {
   function syncOverlayPositions(){
     // Recalibrar precio→píxel con CSS vars de Vela + rango visible actual.
     if(window._lastCandles) _velaSeedCalFromCandles(window._lastCandles);
-    if(window._lastCandles){const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open);}
     drawings.forEach(d=>{
       if(window._dragSession&&window._dragSession.drawing===d) return;
       if(d.type==='text'&&d.label){ d.label.style.display='none'; }
@@ -8087,8 +8062,10 @@ function initChart() {
   function _queueSync(){ if(!_syncRaf) _syncRaf=requestAnimationFrame(()=>{ _syncRaf=null; syncOverlayPositions(); }); }
   container.addEventListener('wheel', () => { _velaCalPts = []; _queueSync(); }, {passive:true});
   container.addEventListener('pointermove', _queueSync, {passive:true});
-  // Vela dispara 'bar' en cada frame de pan/zoom — usarlo para sincronizar
+  // Vela dispara 'bar' en cada frame de pan/zoom — usarlo para sincronizar.
+  // 'render' dispara en cada frame del render engine (incluye animaciones de zoom).
   try { chart.on('bar', _queueSync); } catch(e){}
+  try { chart.on('render', _queueSync); } catch(e){}
 
   wireAlertContextMenu();
   wireAlertDrag();
@@ -12974,8 +12951,6 @@ function startReplay(idx){
   if (!full.length) return;
   idx = Math.max(0, Math.min(idx, full.length - 1));
   clearInterval(_countdownTimer);
-  const badge = document.getElementById('price-countdown-badge');
-  if (badge) badge.style.display = 'none';
   window._replay = { full, idx, playing:false, timer:null, speedMs:600, isMaster:true };
   document.getElementById('btn-replay').classList.add('active');
   document.getElementById('replay-bar').classList.remove('hidden');
@@ -16038,8 +16013,6 @@ async function loadChart(symbol, timeframe, _isUppercaseRetry) {
     window._replay = null;
     document.getElementById('replay-bar')?.classList.add('hidden');
     document.getElementById('btn-replay')?.classList.remove('active');
-    const badge = document.getElementById('price-countdown-badge');
-    if (badge) badge.style.display = '';
     if (wasMaster && EMBED_MODE && PANE_ID) {
       window.parent.postMessage({ type:'zentinel:replayExited', pane:PANE_ID, symbol }, '*');
     }
@@ -16284,22 +16257,6 @@ function nextCloseTime(timeframe, lastBarTime){
   return null;
 }
 
-function positionCountdownBadge(lastClose, lastOpen){
-  const badge=document.getElementById('price-countdown-badge');
-  if(!badge||lastClose==null){ if(badge)badge.style.display='none'; return; }
-  const y=candleSeries.priceToCoordinate(lastClose);
-  if(y==null){ badge.style.display='none'; return; }
-  const container=document.getElementById('chart-container');
-  const priceScaleW=chart.priceScale('right').width();
-  const RIGHT_GAP=6, TAG_H=17;
-  badge.style.display='flex';
-  badge.style.left=(container.clientWidth-priceScaleW)+'px';
-  badge.style.width=(priceScaleW-RIGHT_GAP)+'px';
-  badge.style.height=TAG_H+'px';
-  badge.style.top=(y+11)+'px';
-  badge.classList.toggle('up', lastClose>=lastOpen);
-  badge.classList.toggle('dn', lastClose<lastOpen);
-}
 
 let _formingFetchInFlight=false;
 async function refreshFormingCandle(symbol, timeframe){
@@ -16362,7 +16319,6 @@ async function refreshFormingCandle(symbol, timeframe){
     updateTopbarPrice(bar,prev);
     updateTopbarOHLCV(bar);
     updateWLPrice(symbol,bar.close);
-    positionCountdownBadge(bar.close,bar.open);
   } catch(e){
     // red caída un segundo: el próximo tick reintenta solo
   } finally {
@@ -16382,11 +16338,7 @@ function wtApproxNow(){
 
 function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
   clearInterval(_countdownTimer);
-  const badge=document.getElementById('price-countdown-badge');
   let close=nextCloseTime(timeframe, lastBarTime);
-  // Si el bridge no devolvió la vela en formación (sólo cerradas), nextClose
-  // ya pasó. Calculamos el cierre real de la vela actual desde serverTime
-  // para que el badge muestre el countdown correcto igual.
   if (close !== null && close <= serverTimeAtLoad) {
     const tfSec = tfToSeconds(timeframe);
     if (tfSec > 0) {
@@ -16406,15 +16358,6 @@ function startCountdown(timeframe, lastBarTime, serverTimeAtLoad){
     if(close!==null){
       let remain=Math.max(0, Math.round(close-nowServer));
       if(remain<=0){ clearInterval(_countdownTimer); appendNewBar(STATE.symbol, STATE.timeframe); return; }
-      const h=Math.floor(remain/3600), m=Math.floor((remain%3600)/60), s=remain%60;
-      // Con horas de por medio (TF grandes: D/W/M) se corta el segundero —
-      // mostrar hh:mm:ss ahí desbordaba el cartel (pensado para el ancho
-      // angosto de mm:ss) y los dígitos de las puntas quedaban recortados.
-      // A esa escala el segundo exacto tampoco aporta nada.
-      badge.textContent = h>0
-        ? `${h}:${String(m).padStart(2,'0')}`
-        : `${m}:${String(s).padStart(2,'0')}`;
-      badge.classList.toggle('soon', remain<=10);
     }
     // El bridge MT5 es local, sin límite de uso — pedir la vela en formación
     // cada 1s no tiene costo. Binance/Bybit son APIs públicas con límite de
