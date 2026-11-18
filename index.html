@@ -7854,17 +7854,44 @@ function initChart() {
   // con ~10% de padding (lo que Vela aplica por defecto al autoescalar).
   function _velaSeedCalFromCandles(candles) {
     if (!candles || candles.length < 2) return;
-    const ch = container.clientHeight - 24; // restar altura del timescale (stub: 24px)
-    if (ch <= 0) return;
-    const closes = candles.map(c => c.close);
-    const mn = Math.min(...closes), mx = Math.max(...closes);
-    if (mx <= mn) return;
-    const pad = (mx - mn) * 0.10;
-    const displayedRange = (mx - mn) + 2 * pad;
-    _velaRatio = ch / displayedRange * -1; // Y crece hacia abajo, precio hacia arriba
-    // punto de referencia: precio máximo en el borde superior del área de plot (con padding)
-    _velaCalRef = { price: mx + pad, y: 0 };
+    // Usar CSS vars de Vela para el rango de píxeles real de la price pane.
+    // --vela-price-pane-top/bottom son insets (distancias desde cada borde).
+    const style = getComputedStyle(container);
+    const paneTopPx = parseFloat(style.getPropertyValue('--vela-price-pane-top')) || 0;
+    const paneBottomInset = parseFloat(style.getPropertyValue('--vela-price-pane-bottom'));
+    const paneH = paneBottomInset
+      ? (container.clientHeight - paneBottomInset - paneTopPx)
+      : (container.clientHeight - 24); // fallback si Vela no publicó la var
+    if (paneH <= 10) return;
+    // Filtrar a las velas visibles usando getVisibleRange para mayor precisión.
+    let vis = candles;
+    try {
+      const vr = chart.getVisibleRange ? chart.getVisibleRange() : null;
+      if (vr && vr.from && vr.to) {
+        const fromSec = Math.floor(vr.from / 1000) - 1, toSec = Math.ceil(vr.to / 1000) + 1;
+        const f = candles.filter(c => c.time >= fromSec && c.time <= toSec);
+        if (f.length >= 2) vis = f;
+      }
+    } catch(e) {}
+    // Min/max de OHLC (no solo close) para mayor precisión.
+    let mn = Infinity, mx = -Infinity;
+    vis.forEach(c => { mn = Math.min(mn, c.low); mx = Math.max(mx, c.high); });
+    if (mx <= mn || !isFinite(mn)) return;
+    // Aplicar márgenes de chartSettings para calcular el rango displayed real.
+    const cs = window.STATE?.chartSettings || {};
+    const mt = cs.marginTop ?? 0.08, mb = cs.marginBottom ?? 0.18;
+    const factor = 1 - mt - mb;
+    if (factor <= 0.05) return;
+    const rawRange = mx - mn;
+    const displayedRange = rawRange / factor;
+    const displayedTop = mx + rawRange * (mt / factor);
+    const newRatio = paneH / displayedRange * -1; // Y baja, precio sube
+    // Siempre actualizar la referencia; solo omitir si el ratio es estable.
+    _velaCalRef = { price: displayedTop, y: paneTopPx };
+    if (_velaRatio !== null && _velaCalGood && Math.abs(newRatio - _velaRatio) / Math.abs(_velaRatio) < 0.02) return;
+    _velaRatio = newRatio;
     _velaCalPts = [];
+    _velaCalGood = true;
   }
   window._velaSeedCal = _velaSeedCalFromCandles;
 
@@ -8034,6 +8061,8 @@ function initChart() {
   // syncOverlayPositions: positions countdown badge and order badges.
   // Custom SVG drawings are hidden (priceToCoordinate returns null with stubs).
   function syncOverlayPositions(){
+    // Recalibrar precio→píxel con CSS vars de Vela + rango visible actual.
+    if(window._lastCandles) _velaSeedCalFromCandles(window._lastCandles);
     if(window._lastCandles){const l=window._lastCandles[window._lastCandles.length-1]; positionCountdownBadge(l.close,l.open);}
     drawings.forEach(d=>{
       if(window._dragSession&&window._dragSession.drawing===d) return;
@@ -13723,10 +13752,11 @@ function applyChartSettings(){
   // color de CSS (var(--text-secondary)/var(--text-dim)), que sí se ajusta
   // por tema y da buen contraste en los dos.
   applyIndicatorLegendVisibility(); // preferencia GLOBAL, no vive en cs — ver cerca de td_theme
-  // Vela: crosshair, márgenes y price line — equivalente al chart.applyOptions() de LightweightCharts.
+  // Vela: crosshair, márgenes, price line, grid, countdown nativo.
   // Vela LineStyle es 'solid'|'dashed'|'dotted'; LightweightCharts usaba 0-4.
   if (chart?.renderer) {
     const _lsMap = ['solid','dotted','dashed','dashed','dotted'];
+    const axisColor = cs.axisColor || CHART_SETTINGS_DEFAULTS.axisColor;
     try { chart.renderer.applyConfig({
       crosshair: {
         color: cs.crosshairColor || CHART_SETTINGS_DEFAULTS.crosshairColor,
@@ -13739,6 +13769,15 @@ function applyChartSettings(){
       },
       priceScale: {
         currentPriceLine: cs.priceLineVisible !== false,
+        // Countdown nativo de Vela — el badge HTML custom queda oculto.
+        countdown: true,
+      },
+      // Líneas de grilla (setTheme establece el color del theme pero el
+      // ChartConfig puede tener un override fijo que lo pisa — setearlo
+      // explícito garantiza que el color del usuario se aplica siempre).
+      grid: {
+        vertLines: { color: axisColor },
+        horzLines: { color: axisColor },
       },
     }); } catch(e) {}
   }
@@ -16244,25 +16283,10 @@ function nextCloseTime(timeframe, lastBarTime){
 }
 
 function positionCountdownBadge(lastClose, lastOpen){
+  // Vela tiene countdown nativo (priceScale.countdown:true en applyConfig) —
+  // ocultamos el badge HTML propio para evitar duplicado y el bug de posición.
   const badge=document.getElementById('price-countdown-badge');
-  if(!candleSeries||lastClose==null){ badge.style.display='none'; return; }
-  const y=candleSeries.priceToCoordinate(lastClose);
-  if(y==null){ badge.style.display='none'; return; }
-  const container=document.getElementById('chart-container');
-  const priceScaleW=chart.priceScale('right').width();
-  // Medido pixel a pixel contra el tag de precio nativo: no ocupa todo el
-  // ancho de la escala de precio, deja ~6px de margen del lado derecho, y
-  // mide 17px de alto centrado en la línea del precio.
-  const RIGHT_GAP=6, TAG_H=17;
-  badge.style.display='flex';
-  badge.style.left=(container.clientWidth-priceScaleW)+'px';
-  badge.style.width=(priceScaleW-RIGHT_GAP)+'px';
-  badge.style.height=TAG_H+'px';
-  // El tag nativo no está centrado en "y": mide pixel a pixel de y-5 a
-  // y+11 (17px) — su borde inferior real es y+11, no y+altura/2.
-  badge.style.top=(y+11)+'px';
-  badge.classList.toggle('up', lastClose>=lastOpen);
-  badge.classList.toggle('dn', lastClose<lastOpen);
+  if(badge) badge.style.display='none';
 }
 
 let _formingFetchInFlight=false;
