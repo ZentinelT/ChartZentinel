@@ -9696,6 +9696,7 @@ function runPineFromModal() {
   errEl.style.display = 'none';
   if (!src) return;
   if (!window.VelaPinets) { errEl.textContent = 'PineTS engine not loaded.'; errEl.style.display = ''; return; }
+  if (document.hidden) { errEl.textContent = 'El chart necesita estar visible para cargar el indicador. Abrí esta ventana en primer plano y volvé a presionar Run.'; errEl.style.display = 'block'; return; }
   try {
     const handle = chart.addIndicator(src);
     const nameMatch = src.match(/indicator\s*\(\s*["']([^"']+)["']/);
