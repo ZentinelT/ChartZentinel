@@ -9722,22 +9722,32 @@ function _renderPineActiveList() {
   });
 }
 
-function runPineFromModal() {
+async function runPineFromModal() {
   const src = document.getElementById('pine-source').value.trim();
   const errEl = document.getElementById('pine-error');
+  const runBtn = document.querySelector('#modal-pine .btn-primary');
   errEl.style.display = 'none';
   if (!src) return;
   if (!window.VelaPinets) { errEl.textContent = 'PineTS engine not loaded.'; errEl.style.display = ''; return; }
+  if (runBtn) { runBtn.disabled = true; runBtn.textContent = 'Running…'; }
   try {
-    const handle = chart.addIndicator(src);
-    const nameMatch = src.match(/indicator\s*\(\s*["']([^"']+)["']/);
-    const name = nameMatch ? nameMatch[1] : `Pine ${_pineHandles.length + 1}`;
-    _pineHandles.push({ id: handle?.id, name, handle });
-    _renderPineActiveList();
-    document.getElementById('pine-source').value = '';
+    const result = await chart.runScript(src);
+    if (!result.ok) {
+      const msg = result.error?.message || String(result.error) || 'Error al compilar el script';
+      errEl.textContent = msg;
+      errEl.style.display = '';
+    } else {
+      const nameMatch = src.match(/indicator\s*\(\s*["']([^"']+)["']/);
+      const name = nameMatch ? nameMatch[1] : `Pine ${_pineHandles.length + 1}`;
+      _pineHandles.push({ id: result.run?.id, name, handle: { remove: result.remove } });
+      _renderPineActiveList();
+      document.getElementById('pine-source').value = '';
+    }
   } catch (e) {
-    errEl.textContent = e.message;
+    errEl.textContent = e.message || String(e);
     errEl.style.display = '';
+  } finally {
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run'; }
   }
 }
 
@@ -13678,6 +13688,9 @@ function applyChartSettings(){
   const ohlcvBar = document.getElementById('ohlcv-bar');
   const ohlcvHidden = cs.showOhlcv===false;
   if (ohlcvBar) ohlcvBar.querySelectorAll('.ohlcv-val').forEach(el => { el.style.display = ohlcvHidden ? 'none' : ''; });
+  // La legend nativa de Vela también muestra OHLCV del símbolo en el canvas —
+  // sincronizar con el toggle.
+  if (chart?.renderer) { try { chart.renderer.applyConfig({ indicatorValues: !ohlcvHidden }); } catch(e){} }
   const indChips = document.getElementById('chart-indicator-chips');
   if (indChips) {
     indChips.style.color = cs.textColor; // nombres de indicadores — mismo color que precio/horario
