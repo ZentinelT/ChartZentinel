@@ -454,6 +454,48 @@
      invisible sin que se notara que había que scrollear para verla. */
   .layout-picker-popup.with-sync { min-width: 248px; max-height: min(460px, calc(100vh - 80px)); }
 
+  /* ─── Picker de diseños ────────────────────────────────────────────────
+     Un diseño = TODO lo armado: cantidad de paneles, y por panel el
+     símbolo/TF/indicadores con su config/colores/velas/fondo/dibujos. El
+     popup imita el de TV: autoguardado arriba, botón de guardar uno nuevo,
+     y la lista de los guardados abajo. */
+  #designs-wrap { position: relative; flex-shrink: 0; }
+  .designs-popup { right: 0; left: auto; min-width: 230px; max-height: min(460px, calc(100vh - 80px)); }
+  #designs-active-label {
+    font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+    max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .designs-new-btn {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--font-ui); font-size: 12px; color: var(--gold);
+    padding: 7px 8px; border-radius: 5px; cursor: pointer;
+    transition: background .15s;
+  }
+  .designs-new-btn:hover { background: var(--bg-hover); }
+  .design-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; border-radius: 5px; cursor: pointer;
+    font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary);
+    transition: background .15s, color .15s;
+  }
+  .design-row:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .design-row.active { color: var(--gold); }
+  /* Ancho fijo para el tilde: así los nombres de todas las filas arrancan
+     alineados, con diseño activo o sin él. */
+  .design-row-check { width: 11px; flex-shrink: 0; font-size: 11px; }
+  .design-row-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .design-row-del {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 3px;
+    opacity: 0; transition: opacity .15s, color .15s;
+  }
+  .design-row:hover .design-row-del { opacity: 1; }
+  .design-row-del:hover { color: var(--red); }
+  .designs-empty {
+    font-family: var(--font-ui); font-size: 11px; color: var(--text-dim);
+    padding: 6px 8px 8px; line-height: 1.5;
+  }
+
   /* ─── Go to date/time (popup tipo TV, junto a Undo/Redo) ─────── */
   .goto-date-wrap { position: relative; flex-shrink: 0; }
   .goto-date-popup { padding: 10px; min-width: 190px; }
@@ -1876,6 +1918,15 @@
        html.embed-mode con #tf-bar-tools de abajo. -->
   <div class="topbar-spacer"></div>
   <div id="tf-bar-tools">
+    <div id="designs-wrap">
+      <button id="designs-trigger" class="topbar-btn" title="Diseños guardados (paneles, indicadores, colores, dibujos)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span class="tb-label" id="designs-active-label"></span>
+        <svg class="tb-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="designs-popup" class="tf-fav-popup designs-popup"></div>
+    </div>
+
     <div id="layout-picker-wrap">
       <button id="layout-picker-trigger" class="topbar-btn" title="Number of charts">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
@@ -2891,6 +2942,25 @@ function lsSet(key, val){ if(!_lsOK){ _lsMem[key]=val; return; } try { localStor
 if (!_lsOK) console.warn('Zentinel: localStorage not available (blocked by the browser) — settings will not persist across reloads.');
 
 // ══════════════════════════════════════════════════════════
+//  La cantidad de paneles también se recuerda
+//
+//  La app siempre se abre en index.html sin parámetros (ver main.js), y la
+//  cantidad de paneles vivía SOLO en la URL (?layout=N) — así que por más que
+//  el contenido de cada panel estuviera guardado, al reabrir la app siempre
+//  aparecía con 1 gráfico y había que volver a elegir la grilla a mano.
+//
+//  'td_layout' guarda la última elegida (lo escribe goToLayout, y también
+//  applyDesign al aplicar un diseño). Si la app arranca sin ?layout y la última
+//  era de más de 1, se redirige una vez. No puede entrar en loop: ya con
+//  ?layout en la URL no se vuelve a evaluar, y elegir "1 gráfico" a mano
+//  escribe td_layout='1'.
+// ══════════════════════════════════════════════════════════
+if (!EMBED_MODE && !_qs.has('layout')) {
+  const saved = Number(lsGet('td_layout'));
+  if (saved >= 2 && saved <= 4) location.replace('index.html?layout=' + saved);
+}
+
+// ══════════════════════════════════════════════════════════
 //  TEMA (claro/oscuro) — afecta toda la interfaz (toolbar, sidebar,
 //  modales, barras) pero NO el gráfico en sí: los colores de velas/fondo
 //  del chart ya se manejan aparte, desde Settings (STATE.chartSettings),
@@ -3065,6 +3135,7 @@ function renderLayoutGrid(n){
     trades: _bar1g('btn-trades'),
     orders: _bar1g('btn-orders-open'),
     calendar: _bar1g('btn-calendar'),
+    designs: (document.getElementById('designs-trigger')||{}).innerHTML || '',
     layoutPicker: (document.getElementById('layout-picker-trigger')||{}).innerHTML || '',
     datasourceOptions: (document.getElementById('data-source-select')||{}).innerHTML || '',
     toolBtns: Array.from(document.querySelectorAll('#toolbar .tool-btn[data-tool]')).map(b => ({
@@ -3403,6 +3474,13 @@ function renderLayoutGrid(n){
     </div>
     <div class="topbar-spacer"></div>
     <div id="tf-bar-tools">
+      <div id="designs-wrap">
+        <button id="designs-trigger" class="topbar-btn" title="Diseños guardados (paneles, indicadores, colores, dibujos)">
+          ${SHARED_ICON.designs}
+        </button>
+        <div id="designs-popup" class="tf-fav-popup designs-popup"></div>
+      </div>
+
       <div id="layout-picker-wrap">
         <button id="layout-picker-trigger" class="topbar-btn" title="Number of charts">
           ${SHARED_ICON.layoutPicker}
@@ -3493,8 +3571,9 @@ function renderLayoutGrid(n){
     popup.addEventListener('click', (e) => {
       const row = e.target.closest('.layout-opt-row');
       if (!row) return;
-      const v = row.dataset.layout;
-      location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
+      // goToLayout y no un location.href a mano: así también acá queda
+      // guardada la cantidad de paneles para el próximo arranque.
+      goToLayout(row.dataset.layout);
     });
     // Clic en cualquier parte de la fila (el <label> entero) togglea su
     // switch solo, por semántica nativa de HTML — acá solo reaccionamos al
@@ -3518,6 +3597,9 @@ function renderLayoutGrid(n){
   headerRow.appendChild(bar);
   headerRow.appendChild(gbar);
   document.body.appendChild(headerRow);
+  // Después del appendChild: initDesignsPicker busca por id en el documento,
+  // y hasta acá la barra todavía no estaba colgada.
+  initDesignsPicker();
   applyTheme(lsGet('td_theme') || 'dark'); // repinta el ícono del botón de tema recién creado
 
   // ─── Barra de herramientas + watchlist COMPARTIDAS ──────────────────
@@ -9332,6 +9414,240 @@ if (_ordersCollapsedSaved === '0') {
 // lo que se estaba mirando en el modo de 1 gráfico. Al pasar de 1 a 2/4,
 // clonamos el estado actual (sin sufijo) hacia las claves del panel 1,
 // así ese panel arranca siendo una continuación de lo que ya tenías.
+// ══════════════════════════════════════════════════════════
+//  DISEÑOS — "todo lo armado", guardado con nombre
+//
+//  Pedido del usuario (2026-11-18), calcado del picker de layouts de TV:
+//  autoguardado con interruptor, un botón para guardar el diseño actual, y
+//  abajo la lista de los guardados.
+//
+//  Qué es un diseño acá: la CANTIDAD de paneles + el estado completo de cada
+//  panel (símbolo, TF, fuente de datos, indicadores con su configuración,
+//  colores/velas/fondo, dibujos, qué paneles de la interfaz están abiertos) +
+//  un puñado de cosas de toda la app (tema, sincronización entre paneles).
+//  Es la unión de lo que antes estaba partido en Theme (td_presets, sólo
+//  colores) y Workspace (td_workspaces, sólo un panel): esos dos siguen
+//  existiendo y no se tocan — sirven para aplicar una mitad sola.
+//
+//  Cómo se guarda y se aplica: copiando las MISMAS claves de localStorage que
+//  la app ya lee al arrancar, con el sufijo de cada panel (ver lsKey/LS_SUFFIX).
+//  Guardar es leerlas; aplicar es escribirlas y recargar. Por eso un diseño
+//  aplicado queda idéntico, sin tener que replicar a mano la lógica de cada
+//  indicador: lo que lo reconstruye es el arranque normal de la app.
+// ══════════════════════════════════════════════════════════
+const DESIGNS_KEY = 'td_designs';
+const DESIGN_ACTIVE_KEY = 'td_design_active';
+const DESIGN_AUTOSAVE_KEY = 'td_design_autosave';
+const DESIGN_AUTOSAVE_MS = 8000;
+
+// Claves POR PANEL: a cada una se le pega el sufijo del panel ('' para el 1,
+// '_p2'/'_p3'/'_p4' para el resto). Son las que definen cómo se ve y qué
+// muestra ese gráfico.
+const DESIGN_PANE_KEYS = [
+  'td_datasource', 'td_charttype', 'td_symbol', 'td_tf', 'td_watchlist',
+  'td_indicators', 'td_ind_styles', 'td_ind_hidden', 'td_ind_legend',
+  'td_watchtower', 'td_sniper', 'td_sweeps', 'td_fractal_model', 'td_stat_map2',
+  'td_chart_settings',
+  'td_drawings',
+  'td_sidebar_collapsed', 'td_orders_collapsed', 'td_rsi_height',
+  'td_volume_visible', 'td_magnet',
+];
+
+// Claves de TODA la app (sin sufijo) que igual son parte del diseño. A
+// propósito NO entran acá las que son biblioteca del usuario y no diseño: los
+// TFs favoritos, los templates de indicadores/dibujos, el logo, el journal.
+const DESIGN_GLOBAL_KEYS = ['td_theme', 'td_grid_sync', 'td_grid_accent_color'];
+
+function _designEsc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function readDesigns(){
+  try { const d = JSON.parse(lsGet(DESIGNS_KEY) || '{}'); return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {}; }
+  catch(e){ return {}; }
+}
+function writeDesigns(d){ lsSet(DESIGNS_KEY, JSON.stringify(d)); }
+// Autoguardado prendido por default, igual que en TV. Sólo puede pisar el
+// diseño ACTIVO (el que estás usando); sin diseño activo no hace nada.
+function designAutosaveOn(){ return lsGet(DESIGN_AUTOSAVE_KEY) !== '0'; }
+function paneSuffix(i){ return i === 1 ? '' : '_p' + i; }
+
+function captureDesign(){
+  const panes = {};
+  for (let i = 1; i <= LAYOUT_N; i++) {
+    const pane = {};
+    DESIGN_PANE_KEYS.forEach(k => { const v = lsGet(k + paneSuffix(i)); if (v != null) pane[k] = v; });
+    panes[i] = pane;
+  }
+  const globals = {};
+  DESIGN_GLOBAL_KEYS.forEach(k => { const v = lsGet(k); if (v != null) globals[k] = v; });
+  return {
+    layout: LAYOUT_N,
+    panes,
+    globals,
+    // Cómo quedaron repartidos los anchos/altos de la grilla (lo que se
+    // arrastra con los divisores). Es por cantidad de paneles.
+    split: lsGet('td_grid_split_' + LAYOUT_N),
+    savedAt: Date.now(),
+  };
+}
+
+// true si el diseño describe algo distinto de lo que hay en pantalla ahora.
+// savedAt queda afuera de la comparación: cambia siempre y no es contenido.
+function designsDiffer(a, b){
+  if (!a || !b) return true;
+  const strip = (d) => JSON.stringify({ layout: d.layout, panes: d.panes, globals: d.globals, split: d.split });
+  return strip(a) !== strip(b);
+}
+
+let _designApplying = false;
+
+function saveDesignNamed(name){
+  const designs = readDesigns();
+  designs[name] = captureDesign();
+  writeDesigns(designs);
+  lsSet(DESIGN_ACTIVE_KEY, name);
+  renderDesignsPopup();
+}
+
+function saveCurrentAsDesign(){
+  const existing = Object.keys(readDesigns()).sort();
+  promptSaveAsName('Guardar diseño como…', existing, (name) => saveDesignNamed(name));
+}
+
+// Guarda el diseño activo si cambió. Lo llama el autoguardado, y también
+// applyDesign antes de irse a otro (si no, lo que hiciste en este se perdía).
+function autosaveActiveDesign(){
+  if (_designApplying || !designAutosaveOn()) return;
+  const name = lsGet(DESIGN_ACTIVE_KEY);
+  if (!name) return;
+  const designs = readDesigns();
+  if (!designs[name]) { lsSet(DESIGN_ACTIVE_KEY, ''); return; } // lo borraron
+  const snap = captureDesign();
+  if (!designsDiffer(designs[name], snap)) return;
+  designs[name] = snap;
+  writeDesigns(designs);
+}
+
+function applyDesign(name){
+  const d = readDesigns()[name];
+  if (!d) return;
+  autosaveActiveDesign();
+  _designApplying = true;
+
+  const layout = Number(d.layout) || 1;
+  for (let i = 1; i <= layout; i++) {
+    const pane = (d.panes && d.panes[i]) || {};
+    DESIGN_PANE_KEYS.forEach(k => { if (k in pane) lsSet(k + paneSuffix(i), pane[k]); });
+  }
+  Object.entries(d.globals || {}).forEach(([k, v]) => lsSet(k, v));
+  if (d.split != null) lsSet('td_grid_split_' + layout, d.split);
+  lsSet(DESIGN_ACTIVE_KEY, name);
+  lsSet('td_layout', String(layout));
+
+  // Recargar es justamente lo que reconstruye todo: cada documento (el shell y
+  // cada panel) vuelve a leer sus claves como en un arranque normal.
+  if (layout === LAYOUT_N) location.reload();
+  else location.href = layout === 1 ? 'index.html' : ('index.html?layout=' + layout);
+}
+
+async function deleteDesign(name){
+  if (!(await zConfirm(`¿Borrar el diseño "${name}"?`, { danger:true, confirmText:'Borrar', noAskKey:'td_no_confirm_delete_design' }))) return;
+  const designs = readDesigns();
+  delete designs[name];
+  writeDesigns(designs);
+  if (lsGet(DESIGN_ACTIVE_KEY) === name) lsSet(DESIGN_ACTIVE_KEY, '');
+  renderDesignsPopup();
+}
+
+// Dibuja el popup y el nombre del diseño activo en el botón. Sin argumentos a
+// propósito: hay un solo #designs-popup por documento (el del gráfico único o
+// el del shell de la grilla, nunca los dos).
+function renderDesignsPopup(){
+  const popup = document.getElementById('designs-popup');
+  if (!popup) return;
+  const designs = readDesigns();
+  const active = lsGet(DESIGN_ACTIVE_KEY) || '';
+  const names = Object.keys(designs).sort((a, b) => a.localeCompare(b));
+
+  popup.innerHTML = `
+    <label class="sync-row" id="design-autosave-row" title="Guarda solo, cada ${DESIGN_AUTOSAVE_MS/1000}s, los cambios en el diseño activo">
+      <span class="sync-row-label">Autoguardado</span>
+      <span class="sync-switch"><input type="checkbox" ${designAutosaveOn() ? 'checked' : ''}><span class="track"><span class="thumb"></span></span></span>
+    </label>
+    <div class="designs-new-btn" data-action="new">+ Guardar diseño actual…</div>
+    <div class="sync-section">
+      <div class="sync-section-label">Mis diseños</div>
+      ${names.length
+        ? names.map(n => `
+          <div class="design-row${n === active ? ' active' : ''}" data-name="${_designEsc(n)}">
+            <span class="design-row-check">${n === active ? '✓' : ''}</span>
+            <span class="design-row-name">${_designEsc(n)}</span>
+            <button class="design-row-del" data-action="del" title="Borrar">×</button>
+          </div>`).join('')
+        : '<div class="designs-empty">Todavía no guardaste ninguno. Armá el gráfico como te gusta y usá «Guardar diseño actual».</div>'}
+    </div>`;
+
+  const label = document.getElementById('designs-active-label');
+  if (label) label.textContent = active || '';
+}
+
+function initDesignsPicker(){
+  const wrap = document.getElementById('designs-wrap');
+  const trigger = document.getElementById('designs-trigger');
+  const popup = document.getElementById('designs-popup');
+  if (!wrap || !trigger || !popup) return;
+
+  renderDesignsPopup();
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Releer al abrir: un diseño guardado o borrado desde otra ventana (el
+    // dashboard, otro panel) comparte el mismo storage.
+    if (!popup.classList.contains('open')) renderDesignsPopup();
+    popup.classList.toggle('open');
+    trigger.classList.toggle('active', popup.classList.contains('open'));
+  });
+
+  popup.addEventListener('click', (e) => {
+    if (e.target.closest('#design-autosave-row')) return; // lo maneja 'change'
+    const del = e.target.closest('[data-action="del"]');
+    if (del) {
+      e.stopPropagation();
+      deleteDesign(del.closest('.design-row').dataset.name);
+      return;
+    }
+    if (e.target.closest('[data-action="new"]')) {
+      popup.classList.remove('open');
+      trigger.classList.remove('active');
+      saveCurrentAsDesign();
+      return;
+    }
+    const row = e.target.closest('.design-row');
+    if (row) applyDesign(row.dataset.name);
+  });
+
+  popup.addEventListener('change', (e) => {
+    if (!e.target.closest('#design-autosave-row')) return;
+    lsSet(DESIGN_AUTOSAVE_KEY, e.target.checked ? '1' : '0');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (wrap.contains(e.target)) return;
+    popup.classList.remove('open');
+    trigger.classList.remove('active');
+  });
+}
+
+// El autoguardado corre SOLO en el documento de arriba: en modo grilla, los
+// paneles son iframes del mismo origen y capturarían el mismo storage cuatro
+// veces de más. El flush al cerrar/recargar cubre el cambio de cantidad de
+// paneles y el cierre de la app, que si no perdían los últimos segundos.
+if (!EMBED_MODE) {
+  setInterval(autosaveActiveDesign, DESIGN_AUTOSAVE_MS);
+  window.addEventListener('beforeunload', autosaveActiveDesign);
+  window.addEventListener('pagehide', autosaveActiveDesign);
+}
+
 const PANE_CLONE_KEYS = ['td_symbol','td_tf','td_watchlist','td_indicators','td_watchtower','td_sniper','td_chart_settings','td_ind_styles','td_sidebar_collapsed'];
 function clonePaneState(fromSuffix, toSuffix){
   PANE_CLONE_KEYS.forEach(k=>{
@@ -9351,6 +9667,9 @@ const LAYOUT_ICONS = {
 const LAYOUT_LABELS = { 1:'1 chart', 2:'2 charts', 3:'3 charts', 4:'4 charts' };
 function goToLayout(v){
   if (v!=='1' && !EMBED_MODE && LAYOUT_N===1) clonePaneState('', '_p1');
+  // Para que la próxima vez que se abra la app aparezca con esta misma
+  // cantidad de paneles (ver la redirección del arranque, más arriba).
+  lsSet('td_layout', String(v));
   location.href = v==='1' ? 'index.html' : ('index.html?layout='+v);
 }
 (function initLayoutPicker(){
@@ -9379,6 +9698,11 @@ function goToLayout(v){
     }
   });
 })();
+
+// Sólo en el modo 1 gráfico: con grilla, esta barra entera se descarta y es el
+// shell el que arma la suya (y llama a initDesignsPicker por su cuenta, más
+// abajo). En un panel embebido el botón está oculto por CSS.
+if (LAYOUT_N === 1 && !EMBED_MODE) initDesignsPicker();
 
 function setTool(btn, name) {
   // btn es opcional: cuando la grilla multi-chart maneja el panel activo
