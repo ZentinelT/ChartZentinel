@@ -794,11 +794,14 @@
 
   /* ─── GRUPOS DE HERRAMIENTAS (toolbar agrupada por tipo) ─────────────
      Cada grupo (ver TOOL_GROUPS/setupToolGroups) muestra SOLO la última
-     herramienta usada de ese grupo en el lugar de siempre — las demás
-     quedan con display:none hasta que se abre el triangulito de la
-     esquina, que las despliega flotando debajo sin correr el resto de
-     la toolbar (igual criterio visual que TradingView). */
-  .tool-group { position: relative; display: inline-block; }
+     herramienta usada de ese grupo en el lugar de siempre — las demás se
+     despliegan en fila hacia la DERECHA (afuera de la columna angosta de
+     la toolbar) al tocar el triangulito de la esquina, con una separación
+     clara (TOOL_GROUP_GAP) y una transición de aparición — ni pegadas al
+     ícono principal ni un simple show/hide instantáneo (los dos problemas
+     que reportó el usuario: "queda muy cerca" y "el efecto es pobre). */
+  .tool-group { position: relative; width: 30px; height: 30px; }
+  .tool-group > .tool-btn { position: absolute; top: 0; }
   /* El elemento clickeable es más grande (12x12) que el triángulo que se
      ve (6x6, dibujado con ::after) — un triángulo de 5x5 como área de
      click real es casi imposible de acertar con el mouse; el usuario lo
@@ -817,21 +820,37 @@
   .tool-group:hover .tool-group-corner::after,
   .tool-group.open .tool-group-corner::after { border-bottom-color: var(--gold); }
   .tool-group.open { z-index: 60; }
-  /* Panel de fondo detrás de los botones desplegados (ver openGroup) — sin
-     esto los íconos quedaban flotando sueltos encima del chart, sin nada
-     que los distinga del fondo oscuro (reportado por el usuario: "no se
-     ven bien"). display:none por default, lo prende/apaga JS junto con
-     el flyout — mismo ancho que un .tool-btn (30px), alto según cuántos
-     botones tenga el grupo (ver openGroup: btns.length * 32px). */
+  /* Los botones que NO son el principal viven siempre en el DOM a su
+     posición final (ver positionGroup) pero invisibles/no-clickeables
+     (opacity+pointer-events, nunca display:none) — así la aparición
+     puede animarse con transition en vez de ser un corte seco. Un
+     ligerísimo translateX de "entrada desde la izquierda" (como un
+     submenú real deslizándose desde el ícono que lo abrió) en vez de
+     aparecer ya en su lugar final. */
+  .tool-group-flyout-item {
+    opacity: 0; pointer-events: none; transform: translateX(-6px);
+    transition: opacity .14s ease, transform .14s ease;
+    z-index: 41;
+  }
+  .tool-group.open .tool-group-flyout-item {
+    opacity: 1; pointer-events: auto; transform: translateX(0);
+  }
+  /* Panel de fondo detrás de los botones desplegados — sin esto quedaban
+     flotando sueltos encima del chart, sin ningún borde/sombra que los
+     distinga del fondo oscuro (reportado por el usuario en una vuelta
+     anterior: "no se ven bien"). Mismo fade+slide que los botones, para
+     que todo el flyout aparezca como un solo bloque coherente. */
   .tool-group-menu-bg {
-    display: none;
-    position: absolute; left: 0; top: 0; width: 30px;
+    position: absolute; top: 0; height: 30px;
     background: var(--bg-active);
     border: 1px solid var(--border-light);
     border-radius: 6px;
     box-shadow: 0 4px 14px rgba(0,0,0,.45);
     z-index: 40;
+    opacity: 0; pointer-events: none; transform: translateX(-6px);
+    transition: opacity .14s ease, transform .14s ease;
   }
+  .tool-group.open .tool-group-menu-bg { opacity: 1; transform: translateX(0); }
 
   /* ─── SIDEBAR ─────────────────────────────────────────── */
   /* ¿Por qué un wrapper interno de ancho fijo? Animar el "width" de
@@ -3026,33 +3045,49 @@ const TOOL_GROUPS = [
   ['fib', 'fibext', 'gann', 'vp'],
   ['long', 'short'],
 ];
+// Separación entre el ícono principal y el panel desplegado, y paso entre
+// cada ítem DENTRO del panel — ver positionGroup. El flyout se abre hacia
+// la DERECHA (afuera de la columna angosta de la toolbar, flotando sobre
+// el chart) en vez de apilarse pegado abajo: look de submenú real, con
+// una separación clara del ícono que lo abrió (reportado por el usuario:
+// "queda muy cerca").
+const TOOL_GROUP_GAP = 8;
+const TOOL_GROUP_STEP = 32;
 function setupToolGroups(root) {
   if (!root || root.dataset.toolGroupsInit) return;
   root.dataset.toolGroupsInit = '1';
 
-  // Panel de fondo detrás de los botones desplegados — sin esto quedaban
-  // flotando sueltos encima del chart, sin ningún borde/sombra que los
-  // distinga del fondo oscuro (reportado por el usuario: "no se ven bien").
-  function closeGroup(wrap, btns) {
-    wrap.classList.remove('open');
-    const bg = wrap.querySelector('.tool-group-menu-bg');
-    if (bg) bg.style.display = 'none';
+  // Recalcula la posición de CADA botón del grupo según cuál es el
+  // "principal" ahora mismo — el principal va fijo en el lugar de
+  // siempre (left:0, igual que si no estuviera agrupado); el resto se
+  // reparte en fila hacia la derecha, uno al lado del otro, por fuera
+  // del wrap (left:100% + el offset de cada uno — ver TOOL_GROUP_STEP).
+  // Solo cambia estilo inline de POSICIÓN; visibilidad/transición quedan
+  // en CSS (.tool-group-flyout-item / .tool-group.open), así que esto se
+  // puede llamar con el grupo abierto o cerrado sin que se note un salto.
+  function positionGroup(wrap, btns) {
+    const main = wrap.dataset.currentMain;
+    let flyoutIdx = 0;
     btns.forEach(b => {
-      if (b.dataset.tool !== wrap.dataset.currentMain) b.style.display = 'none';
-      b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.zIndex = '';
-    });
-  }
-  function openGroup(wrap, btns, bg) {
-    wrap.classList.add('open');
-    bg.style.display = 'block';
-    bg.style.height = (btns.length * 32) + 'px';
-    btns.forEach((b, i) => {
-      b.style.display = 'flex';
       b.style.position = 'absolute';
-      b.style.left = '0';
-      b.style.top = (i * 32) + 'px';
-      b.style.zIndex = 41;
+      b.style.top = '0';
+      if (b.dataset.tool === main) {
+        b.style.left = '0';
+        b.style.zIndex = '2';
+        b.classList.remove('tool-group-flyout-item');
+      } else {
+        b.style.left = '100%';
+        b.style.marginLeft = (TOOL_GROUP_GAP + flyoutIdx*TOOL_GROUP_STEP) + 'px';
+        b.classList.add('tool-group-flyout-item');
+        flyoutIdx++;
+      }
     });
+    const bg = wrap.querySelector('.tool-group-menu-bg');
+    if (bg) {
+      bg.style.left = '100%';
+      bg.style.marginLeft = TOOL_GROUP_GAP + 'px';
+      bg.style.width = Math.max(0, flyoutIdx*TOOL_GROUP_STEP - 2) + 'px';
+    }
   }
 
   TOOL_GROUPS.forEach(tools => {
@@ -3068,11 +3103,11 @@ function setupToolGroups(root) {
     btns[0].parentNode.insertBefore(wrap, btns[0]);
     btns.forEach(b => wrap.appendChild(b)); // mueve los botones YA existentes, no los clona
     wrap.dataset.currentMain = savedMain;
-    btns.forEach(b => { b.style.display = (b.dataset.tool === savedMain) ? '' : 'none'; });
 
     const menuBg = document.createElement('span');
     menuBg.className = 'tool-group-menu-bg';
     wrap.appendChild(menuBg);
+    positionGroup(wrap, btns);
 
     const corner = document.createElement('span');
     corner.className = 'tool-group-corner';
@@ -3084,23 +3119,21 @@ function setupToolGroups(root) {
       const wasOpen = wrap.classList.contains('open');
       // Cerrar cualquier otro grupo abierto (de esta u otra toolbar) antes
       // de abrir este — nunca dos flyouts pisándose a la vez.
-      document.querySelectorAll('.tool-group.open').forEach(g => {
-        if (g !== wrap) closeGroup(g, Array.from(g.querySelectorAll('.tool-btn')));
-      });
-      if (wasOpen) { closeGroup(wrap, btns); return; }
-      openGroup(wrap, btns, menuBg);
+      document.querySelectorAll('.tool-group.open').forEach(g => { if (g !== wrap) g.classList.remove('open'); });
+      wrap.classList.toggle('open', !wasOpen);
     });
 
-    // El click de CUALQUIER botón del grupo (sea el visible de siempre o
-    // uno desplegado en el flyout) ya dispara su propio onclick inline
+    // El click de CUALQUIER botón del grupo (sea el principal o uno
+    // desplegado en el flyout) ya dispara su propio onclick inline
     // (setTool/shellSetTool) tal cual estaba — acá solo hace falta, DESPUÉS
-    // de eso, dejarlo como el nuevo "principal" visible del grupo y
-    // recordarlo para la próxima carga.
+    // de eso, dejarlo como el nuevo "principal" visible del grupo,
+    // recalcular posiciones y recordarlo para la próxima carga.
     btns.forEach(b => {
       b.addEventListener('click', () => {
         wrap.dataset.currentMain = b.dataset.tool;
         lsSet(groupKey, b.dataset.tool);
-        closeGroup(wrap, btns);
+        positionGroup(wrap, btns);
+        wrap.classList.remove('open');
       });
     });
   });
@@ -3109,14 +3142,7 @@ function setupToolGroups(root) {
 // al clickear afuera — sea cual sea la toolbar donde esté.
 document.addEventListener('click', e => {
   document.querySelectorAll('.tool-group.open').forEach(g => {
-    if (g.contains(e.target)) return;
-    g.classList.remove('open');
-    const bg = g.querySelector('.tool-group-menu-bg');
-    if (bg) bg.style.display = 'none';
-    g.querySelectorAll('.tool-btn').forEach(b => {
-      if (b.dataset.tool !== g.dataset.currentMain) b.style.display = 'none';
-      b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.zIndex = '';
-    });
+    if (!g.contains(e.target)) g.classList.remove('open');
   });
 });
 
@@ -3875,7 +3901,13 @@ function renderLayoutGrid(n){
         // Re-render la barra flotante del shell directamente
         window._reRenderGridFavBar && window._reRenderGridFavBar();
       });
-      btn.style.position = 'relative';
+      // Si ya está agrupado (ver setupToolGroups, corre ANTES que esto),
+      // el botón ya tiene position:absolute puesto a mano para su lugar
+      // dentro del flyout — pisarlo acá con 'relative' lo mandaba todo a
+      // la posición estática de siempre, rompiendo el despliegue. 'static'
+      // es el único caso que de verdad necesita este fallback (para que
+      // la estrella, position:absolute, tenga contra qué posicionarse).
+      if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative';
       btn.appendChild(star);
     });
   })();
@@ -19315,7 +19347,9 @@ function _initGridFavBar(toolBtns){
       star.classList.toggle('on', favs.includes(tool));
       renderFavBar();
     });
-    btn.style.position = 'relative';
+    // Ver mismo comentario en la versión de esto para el shell: no pisar
+    // el position:absolute que ya haya puesto setupToolGroups.
+    if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative';
     btn.appendChild(star);
   });
 
