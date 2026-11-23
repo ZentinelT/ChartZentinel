@@ -835,6 +835,17 @@
   .tool-group.open .tool-group-flyout-item {
     opacity: 1; pointer-events: auto; transform: translateX(0);
   }
+  /* El tooltip genérico (.tool-btn::after) sale hacia la DERECHA del botón
+     — perfecto en la columna vertical de siempre, pero acá los ítems del
+     flyout están unos al lado de otros en fila horizontal (ver
+     positionGroup), así que ese mismo tooltip terminaba apareciendo
+     ENCIMA del ícono siguiente en vez de al lado (reportado por el
+     usuario, captura: la etiqueta "Gann Square" tapaba el próximo ícono).
+     Para estos, el tooltip va ABAJO en cambio, centrado — ahí no hay
+     ningún otro ícono con el que pueda chocar. */
+  .tool-group-flyout-item::after {
+    left: 50%; top: calc(100% + 8px); transform: translateX(-50%);
+  }
   /* Panel de fondo detrás de los botones desplegados — sin esto quedaban
      flotando sueltos encima del chart, sin ningún borde/sombra que los
      distinga del fondo oscuro (reportado por el usuario en una vuelta
@@ -1819,13 +1830,22 @@
   .selected-drawing { filter: drop-shadow(0 0 16px rgba(255,255,255,1)) drop-shadow(0 0 8px rgba(255,255,255,1)) drop-shadow(0 0 2px rgba(255,255,255,1)); }
 
   /* ─── TOOL FAVORITES BAR ─────────────────────────────────── */
+  /* Antes era solo el carácter ★ suelto encima del ícono, sin nada
+     detrás — una vez marcada como favorita (.on, siempre visible, no
+     solo al hover) quedaba "pintada" directo sobre los trazos del ícono
+     del botón, sobre todo en los íconos chicos del flyout (reportado por
+     el usuario). Un fondo circular chico detrás la separa visualmente del
+     ícono, como una bandeja/badge normal en vez de un tatuaje encima. */
   .tool-btn .tool-fav-star {
-    display: none; position: absolute; top: 2px; right: 2px;
-    font-size: 9px; line-height: 1; color: var(--text-dim);
-    cursor: pointer; z-index: 2; padding: 1px;
+    display: none; position: absolute; top: 1px; right: 1px;
+    width: 12px; height: 12px; border-radius: 50%;
+    align-items: center; justify-content: center;
+    background: var(--bg-panel);
+    font-size: 8px; line-height: 1; color: var(--text-dim);
+    cursor: pointer; z-index: 2;
   }
-  .tool-btn:hover .tool-fav-star { display: block; }
-  .tool-btn .tool-fav-star.on { display: block; color: var(--gold); }
+  .tool-btn:hover .tool-fav-star { display: flex; }
+  .tool-btn .tool-fav-star.on { display: flex; color: var(--gold); }
   #tool-fav-bar {
     position: fixed; z-index: 500;
     display: none;
