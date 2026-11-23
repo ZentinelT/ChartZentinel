@@ -8600,6 +8600,19 @@ function initDrawingLayer() {
   syncSvgSize();
 
   function clearPreview() { if (previewEl) { previewEl.remove(); previewEl=null; } }
+  // Nodo visible en cada punto YA puesto mientras se está dibujando (no
+  // solo al final, seleccionado) — pedido explícito del usuario, igual
+  // que en TradingView: mientras se arma un trendline/fib/rect/path/curve/
+  // etc. se ven los puntos puestos hasta ahora, y desaparecen junto con el
+  // resto del preview en cuanto el dibujo queda terminado (clearPreview,
+  // o al deseleccionarlo si se tocó afuera del chart).
+  function mkNodeMarker(x, y) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 3.5);
+    c.setAttribute('fill', toolDefaults.color);
+    c.setAttribute('stroke', '#0a0a0c'); c.setAttribute('stroke-width', '1');
+    return c;
+  }
   function clearMeasurePreview() { if (measurePreviewEl) { measurePreviewEl.remove(); measurePreviewEl=null; } }
 
   // Medición de la herramienta Crosshair (arrastrar mide, como en TV): caja
@@ -9328,6 +9341,11 @@ function initDrawingLayer() {
       } else {
         pathPending.points.push({ price, time });
       }
+      // El nodo del punto recién puesto tiene que verse YA, no recién en
+      // el próximo mousemove real (que puede tardar si el mouse queda
+      // quieto) — se re-dispara el mismo mousemove a mano, mismo
+      // clientX/clientY del click, para no duplicar la lógica del preview.
+      if (pathPending) svg.dispatchEvent(new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY }));
       return;
     }
 
@@ -9404,29 +9422,42 @@ function initDrawingLayer() {
             line.setAttribute('stroke',fibColors[i]+'bb'); line.setAttribute('stroke-width','1'); line.setAttribute('stroke-dasharray','3,3');
             group.appendChild(line);
           });
+          // Nodos de los 2 puntos YA fijados (p1/p2, la base del
+          // movimiento) + el candidato a p3 bajo el mouse — ver
+          // mkNodeMarker, pedido del usuario de que los nodos se vean
+          // mientras se arma el dibujo, no solo después.
+          const p1xy = { x: chart.timeScale().timeToCoordinate(safeLineTime(fibExtPending.p1.time)), y: candleSeries.priceToCoordinate(fibExtPending.p1.price) };
+          const p2xy = { x: chart.timeScale().timeToCoordinate(safeLineTime(fibExtPending.p2.time)), y: candleSeries.priceToCoordinate(fibExtPending.p2.price) };
+          if (p1xy.x!==null && p1xy.y!==null) group.appendChild(mkNodeMarker(p1xy.x, p1xy.y));
+          if (p2xy.x!==null && p2xy.y!==null) group.appendChild(mkNodeMarker(p2xy.x, p2xy.y));
+          group.appendChild(mkNodeMarker(c3.x, c3.y));
           svg.appendChild(group); previewEl = group;
         }
       } else if (tool === 'path' && pathPending) {
         // Vista previa: los segmentos ya fijados + un tramo "de goma"
-        // siguiendo el mouse hasta el próximo clic.
+        // siguiendo el mouse hasta el próximo clic + un nodo en CADA
+        // punto ya puesto (incluido el candidato bajo el mouse).
         e.preventDefault();
         clearPreview();
-        const pts = pathPending.points.map(p => {
+        const fixedPts = pathPending.points.map(p => {
           const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
           const y = candleSeries.priceToCoordinate(p.price);
-          return (x===null||y===null) ? null : `${x},${y}`;
+          return (x===null||y===null) ? null : {x,y};
         }).filter(Boolean);
         const { x: xm, y: ym } = getCoords(e);
-        pts.push(`${xm},${ym}`);
-        if (pts.length >= 2) {
+        const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+        const allPts = fixedPts.concat([{x:xm,y:ym}]);
+        if (allPts.length >= 2) {
           const pl = document.createElementNS('http://www.w3.org/2000/svg','polyline');
-          pl.setAttribute('points', pts.join(' '));
+          pl.setAttribute('points', allPts.map(p=>`${p.x},${p.y}`).join(' '));
           pl.setAttribute('fill','none');
           pl.setAttribute('stroke', toolDefaults.color + '88');
           pl.setAttribute('stroke-width', toolDefaults.width);
           pl.setAttribute('stroke-dasharray','4,3');
-          svg.appendChild(pl); previewEl = pl;
+          group.appendChild(pl);
         }
+        allPts.forEach(p => group.appendChild(mkNodeMarker(p.x, p.y)));
+        svg.appendChild(group); previewEl = group;
       }
       return;
     }
@@ -9438,23 +9469,32 @@ function initDrawingLayer() {
 
     if (tool === 'trendline') {
       const snapped = shiftSnap(e, drawStart, { x:x2, y:y2 });
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
       const line = document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
       line.setAttribute('x2', snapped.x); line.setAttribute('y2', snapped.y);
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
-      svg.appendChild(line); previewEl = line;
+      group.appendChild(line);
+      group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
+      group.appendChild(mkNodeMarker(snapped.x, snapped.y));
+      svg.appendChild(group); previewEl = group;
     } else if (tool === 'curve') {
       // Preview recta nomás (igual criterio que fibext fase 1): recién nace
       // con pc en el punto medio, así que hasta soltar no hay nada curvo
       // que mostrar todavía.
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
       const line = document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
       line.setAttribute('x2', x2); line.setAttribute('y2', y2);
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
-      svg.appendChild(line); previewEl = line;
+      group.appendChild(line);
+      group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
+      group.appendChild(mkNodeMarker(x2, y2));
+      svg.appendChild(group); previewEl = group;
     } else if (tool === 'rect' || tool === 'vp' || tool === 'long' || tool === 'short' || tool === 'gann') {
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
       const rx=Math.min(drawStart.x,x2), ry=Math.min(drawStart.y,y2);
       const rw=Math.abs(x2-drawStart.x), rh=Math.abs(y2-drawStart.y);
       const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -9463,7 +9503,10 @@ function initDrawingLayer() {
       rect.setAttribute('stroke', previewColor); rect.setAttribute('stroke-width', toolDefaults.width);
       rect.setAttribute('stroke-dasharray','4,3');
       rect.setAttribute('fill', tool==='long' ? 'rgba(38,166,154,0.08)' : tool==='short' ? 'rgba(239,83,80,0.08)' : 'rgba(201,168,76,0.06)');
-      svg.appendChild(rect); previewEl = rect;
+      group.appendChild(rect);
+      group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
+      group.appendChild(mkNodeMarker(x2, y2));
+      svg.appendChild(group); previewEl = group;
     } else if (tool === 'fib') {
       // ly acá tiene que coincidir con el mismo criterio que la creación
       // real (ver tool==='fib' en mouseup, p1=0% en el punto de suelta/y2):
@@ -9479,17 +9522,23 @@ function initDrawingLayer() {
         line.setAttribute('stroke',fibColors[i]+'bb'); line.setAttribute('stroke-width','1'); line.setAttribute('stroke-dasharray','3,3');
         group.appendChild(line);
       });
+      group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
+      group.appendChild(mkNodeMarker(x2, y2));
       svg.appendChild(group); previewEl = group;
     } else if (tool === 'fibext') {
       // Fase 1 (arrastre p1→p2, la base del movimiento): todavía no hay p3
       // así que no se puede mostrar el nivel real de ningún ratio — alcanza
       // con una línea de tendencia simple marcando el tramo elegido.
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
       const line = document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
       line.setAttribute('x2', x2); line.setAttribute('y2', y2);
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
-      svg.appendChild(line); previewEl = line;
+      group.appendChild(line);
+      group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
+      group.appendChild(mkNodeMarker(x2, y2));
+      svg.appendChild(group); previewEl = group;
     }
   });
 
@@ -9594,6 +9643,10 @@ function initDrawingLayer() {
       // (a diferencia del Fibo de retroceso, que lo invierte).
       if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
       fibExtPending = { p1:{price:drawStart.price,time:drawStart.time}, p2:{price:price2,time:time2} };
+      // Mismo motivo que en el mousedown de 'path': que el preview de la
+      // fase 2 (los nodos de p1/p2 + el candidato a p3) se vea apenas se
+      // suelta, no recién cuando el mouse se mueva de nuevo.
+      setTimeout(() => svg.dispatchEvent(new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY })), 0);
     } else if (tool === 'vline') {
       d = { id:genId(), type:'vline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:null,time:drawStart.time}, p2:{price:null,time:drawStart.time} };
     } else if (tool === 'long' || tool === 'short') {
