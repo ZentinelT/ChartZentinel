@@ -1858,6 +1858,14 @@
      cerrado (barra fija normal) ninguna estrella se muestra. */
   .tool-group.open .tool-btn:hover .tool-fav-star { display: flex; }
   .tool-group.open .tool-btn .tool-fav-star.on { display: flex; color: var(--gold); }
+  /* Herramientas sueltas (Rectangle, Text Label, etc.) que no entran en
+     ningún TOOL_GROUP y por lo tanto quedan como hijo directo de
+     #toolbar, nunca dentro de un .tool-group: no tienen flyout donde
+     mostrar la estrella, así que se muestra directo al hover del botón
+     (reportado por el usuario: "rectángulo y texto no tienen la
+     estrella"). */
+  #toolbar > .tool-btn:hover .tool-fav-star { display: flex; }
+  #toolbar > .tool-btn .tool-fav-star.on { display: flex; color: var(--gold); }
   #tool-fav-bar {
     position: fixed; z-index: 500;
     display: none;
