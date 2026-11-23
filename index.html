@@ -16090,6 +16090,21 @@ function attachColorPalette(input){
   wrap.className = 'color-pal-wrap';
   input.parentNode.insertBefore(wrap, input);
   wrap.appendChild(input);
+  // Varios swatches de la app (dtb-color, los de posición Long/Short, VP
+  // Settings...) posicionan el <input color> con position:absolute (ver
+  // ".dtb-color-swatch input[type=color]"). Un span sin más contenido que
+  // un hijo fuera de flujo colapsa a 0x0 — el wrap quedaba sin área
+  // clickeable y, con pointer-events:none en el input (arriba), el swatch
+  // entero dejaba de responder a cualquier click. Igualarlo en tamaño al
+  // input lo deja siempre clickeable, sin cambiar nada en los inputs que sí
+  // tienen layout normal (mismo tamaño de todos modos). getComputedStyle en
+  // vez de offsetWidth/Height a propósito: attachColorPalette corre (vía
+  // scanForColorInputs) ni bien carga la página, con #draw-toolbar todavía
+  // display:none — ahí offsetWidth da 0 (sin caja renderizada) pero
+  // getComputedStyle sigue resolviendo el 28px fijado por CSS.
+  const _cs = getComputedStyle(input);
+  wrap.style.width = _cs.width;
+  wrap.style.height = _cs.height;
 
   const openPalette = () => {
     const wasOpen = popup.classList.contains('open');
@@ -18018,9 +18033,20 @@ function _initGridFavBar(toolBtns){
       });
       bar.appendChild(btn);
     });
+    // La posición guardada es de la ÚLTIMA vez que se movió la barra — antes
+    // la ventana siempre abría a tamaño fijo, así que esa posición seguía
+    // siendo válida en el próximo arranque. Si el tamaño/posición de ventana
+    // cambia entre sesiones, una barra arrastrada cerca de un borde en una
+    // ventana grande puede quedar guardada MÁS ALLÁ del viewport de una
+    // ventana más chica — sin clampear acá, la barra queda fuera de pantalla
+    // y parece directamente haber desaparecido. Mismo criterio que ya usa
+    // _dtbClampToViewport para el panel de config de dibujos.
     const pos = getFavPos();
-    if (pos){ bar.style.left = pos.x + 'px'; bar.style.top = pos.y + 'px'; }
-    else { bar.style.left = '80px'; bar.style.top = '100px'; }
+    const bw = bar.offsetWidth || 60, bh = bar.offsetHeight || 38;
+    const x = pos ? pos.x : 80, y = pos ? pos.y : 100;
+    const maxL = window.innerWidth - bw - 4, maxT = window.innerHeight - bh - 4;
+    bar.style.left = (maxL >= 4 ? Math.min(Math.max(4, x), maxL) : 4) + 'px';
+    bar.style.top  = (maxT >= 4 ? Math.min(Math.max(4, y), maxT) : 4) + 'px';
   }
 
   // Chromium bug: position:fixed sobre iframes NO bloquea eventos de puntero.
@@ -18124,10 +18150,16 @@ function _initGridFavBar(toolBtns){
       });
       bar.appendChild(btn);
     });
-    // Restore position
+    // Restore position — clampeada contra el viewport ACTUAL (ver comentario
+    // en la versión de _initGridFavBar más arriba: si el tamaño de ventana
+    // cambia entre sesiones, una posición guardada con una ventana más
+    // grande puede caer fuera de una más chica y la barra "desaparece").
     const pos = getFavPos();
-    if (pos) { bar.style.left = pos.x + 'px'; bar.style.top = pos.y + 'px'; }
-    else { bar.style.left = '80px'; bar.style.top = '100px'; }
+    const bw = bar.offsetWidth || 60, bh = bar.offsetHeight || 38;
+    const x = pos ? pos.x : 80, y = pos ? pos.y : 100;
+    const maxL = window.innerWidth - bw - 4, maxT = window.innerHeight - bh - 4;
+    bar.style.left = (maxL >= 4 ? Math.min(Math.max(4, x), maxL) : 4) + 'px';
+    bar.style.top  = (maxT >= 4 ? Math.min(Math.max(4, y), maxT) : 4) + 'px';
   }
 
   // Drag behavior
