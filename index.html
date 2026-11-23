@@ -2079,6 +2079,13 @@
         <circle cx="13" cy="15" r="1.6" fill="currentColor" stroke="none"/>
       </svg>
     </button>
+    <button class="tool-btn" data-tip="Curve (drag the midpoint handle to bend it)" data-tool="curve" onclick="setTool(this,'curve')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 18 Q12 2 20 10"/>
+        <circle cx="4" cy="18" r="1.6" fill="currentColor" stroke="none"/>
+        <circle cx="20" cy="10" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
     <div class="tool-sep"></div>
     <button class="tool-btn" id="btn-magnet" data-tip="Magnet: off" onclick="toggleMagnet()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3648,6 +3655,7 @@ function renderLayoutGrid(n){
     null,
     { tool:'text', tip:'Text Label', icon:'<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>' },
     { tool:'path', tip:'Path (click multiple points, double-click or Esc to finish)', icon:'<polyline points="3 19 8 9 13 15 21 5"/><circle cx="3" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="8" cy="9" r="1.6" fill="currentColor" stroke="none"/><circle cx="13" cy="15" r="1.6" fill="currentColor" stroke="none"/>' },
+    { tool:'curve', tip:'Curve (drag the midpoint handle to bend it)', icon:'<path d="M4 18 Q12 2 20 10"/><circle cx="4" cy="18" r="1.6" fill="currentColor" stroke="none"/><circle cx="20" cy="10" r="1.6" fill="currentColor" stroke="none"/>' },
   ];
   shellToolbar.innerHTML = TOOL_DEFS.map(t => t===null ? '<div class="tool-sep"></div>' :
     `<button class="tool-btn${t.tool==='cursor'?' active':''}" data-tool="${t.tool}" data-tip="${t.tip}" onclick="shellSetTool(this,'${t.tool}')">
@@ -5334,7 +5342,7 @@ function serializeDrawings(){
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
       lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
-      anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined,
+      anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5349,7 +5357,7 @@ window.applyExternalDrawings = function(list){
     [...drawings].forEach(d => removeDrawingById(d.id));
     deselectDrawing();
     (list || []).forEach(data => {
-      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined };
+      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined };
       drawings.push(d);
       if (d.type === 'text') {
         const fontSize = d.fontSize || 14, bgColor = d.bgColor || '#0a0a0c';
@@ -5621,6 +5629,12 @@ function restyleDrawingAppearance(d) {
       d.pathEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     }
     if (d.arrowEl instanceof Element) d.arrowEl.setAttribute('fill', C);
+  } else if (d.type === 'curve') {
+    if (d.curveEl instanceof Element) {
+      d.curveEl.setAttribute('stroke', C);
+      d.curveEl.setAttribute('stroke-width', lw);
+      d.curveEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    }
   } else if (d.type === 'rect') {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
@@ -6105,6 +6119,10 @@ function updateDrawingGeometry(d) {
     syncPathSvg(d);
     ok = true;
 
+  } else if (d.type === 'curve') {
+    syncCurveSvg(d);
+    ok = true;
+
   } else if ((d.type === 'long' || d.type === 'short') && d.series.length === 3) {
     // positionToolRenderTimes en vez de d.p1.time/d.p2.time crudos: exige
     // tiempos estrictamente ascendentes (sin esto, un dibujo sincronizado
@@ -6177,6 +6195,7 @@ function removeDrawingById(id) {
   if (d.vLabelEl instanceof Element) d.vLabelEl.remove();
   if (d.pathEl instanceof Element) d.pathEl.remove();
   if (d.arrowEl instanceof Element) d.arrowEl.remove();
+  if (d.curveEl instanceof Element) d.curveEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
@@ -6220,6 +6239,34 @@ function syncPathSvg(d) {
     d.arrowEl.style.display = '';
     d.arrowEl.setAttribute('points', `${pEnd.x},${pEnd.y} ${leftX},${leftY} ${rightX},${rightY}`);
   }
+}
+
+// Punto de una curva cuadrática de Bezier (p1→pc→p2) en t∈[0,1] — usado
+// tanto para dibujarla (muestreada por el navegador vía el propio SVG
+// "Q", no hace falta acá) como para el hit-test (isClickOnDrawing, que sí
+// necesita puntos discretos para medir distancia).
+function quadBezierAt(a, c, b, t) {
+  const mt = 1 - t;
+  return {
+    x: mt*mt*a.x + 2*mt*t*c.x + t*t*b.x,
+    y: mt*mt*a.y + 2*mt*t*c.y + t*t*b.y,
+  };
+}
+// Reposiciona la curva — recalculada ENTERA cada frame a partir de las
+// posiciones en pantalla actuales de p1/p2/pc (no se guarda ningún estado
+// intermedio): un <path> SVG nativo con comando "Q" ya interpola la curva
+// sola, así que alcanza con pasarle los 3 puntos en coordenadas de pantalla.
+function syncCurveSvg(d) {
+  if (!(d.curveEl instanceof Element)) return;
+  const toXY = p => {
+    const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
+    const y = candleSeries.priceToCoordinate(p.price);
+    return (x===null||y===null) ? null : {x,y};
+  };
+  const a = toXY(d.p1), b = toXY(d.p2), c = toXY(d.pc);
+  if (!a || !b || !c) { d.curveEl.style.display = 'none'; return; }
+  d.curveEl.style.display = '';
+  d.curveEl.setAttribute('d', `M ${a.x},${a.y} Q ${c.x},${c.y} ${b.x},${b.y}`);
 }
 
 // Vuelve a ubicar la línea vertical de un dibujo (se llama cada frame y
@@ -7169,6 +7216,22 @@ function buildDrawingOnChart(d) {
     d.pathEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     d.arrowEl.setAttribute('fill', C);
     syncPathSvg(d);
+
+  } else if (d.type === 'curve') {
+    // Igual criterio que Path: una curva de Bezier no es expresable como
+    // serie nativa del chart, así que vive entera como overlay SVG — un
+    // <path> con comando "Q" (cuadrática), reposicionado cada frame por
+    // syncCurveSvg a partir de p1/p2/pc en pantalla.
+    if (!(d.curveEl instanceof Element)) {
+      const pa = document.createElementNS('http://www.w3.org/2000/svg','path');
+      pa.setAttribute('fill', 'none');
+      window._drawingLayerSvg.appendChild(pa);
+      d.curveEl = pa;
+    }
+    d.curveEl.setAttribute('stroke', C);
+    d.curveEl.setAttribute('stroke-width', lw);
+    d.curveEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    syncCurveSvg(d);
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
@@ -7242,6 +7305,10 @@ function highlightSelectedSvg(id) {
       (d.points||[]).forEach((p,i) => {
         addHandle(timeToX(safeLineTime(p.time)), priceToY(p.price), id, 'pt'+i);
       });
+    } else if (d.type === 'curve') {
+      addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
+      addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
+      addHandle(timeToX(safeLineTime(d.pc.time)), priceToY(d.pc.price), id, 'pc');
     } else if (d.type === 'long' || d.type === 'short') {
       // Mismo motivo que en isClickOnDrawing: usar los tiempos RENDERIZADOS
       // (ajustados a este panel), no los crudos — si no, las manijas de un
@@ -7371,6 +7438,10 @@ function applyHandleDrag(d, role, price, time) {
   } else if (d.type === 'path') {
     const m = /^pt(\d+)$/.exec(role||'');
     if (m && d.points[+m[1]]) { d.points[+m[1]] = { price, time }; }
+  } else if (d.type === 'curve') {
+    if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
+    else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
+    else if (role === 'pc') { d.pc.price = price; d.pc.time = time; }
   } else if (d.type === 'long' || d.type === 'short') {
     if (role === 'entry') {
       // Arrastrar la línea de entrada mueve TODO el bloque (entrada, SL,
@@ -8143,6 +8214,8 @@ function initChart() {
         syncVLine(d);
       } else if (d.type==='path') {
         syncPathSvg(d);
+      } else if (d.type==='curve') {
+        syncCurveSvg(d);
       } else if (d.type==='rect') {
         syncRectFill(d);
       } else if (d.type==='vp') {
@@ -8488,6 +8561,24 @@ function initDrawingLayer() {
       }
       return false;
     }
+    if (d.type === 'curve') {
+      // Sin forma cerrada de medir distancia a una curva de Bezier: se
+      // aproxima muestreándola en varios puntos (10 segmentos alcanza de
+      // sobra para el grosor de un THRESH de clic) y se mide contra esa
+      // polilínea, igual que Path.
+      const a = {x:timeToX(safeLineTime(d.p1.time)), y:priceToY(d.p1.price)};
+      const b = {x:timeToX(safeLineTime(d.p2.time)), y:priceToY(d.p2.price)};
+      const c = {x:timeToX(safeLineTime(d.pc.time)), y:priceToY(d.pc.price)};
+      if (a.x===null||a.y===null||b.x===null||b.y===null||c.x===null||c.y===null) return false;
+      const N = 10;
+      let prev = a;
+      for (let i=1;i<=N;i++){
+        const cur = quadBezierAt(a,c,b,i/N);
+        if (distToSegment(prev.x,prev.y,cur.x,cur.y,mx,my) < THRESH) return true;
+        prev = cur;
+      }
+      return false;
+    }
     if (d.type === 'long' || d.type === 'short') {
       // Caja completa (del SL al TP) clickeable en cualquier punto interno
       // — igual que un rect, no hace falta acertarle a un borde fino.
@@ -8607,6 +8698,7 @@ function initDrawingLayer() {
         origP1:{...hit.p1}, origP2: hit.p2?{...hit.p2}:null,
         origP3: hit.p3?{...hit.p3}:null,
         origPoints: Array.isArray(hit.points) ? hit.points.map(p=>({...p})) : null,
+        origPc: hit.pc?{...hit.pc}:null,
         origTargetPrice: hit.targetPrice,
         labelLeft: hit.label?parseFloat(hit.label.style.left):0,
         labelTop:  hit.label?parseFloat(hit.label.style.top):0,
@@ -8696,6 +8788,10 @@ function initDrawingLayer() {
         if (window._dragSession.origP3) {
           d.p3.price = window._dragSession.origP3.price + dPrice;
           d.p3.time  = window._dragSession.origP3.time  + dTime;
+        }
+        if (window._dragSession.origPc) {
+          d.pc.price = window._dragSession.origPc.price + dPrice;
+          d.pc.time  = window._dragSession.origPc.time  + dTime;
         }
         if (window._dragSession.origTargetPrice != null) {
           d.targetPrice = window._dragSession.origTargetPrice + dPrice;
@@ -8857,6 +8953,10 @@ function initDrawingLayer() {
       }
       if (Array.isArray(d.points)) {
         d.points.forEach(p => { p.price += dPrice; p.time += dTime; });
+      }
+      if (d.pc) {
+        if (d.pc.price != null) d.pc.price += dPrice;
+        if (d.pc.time  != null) d.pc.time  += dTime;
       }
       if (d.targetPrice != null) d.targetPrice += dPrice;
       if (d.type === 'long' || d.type === 'short') {
@@ -9037,6 +9137,16 @@ function initDrawingLayer() {
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
       svg.appendChild(line); previewEl = line;
+    } else if (tool === 'curve') {
+      // Preview recta nomás (igual criterio que fibext fase 1): recién nace
+      // con pc en el punto medio, así que hasta soltar no hay nada curvo
+      // que mostrar todavía.
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
     } else if (tool === 'rect' || tool === 'vp' || tool === 'long' || tool === 'short') {
       const rx=Math.min(drawStart.x,x2), ry=Math.min(drawStart.y,y2);
       const rw=Math.abs(x2-drawStart.x), rh=Math.abs(y2-drawStart.y);
@@ -9101,6 +9211,21 @@ function initDrawingLayer() {
       const p1 = drawStart.time <= time2 ? drawStart.price : price2;
       const p2 = drawStart.time <= time2 ? price2 : drawStart.price;
       d = { id:genId(), type:'trendline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, p1:{price:p1,time:t1}, p2:{price:p2,time:t2} };
+    } else if (tool === 'curve') {
+      // Nace recta (pc = punto medio exacto de p1-p2) — el usuario la dobla
+      // DESPUÉS, arrastrando la manija del medio (ver applyHandleDrag). No
+      // hace falta un tercer clic como en Fib Extension: al revés que ahí,
+      // una curva sin doblar todavía es un dibujo válido (una línea recta
+      // sigue siendo una curva con bend=0), así que se cierra de una con el
+      // mismo arrastre simple de una trend line.
+      if (Math.abs(time2-drawStart.time)<0.0001 && price2===drawStart.price) { drawStart=null; return; }
+      d = {
+        id:genId(), type:'curve', series:[], svgEls:[], label:null, locked:false,
+        color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style,
+        extLeft:false, extRight:false,
+        p1:{price:drawStart.price,time:drawStart.time}, p2:{price:price2,time:time2},
+        pc:{price:(drawStart.price+price2)/2, time:(drawStart.time+time2)/2},
+      };
     } else if (tool === 'rect') {
       const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
       const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
