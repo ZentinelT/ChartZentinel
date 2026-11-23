@@ -1597,7 +1597,15 @@
   .alerts-wrap { position: relative; display: flex; align-items: center; }
   .alerts-badge {
     position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px;
-    border-radius: 7px; background: var(--gold); color: #141414;
+    /* Fondo = --gold (gris claro en oscuro, casi negro en claro), como
+       siempre. El texto fijo en #141414 rompía en modo claro: fondo casi
+       negro + texto casi negro = número invisible (reportado por el
+       usuario, que también pidió no usar azul ni ningún color fuera de la
+       paleta de grises). --bg-primary es casi negro en oscuro y casi
+       blanco en claro, así que como color de texto da el contraste
+       opuesto al de --gold en los dos temas sin salir de la escala de
+       grises. */
+    border-radius: 7px; background: var(--gold); color: var(--bg-primary);
     font-family: var(--font-mono); font-size: 9px; font-weight: 700;
     line-height: 13px; text-align: center; padding: 0 2px; display: none;
   }
