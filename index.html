@@ -2040,6 +2040,14 @@
         <line x1="2" y1="22.5" x2="22" y2="22.5"/>
       </svg>
     </button>
+    <button class="tool-btn" data-tip="Fib Extension" data-tool="fibext" onclick="setTool(this,'fibext')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <polyline points="3 18 10 6 15 13"/>
+        <line x1="15" y1="13" x2="21" y2="13" stroke-dasharray="2,2"/>
+        <line x1="15" y1="8" x2="21" y2="8" stroke-dasharray="2,2"/>
+        <line x1="15" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2,2"/>
+      </svg>
+    </button>
     <button class="tool-btn" data-tip="Long Position" data-tool="long" onclick="setTool(this,'long')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/>
@@ -3626,6 +3634,7 @@ function renderLayoutGrid(n){
     { tool:'rect', tip:'Rectangle', icon:'<rect x="3" y="6" width="18" height="12" rx="1"/>' },
     { tool:'vp', tip:'Volume Profile', icon:'<rect x="3" y="4" width="11" height="3"/><rect x="3" y="9" width="17" height="3"/><rect x="3" y="14" width="7" height="3"/><rect x="3" y="19" width="14" height="3"/>' },
     { tool:'fib', tip:'Fibonacci', strokeWidth:'1.6', icon:'<line x1="2" y1="3.5" x2="22" y2="3.5"/><line x1="2" y1="8.3" x2="15" y2="8.3"/><line x1="2" y1="13" x2="20" y2="13"/><line x1="2" y1="17.7" x2="11" y2="17.7"/><line x1="2" y1="22.5" x2="22" y2="22.5"/>' },
+    { tool:'fibext', tip:'Fib Extension', strokeWidth:'1.6', icon:'<polyline points="3 18 10 6 15 13"/><line x1="15" y1="13" x2="21" y2="13" stroke-dasharray="2,2"/><line x1="15" y1="8" x2="21" y2="8" stroke-dasharray="2,2"/><line x1="15" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2,2"/>' },
     { tool:'long', tip:'Long Position', icon:'<rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="14" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="10.5" x2="22" y2="10.5"/><polyline points="9 16 12 19 15 16"/>' },
     { tool:'short', tip:'Short Position', icon:'<rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="3" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="13.5" x2="22" y2="13.5"/><polyline points="9 8 12 5 15 8"/>' },
     null,
@@ -5147,8 +5156,12 @@ function refreshToolDefaultsFor(type){
   // vp) siguen naciendo como un segmento acotado hasta que el usuario pida
   // extenderlas a mano.
   const extBase = type === 'hline' ? true : false;
+  // La Extensión de Fib nace extendida SOLO a la derecha — es una
+  // proyección hacia adelante desde el punto 3, al revés de fib/trendline
+  // que nacen sin extender de ningún lado.
+  const extRightBase = extBase || type === 'fibext';
   Object.assign(toolDefaults, {
-    color:'#c9a84c', width:1, style:0, extLeft:extBase, extRight:extBase, levels:undefined, fibLabelMode:undefined,
+    color:'#c9a84c', width:1, style:0, extLeft:extBase, extRight:extRightBase, levels:undefined, fibLabelMode:undefined,
     rows:undefined, vaPct:undefined, placement:undefined, volumeType:undefined,
     upColor:undefined, downColor:undefined, vaUpColor:undefined, vaDownColor:undefined,
     pocColor:undefined, vaLineColor:undefined, showPoc:undefined, showValueArea:undefined, extendPoc:undefined, widthPct:undefined, barOpacity:undefined,
@@ -5176,14 +5189,14 @@ function captureDrawingStyle(d){
       showLabels: d.showLabels !== false,
     });
   }
-  if (d.type === 'fib') {
+  if (d.type === 'fib' || d.type === 'fibext') {
     // El on/off y color de cada nivel (lo que de verdad se personaliza en
     // un Fibonacci) vivía SOLO en d.levels — nunca entraba acá, así que
     // guardar/cargar un template de Fib no tocaba nada de eso (el bug
     // reportado: "no carga los presets guardados"). showPriceLabel: ver
     // comentario en 'hline'/'trendline' más abajo.
     return Object.assign(base, {
-      levels: JSON.parse(JSON.stringify(d.levels || cloneFibLevels())),
+      levels: JSON.parse(JSON.stringify(d.levels || (d.type === 'fibext' ? cloneFibExtLevels() : cloneFibLevels()))),
       showPriceLabel: d.showPriceLabel !== false,
       fibLabelMode: d.fibLabelMode || 'percent',
     });
@@ -5237,7 +5250,7 @@ function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringi
 // restyleDrawingAppearance() no sabe aplicar porque no toca visibilidad/
 // opciones por fuera de color-ancho-estilo, solo repinta las series que YA
 // existen. Para estos hace falta reconstruir entero.
-const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'rect', 'vp', 'long', 'short', 'hline', 'trendline']);
+const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'fibext', 'rect', 'vp', 'long', 'short', 'hline', 'trendline']);
 function applyStyleObjectToDrawing(d, style){
   captureUndoSnapshot();
   Object.assign(d, style);
@@ -5429,6 +5442,22 @@ const DEFAULT_FIB_LEVELS = [
 ];
 function cloneFibLevels() { return JSON.parse(JSON.stringify(DEFAULT_FIB_LEVELS)); }
 
+// Niveles por defecto de la Extensión de Fibonacci (trend-based) — a
+// diferencia del retroceso, acá lo que importa son los niveles >100% (el
+// precio proyectado MÁS ALLÁ del punto 2), así que el set de fábrica es
+// distinto del de arriba — mismos ratios que usa TradingView por default.
+const DEFAULT_FIBEXT_LEVELS = [
+  { value:0,     color:'#ef5350', on:true },
+  { value:0.382, color:'#f0c060', on:true },
+  { value:0.618, color:'#26a69a', on:true },
+  { value:1,     color:'#60c0f0', on:true },
+  { value:1.272, color:'#a060f0', on:true },
+  { value:1.618, color:'#f06060', on:true },
+  { value:2,     color:'#60f0a0', on:true },
+  { value:2.618, color:'#f0a060', on:true },
+];
+function cloneFibExtLevels() { return JSON.parse(JSON.stringify(DEFAULT_FIBEXT_LEVELS)); }
+
 function lwStyle(s) {
   // lightweight-charts' LineStyle enum es Solid=0, Dotted=1, Dashed=2 — pero
   // nuestro <select> (value 1="Dashed", value 2="Dotted") sigue el orden al
@@ -5469,11 +5498,12 @@ function selectDrawing(id) {
     document.getElementById('dtb-text-bg-color').value = bg;
     document.getElementById('dtb-text-bg-swatch').style.background = bg;
   }
-  document.getElementById('dtb-levels').style.display = d.type==='fib' ? '' : 'none';
-  document.getElementById('dtb-fib-label-mode').style.display = d.type==='fib' ? '' : 'none';
-  if (d.type === 'fib') document.getElementById('dtb-fib-label-mode').value = d.fibLabelMode || 'percent';
+  const isFibLike = (d.type === 'fib' || d.type === 'fibext');
+  document.getElementById('dtb-levels').style.display = isFibLike ? '' : 'none';
+  document.getElementById('dtb-fib-label-mode').style.display = isFibLike ? '' : 'none';
+  if (isFibLike) document.getElementById('dtb-fib-label-mode').value = d.fibLabelMode || 'percent';
   document.getElementById('dtb-vp-settings').style.display = d.type==='vp' ? '' : 'none';
-  const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || d.type === 'fib');
+  const hasPriceLabel = (d.type === 'hline' || d.type === 'trendline' || isFibLike);
   document.getElementById('dtb-price-label').style.display = hasPriceLabel ? '' : 'none';
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
   document.getElementById('dtb-time-label').style.display = d.type === 'vline' ? '' : 'none';
@@ -5488,7 +5518,7 @@ function selectDrawing(id) {
     document.getElementById('dtb-lp-vl').style.display = isVline ? 'grid' : 'none';
     _syncLabelPosBtns(d.lineLabelPos || (isVline ? 'tc' : 'tr'), isVline);
   }
-  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'rect' || d.type === 'vp' || d.type === 'hline');
+  const extendApplies = (d.type === 'trendline' || d.type === 'fib' || d.type === 'fibext' || d.type === 'rect' || d.type === 'vp' || d.type === 'hline');
   document.getElementById('dtb-ext-left').style.display  = (extendApplies && d.type!=='rect' && d.type!=='vp' && d.type!=='hline') ? '' : 'none';
   // Volume Profile ya tiene su propio "Extend POC right" adentro de VP
   // Settings (vp-set-extendpoc) — este botón genérico de la toolbar
@@ -5532,7 +5562,7 @@ function onDtbColorChange(val) {
   document.getElementById('dtb-color-swatch').style.background = val;
   const d = getSelected();
   if (!d) { rememberToolStyleField(STATE.activeTool, 'color', val); return; }
-  if (d.type === 'fib') {
+  if (d.type === 'fib' || d.type === 'fibext') {
     // El fibo no tiene "un" color — son los colores por nivel. Este control
     // pinta todos los niveles del mismo color de una (hay que destildar/
     // editar los que se quieran distintos desde "Levels").
@@ -5586,7 +5616,7 @@ function restyleDrawingAppearance(d) {
     // siguen a este selector.
     [0,1,2,3].forEach(i => { const s=d.series[i]; if (s) try { s.applyOptions({ color: C+'88', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     syncVolumeProfileBars(d); // recolorea el segmento "total" (usa d.vaUpColor/upColor)
-  } else if (d.type === 'fib') {
+  } else if (d.type === 'fib' || d.type === 'fibext') {
     const levels = (d.levels||[]).filter(lv => lv.on);
     d.series.forEach((s,i) => {
       const lv = levels[i]; if (!lv) return;
@@ -5692,12 +5722,12 @@ function onDtbPosColorChange(field, val, inputEl) {
 // volver a sincronizarla.
 function onDtbTogglePriceLabel() {
   const d = getSelected();
-  if (!d || (d.type !== 'hline' && d.type !== 'trendline' && d.type !== 'fib')) return;
+  if (!d || (d.type !== 'hline' && d.type !== 'trendline' && d.type !== 'fib' && d.type !== 'fibext')) return;
   captureUndoSnapshot();
   d.showPriceLabel = (d.showPriceLabel === false) ? true : false;
   document.getElementById('dtb-price-label').classList.toggle('active', d.showPriceLabel !== false);
   const on = d.showPriceLabel !== false;
-  if (d.type === 'fib') {
+  if (d.type === 'fib' || d.type === 'fibext') {
     syncFibLabels(d);
   } else {
     d.series.forEach(s => { try { s.applyOptions({ lastValueVisible: on }); } catch(e){} });
@@ -5711,7 +5741,7 @@ function onDtbTogglePriceLabel() {
 // recalcula el texto de cada etiqueta existente.
 function onDtbFibLabelMode(mode) {
   const d = getSelected();
-  if (!d || d.type !== 'fib') return;
+  if (!d || (d.type !== 'fib' && d.type !== 'fibext')) return;
   captureUndoSnapshot();
   d.fibLabelMode = mode;
   syncFibLabels(d);
@@ -5776,8 +5806,8 @@ function onDtbTogglePositionLabels() {
 //  NIVELES DE FIBONACCI (editable por dibujo: agregar/sacar/editar)
 // ══════════════════════════════════════════════════════════
 function renderFibLevelsRows() {
-  const d = getSelected(); if (!d || d.type!=='fib') return;
-  if (!d.levels) d.levels = cloneFibLevels();
+  const d = getSelected(); if (!d || (d.type!=='fib' && d.type!=='fibext')) return;
+  if (!d.levels) d.levels = d.type==='fibext' ? cloneFibExtLevels() : cloneFibLevels();
   const list = document.getElementById('fib-levels-list');
   list.innerHTML = '';
   d.levels.forEach((lv, i) => {
@@ -5794,7 +5824,7 @@ function renderFibLevelsRows() {
   });
 }
 function openFibLevelsModal() {
-  const d = getSelected(); if (!d || d.type!=='fib') return;
+  const d = getSelected(); if (!d || (d.type!=='fib' && d.type!=='fibext')) return;
   renderFibLevelsRows();
   openModal('modal-fib-levels');
 }
@@ -6028,17 +6058,22 @@ function updateDrawingGeometry(d) {
     syncVolumeProfileBars(d);
     ok = true;
 
-  } else if (d.type === 'fib') {
+  } else if (d.type === 'fib' || d.type === 'fibext') {
+    const isExt = d.type === 'fibext';
     const levels = (d.levels || []).filter(lv => lv.on);
     if (d.series.length === levels.length) {
-      let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-      let rawT2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+      const times = isExt ? [d.p1.time, d.p2.time, d.p3.time] : [d.p1.time, d.p2.time];
+      let rawT1 = safeLineTime(Math.min(...times));
+      let rawT2 = safeLineTime(Math.max(...times));
       if (rawT2 === rawT1) rawT2 = rawT1 + barInterval;
       const t1 = d.extLeft  ? tPast   : rawT1;
       const t2 = d.extRight ? tFuture : rawT2;
-      // p1 = 0%, p2 = 100% — mismo criterio que buildDrawingOnChart, ver ahí.
+      // p1/p2 = la base del movimiento, ancla del 0% en p1 (fib) o p3 (fibext)
+      // — mismo criterio que buildDrawingOnChart, ver ahí.
+      const base = d.p2.price - d.p1.price;
+      const anchor = isExt ? d.p3.price : d.p1.price;
       levels.forEach((lv,i) => {
-        const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
+        const val = anchor + base * lv.value;
         d.series[i].setData([{time:t1,value:val},{time:t2,value:val}]);
       });
       d.fibLineT2 = t2;
@@ -6257,9 +6292,11 @@ function syncFibLabels(d) {
   const show = d.showPriceLabel !== false;
   const t2 = d.fibLineT2;
   const plotRight = wtPlotRight();
+  const base = d.p2.price - d.p1.price;
+  const anchor = d.type === 'fibext' ? d.p3.price : d.p1.price;
   levels.forEach((lv, i) => {
     const el = d.fibLabelEls[i];
-    const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
+    const val = anchor + base * lv.value;
     const x = (show && t2 != null) ? chart.timeScale().timeToCoordinate(t2) : null;
     const y = (show && t2 != null) ? candleSeries.priceToCoordinate(val) : null;
     if (x === null || y === null) { el.style.display = 'none'; return; }
@@ -6952,18 +6989,24 @@ function buildDrawingOnChart(d) {
     applyVpLevelLines(d, t1, t2, tPoc);
     syncVolumeProfileBars(d);
 
-  } else if (d.type === 'fib') {
-    if (!d.levels) d.levels = cloneFibLevels();
-    let rawT1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
-    let rawT2 = safeLineTime(Math.max(d.p1.time, d.p2.time));
+  } else if (d.type === 'fib' || d.type === 'fibext') {
+    // La Extensión de Fib reusa TODO el motor del retroceso: la "base" del
+    // movimiento es siempre p2-p1 en los dos casos — lo único que cambia es
+    // el ancla del 0% (p1 en el retroceso, p3 — el fin del pullback — en la
+    // extensión, ver fibLevelAnchor/fibLevelBase) y que acá entra un tercer
+    // punto en el rango de tiempo de las líneas.
+    const isExt = d.type === 'fibext';
+    if (!d.levels) d.levels = isExt ? cloneFibExtLevels() : cloneFibLevels();
+    const times = isExt ? [d.p1.time, d.p2.time, d.p3.time] : [d.p1.time, d.p2.time];
+    let rawT1 = safeLineTime(Math.min(...times));
+    let rawT2 = safeLineTime(Math.max(...times));
     if (rawT2 === rawT1) rawT2 = rawT1 + barInterval;
     const t1 = d.extLeft  ? tPast   : rawT1;
     const t2 = d.extRight ? tFuture : rawT2;
-    // p1 = ancla del 0% (el punto donde se SUELTA al dibujar — el extremo
-    // más reciente del movimiento), p2 = ancla del 100% (donde se empieza —
-    // el origen) — sin pisarlo con hi/lo como antes. Ver applyHandleDrag.
+    const base = d.p2.price - d.p1.price;
+    const anchor = isExt ? d.p3.price : d.p1.price;
     d.levels.filter(lv => lv.on).forEach(lv => {
-      const val = d.p1.price + (d.p2.price - d.p1.price) * lv.value;
+      const val = anchor + base * lv.value;
       // Sin lastValueVisible/title nativos (esos pintan un cartelito con
       // FONDO DE COLOR, en el eje y al final de la línea) — el texto del
       // nivel ahora es una etiqueta propia en la capa SVG, mismo estilo
@@ -7094,9 +7137,10 @@ function highlightSelectedSvg(id) {
       addHandle(w * 0.2, y, id, 'price');
       addHandle(w * 0.5, y, id, 'price');
       addHandle(w * 0.8, y, id, 'price');
-    } else if (d.type === 'trendline' || d.type === 'fib') {
+    } else if (d.type === 'trendline' || d.type === 'fib' || d.type === 'fibext') {
       addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
       addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
+      if (d.type === 'fibext') addHandle(timeToX(safeLineTime(d.p3.time)), priceToY(d.p3.price), id, 'p3');
     } else if (d.type === 'rect' || d.type === 'vp') {
       const hi = Math.max(d.p1.price, d.p2.price);
       const lo = Math.min(d.p1.price, d.p2.price);
@@ -7220,6 +7264,12 @@ function applyHandleDrag(d, role, price, time) {
     // updateDrawingGeometry), que ahora usan el mismo criterio.
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else { d.p2.price = price; d.p2.time = time; }
+  } else if (d.type === 'fibext') {
+    // 3 manijas independientes — p1/p2 son la base del movimiento, p3 el
+    // fin del retroceso (ancla del 0%, ver buildDrawingOnChart).
+    if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
+    else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
+    else if (role === 'p3') { d.p3.price = price; d.p3.time = time; }
   } else if (d.type === 'rect' || d.type === 'vp') {
     let hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
     let t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
@@ -8009,7 +8059,7 @@ function initChart() {
         syncRectFill(d);
       } else if (d.type==='vp') {
         syncVolumeProfileBars(d);
-      } else if (d.type==='fib') {
+      } else if (d.type==='fib' || d.type==='fibext') {
         syncFibLabels(d);
       } else if (d.type==='long' || d.type==='short') {
         syncPositionTool(d);
@@ -8048,6 +8098,16 @@ function initDrawingLayer() {
   let previewEl = null;
   let drawStart = null;
   let measurePreviewEl = null;
+  // Fib Extension se dibuja con 3 clics en vez de un solo arrastre (como el
+  // resto de las herramientas): el primer arrastre (mousedown→mouseup) deja
+  // acá p1/p2 (la base del movimiento) en espera del tercer clic (el fin
+  // del retroceso, p3) — ver el mousedown/mousemove/mouseup de más abajo.
+  // Expuesto en window para que setTool() (fuera de este closure) pueda
+  // cancelarlo si el usuario cambia de herramienta a mitad de camino.
+  let fibExtPending = null;
+  window._cancelFibExtPending = function() {
+    if (fibExtPending) { fibExtPending = null; clearPreview(); }
+  };
 
   function syncSvgSize() { syncOverlaySvgSize(svg, container); }
   new ResizeObserver(syncSvgSize).observe(container);
@@ -8266,9 +8326,11 @@ function initDrawingLayer() {
       if (x1===null||x2===null||y1===null||y2===null) return false;
       return distToSegment(x1,y1,x2,y2,mx,my) < THRESH;
     }
-    if (d.type === 'rect' || d.type === 'vp' || d.type === 'fib') {
+    if (d.type === 'rect' || d.type === 'vp' || d.type === 'fib' || d.type === 'fibext') {
+      const isExt = d.type === 'fibext';
+      const times = isExt ? [d.p1.time,d.p2.time,d.p3.time] : [d.p1.time,d.p2.time];
       const hi=Math.max(d.p1.price,d.p2.price), lo=Math.min(d.p1.price,d.p2.price);
-      const t1=safeLineTime(Math.min(d.p1.time,d.p2.time)), t2=safeLineTime(Math.max(d.p1.time,d.p2.time));
+      const t1=safeLineTime(Math.min(...times)), t2=safeLineTime(Math.max(...times));
       const x1=timeToX(t1), x2=timeToX(t2);
       const y1=priceToY(hi), y2=priceToY(lo);
       if (x1===null||x2===null||y1===null||y2===null) return false;
@@ -8278,13 +8340,16 @@ function initDrawingLayer() {
         distToSegment(x1,y1,x1,y2,mx,my)<THRESH||
         distToSegment(x2,y1,x2,y2,mx,my)<THRESH
       );
-      // fib: cualquiera de las líneas de nivel (las que están activas) cuenta como "cuerpo"
-      // — p1=0%/p2=100% (ver buildDrawingOnChart), NO hi/lo: con hi/lo acá
-      // el área clickeable no coincidía con donde las líneas se ven de
-      // verdad apenas el Fibo se dibujó de un High a un Low (en vez de al
-      // revés), que es justo el caso que antes quedaba igual sin que debiera.
-      return (d.levels||cloneFibLevels()).filter(lv=>lv.on).some(lv=>{
-        const y = priceToY(d.p1.price + (d.p2.price - d.p1.price) * lv.value);
+      // fib/fibext: cualquiera de las líneas de nivel (las que están
+      // activas) cuenta como "cuerpo" — p1=0%/p2=100% (fib) o p3=0% (fibext,
+      // ver buildDrawingOnChart), NO hi/lo: con hi/lo acá el área clickeable
+      // no coincidía con donde las líneas se ven de verdad apenas el Fibo se
+      // dibujó de un High a un Low (en vez de al revés), que es justo el
+      // caso que antes quedaba igual sin que debiera.
+      const base = d.p2.price - d.p1.price;
+      const anchor = isExt ? d.p3.price : d.p1.price;
+      return (d.levels||(isExt?cloneFibExtLevels():cloneFibLevels())).filter(lv=>lv.on).some(lv=>{
+        const y = priceToY(anchor + base * lv.value);
         return y!==null && Math.abs(my-y)<THRESH && mx>=Math.min(x1,x2)-2 && mx<=Math.max(x1,x2)+2;
       });
     }
@@ -8414,6 +8479,7 @@ function initDrawingLayer() {
       window._dragSession = {
         kind:'body', drawing:hit, startPrice:price, startTime:time,
         origP1:{...hit.p1}, origP2: hit.p2?{...hit.p2}:null,
+        origP3: hit.p3?{...hit.p3}:null,
         origTargetPrice: hit.targetPrice,
         labelLeft: hit.label?parseFloat(hit.label.style.left):0,
         labelTop:  hit.label?parseFloat(hit.label.style.top):0,
@@ -8492,6 +8558,10 @@ function initDrawingLayer() {
         if (window._dragSession.origP2) {
           d.p2.price = window._dragSession.origP2.price + dPrice;
           d.p2.time  = window._dragSession.origP2.time  + dTime;
+        }
+        if (window._dragSession.origP3) {
+          d.p3.price = window._dragSession.origP3.price + dPrice;
+          d.p3.time  = window._dragSession.origP3.time  + dTime;
         }
         if (window._dragSession.origTargetPrice != null) {
           d.targetPrice = window._dragSession.origTargetPrice + dPrice;
@@ -8647,6 +8717,10 @@ function initDrawingLayer() {
         if (d.p2.price != null) d.p2.price += dPrice;
         if (d.p2.time  != null) d.p2.time  += dTime;
       }
+      if (d.p3) {
+        if (d.p3.price != null) d.p3.price += dPrice;
+        if (d.p3.time  != null) d.p3.time  += dTime;
+      }
       if (d.targetPrice != null) d.targetPrice += dPrice;
       if (d.type === 'long' || d.type === 'short') {
         // Mismo recorte que el drag con mouse del cuerpo entero (ver el
@@ -8672,6 +8746,27 @@ function initDrawingLayer() {
     if (price === null || time === null) return;
     const candles = window._lastCandles || [];
     if (!candles.length) return;
+
+    // Tercer clic de la Extensión de Fib (ver fibExtPending arriba): ya
+    // tenemos p1/p2 de la base del movimiento, este clic cierra el dibujo
+    // con p3 = fin del retroceso — no empieza un arrastre nuevo.
+    if (tool === 'fibext' && fibExtPending) {
+      clearPreview();
+      const d = {
+        id:genId(), type:'fibext', series:[], svgEls:[], label:null, locked:false,
+        color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style,
+        extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight,
+        levels: toolDefaults.levels ? JSON.parse(JSON.stringify(toolDefaults.levels)) : cloneFibExtLevels(),
+        p1: fibExtPending.p1, p2: fibExtPending.p2, p3: { price, time },
+      };
+      fibExtPending = null;
+      captureUndoSnapshot();
+      drawings.push(d);
+      buildDrawingOnChart(d);
+      selectDrawing(d.id);
+      backToCursor();
+      return;
+    }
 
     if (tool === 'text') {
       // Como en TV: se escribe directo sobre el chart, no un prompt() nativo.
@@ -8723,9 +8818,35 @@ function initDrawingLayer() {
   });
 
   svg.addEventListener('mousemove', e => {
-    if (!drawStart) return;
-    e.preventDefault();
     const tool = STATE.activeTool;
+    // Fase 2 de la Extensión de Fib: ya se soltó el primer arrastre
+    // (p1/p2 en fibExtPending), todavía no hubo tercer clic — no hay
+    // drawStart ninguno, pero igual mostramos una vista previa de los
+    // niveles siguiendo el mouse como candidato a p3.
+    if (!drawStart) {
+      if (tool === 'fibext' && fibExtPending) {
+        e.preventDefault();
+        const c3 = getCoords(e);
+        clearPreview();
+        if (c3.price !== null) {
+          const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+          const fibColors=['#ef5350','#f0c060','#26a69a','#60c0f0','#a060f0','#f06060','#60f0a0','#f0a060'];
+          const base = fibExtPending.p2.price - fibExtPending.p1.price;
+          [0,0.382,0.618,1,1.272,1.618,2,2.618].forEach((lvl,i) => {
+            const val = c3.price + base * lvl;
+            const ly = candleSeries.priceToCoordinate(val);
+            if (ly === null) return;
+            const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+            line.setAttribute('x1',0); line.setAttribute('y1',ly); line.setAttribute('x2',container.clientWidth); line.setAttribute('y2',ly);
+            line.setAttribute('stroke',fibColors[i]+'bb'); line.setAttribute('stroke-width','1'); line.setAttribute('stroke-dasharray','3,3');
+            group.appendChild(line);
+          });
+          svg.appendChild(group); previewEl = group;
+        }
+      }
+      return;
+    }
+    e.preventDefault();
     const { x: x2, y: y2 } = getCoords(e);
     clearPreview();
 
@@ -8765,6 +8886,16 @@ function initDrawingLayer() {
         group.appendChild(line);
       });
       svg.appendChild(group); previewEl = group;
+    } else if (tool === 'fibext') {
+      // Fase 1 (arrastre p1→p2, la base del movimiento): todavía no hay p3
+      // así que no se puede mostrar el nivel real de ningún ratio — alcanza
+      // con una línea de tendencia simple marcando el tramo elegido.
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', drawStart.x); line.setAttribute('y1', drawStart.y);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
+      line.setAttribute('stroke-dasharray', '4,3');
+      svg.appendChild(line); previewEl = line;
     }
   });
 
@@ -8838,6 +8969,17 @@ function initDrawingLayer() {
       // buildDrawingOnChart y updateDrawingGeometry, que ahora leen p1/p2
       // directo con el mismo criterio.
       d = { id:genId(), type:'fib', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:toolDefaults.extLeft, extRight:toolDefaults.extRight, levels: toolDefaults.levels ? JSON.parse(JSON.stringify(toolDefaults.levels)) : cloneFibLevels(), p1:{price:price2,time:time2}, p2:{price:drawStart.price,time:drawStart.time} };
+    } else if (tool === 'fibext') {
+      // Solo termina la FASE 1 (la base del movimiento, p1→p2) — todavía
+      // falta el tercer clic (p3, el fin del retroceso) para armar el
+      // dibujo de verdad, así que acá NO se crea `d` (nada se empuja a
+      // drawings ni vuelve a cursor): se guarda en fibExtPending y se
+      // espera el próximo mousedown sobre el chart (ver más arriba).
+      // p1 = donde se EMPEZÓ a arrastrar (inicio del movimiento), p2 =
+      // donde se soltó (fin del movimiento) — orden natural, al derecho
+      // (a diferencia del Fibo de retroceso, que lo invierte).
+      if (Math.abs(price2-drawStart.price)<0.0001) { drawStart=null; return; }
+      fibExtPending = { p1:{price:drawStart.price,time:drawStart.time}, p2:{price:price2,time:time2} };
     } else if (tool === 'vline') {
       d = { id:genId(), type:'vline', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:null,time:drawStart.time}, p2:{price:null,time:drawStart.time} };
     } else if (tool === 'long' || tool === 'short') {
@@ -8896,7 +9038,7 @@ function initDrawingLayer() {
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { deselectDrawing(); }
+    if (e.key === 'Escape') { deselectDrawing(); window._cancelFibExtPending(); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
       if (document.activeElement.tagName === 'INPUT') return;
       onDtbDelete();
@@ -9711,6 +9853,11 @@ function setTool(btn, name) {
   // STATE.activeTool cambie.
   document.querySelectorAll('.tool-btn').forEach(b=>{ if(b.id!=='btn-volume'&&b.id!=='btn-magnet'&&b.id!=='btn-ind-legend'&&b.id!=='btn-quick-trade-toggle')b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
+  // Cambiar de herramienta a mitad de un Fib Extension (ya se hizo el
+  // primer arrastre, falta el tercer clic) cancela ese dibujo a medio
+  // hacer — si no, quedaba "pending" colgado y el próximo clic en fibext
+  // (más adelante, otra vez) lo retomaba con puntos de otra selección.
+  if (name !== 'fibext' && window._cancelFibExtPending) window._cancelFibExtPending();
   STATE.activeTool = name;
   refreshToolDefaultsFor(name);
   if (name !== 'cursor') deselectDrawing();
