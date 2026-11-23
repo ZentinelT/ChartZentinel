@@ -1846,9 +1846,10 @@
     width: 12px; height: 12px; border-radius: 50%;
     align-items: center; justify-content: center;
     background: var(--bg-panel);
-    font-size: 8px; line-height: 1; color: var(--text-dim);
+    color: var(--text-dim);
     cursor: pointer; z-index: 2;
   }
+  .tool-fav-star svg { display: block; }
   /* Solo adentro de un flyout desplegado — pedido explícito del usuario:
      en la barra principal (el botón que queda siempre visible de cada
      grupo, y las herramientas sueltas como Cursor/Rectangle/Text) no
@@ -3939,7 +3940,13 @@ function renderLayoutGrid(n){
       const tool = btn.dataset.tool;
       const star = document.createElement('span');
       star.className = 'tool-fav-star' + (getFavs().includes(tool) ? ' on' : '');
-      star.textContent = '★';
+      // SVG en vez de el carácter de texto ★: un "tamaño mínimo de fuente"
+      // configurado en Chrome (accesibilidad) fuerza CUALQUIER texto por
+      // debajo de ese piso al tamaño mínimo sin importar el font-size del
+      // CSS — en el navegador del usuario eso dejaba la estrella enorme
+      // ("pintada" encima del ícono) pase lo que pase con el CSS. Un SVG
+      // no es texto, así que no le aplica esa configuración.
+      star.innerHTML = '<svg viewBox="0 0 24 24" width="8" height="8" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7L2 9.2l7.1-.6z"/></svg>';
       star.title = 'Toggle favorite';
       star.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
       star.addEventListener('click', e => {
@@ -19450,7 +19457,9 @@ function _initGridFavBar(toolBtns){
     const tool = btn.dataset.tool;
     const star = document.createElement('span');
     star.className = 'tool-fav-star' + (getFavs().includes(tool) ? ' on' : '');
-    star.textContent = '★';
+    // Ver comentario en la versión de esto para el shell: SVG en vez de
+    // texto, así no le aplica el "tamaño mínimo de fuente" de Chrome.
+    star.innerHTML = '<svg viewBox="0 0 24 24" width="8" height="8" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7L2 9.2l7.1-.6z"/></svg>';
     star.title = 'Toggle favorite';
     star.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
     star.addEventListener('click', e => {
