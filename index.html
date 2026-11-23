@@ -817,6 +817,21 @@
   .tool-group:hover .tool-group-corner::after,
   .tool-group.open .tool-group-corner::after { border-bottom-color: var(--gold); }
   .tool-group.open { z-index: 60; }
+  /* Panel de fondo detrás de los botones desplegados (ver openGroup) — sin
+     esto los íconos quedaban flotando sueltos encima del chart, sin nada
+     que los distinga del fondo oscuro (reportado por el usuario: "no se
+     ven bien"). display:none por default, lo prende/apaga JS junto con
+     el flyout — mismo ancho que un .tool-btn (30px), alto según cuántos
+     botones tenga el grupo (ver openGroup: btns.length * 32px). */
+  .tool-group-menu-bg {
+    display: none;
+    position: absolute; left: 0; top: 0; width: 30px;
+    background: var(--bg-active);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.45);
+    z-index: 40;
+  }
 
   /* ─── SIDEBAR ─────────────────────────────────────────── */
   /* ¿Por qué un wrapper interno de ancho fijo? Animar el "width" de
@@ -3017,11 +3032,28 @@ function setupToolGroups(root) {
   if (!root || root.dataset.toolGroupsInit) return;
   root.dataset.toolGroupsInit = '1';
 
+  // Panel de fondo detrás de los botones desplegados — sin esto quedaban
+  // flotando sueltos encima del chart, sin ningún borde/sombra que los
+  // distinga del fondo oscuro (reportado por el usuario: "no se ven bien").
   function closeGroup(wrap, btns) {
     wrap.classList.remove('open');
+    const bg = wrap.querySelector('.tool-group-menu-bg');
+    if (bg) bg.style.display = 'none';
     btns.forEach(b => {
       if (b.dataset.tool !== wrap.dataset.currentMain) b.style.display = 'none';
       b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.zIndex = '';
+    });
+  }
+  function openGroup(wrap, btns, bg) {
+    wrap.classList.add('open');
+    bg.style.display = 'block';
+    bg.style.height = (btns.length * 32) + 'px';
+    btns.forEach((b, i) => {
+      b.style.display = 'flex';
+      b.style.position = 'absolute';
+      b.style.left = '0';
+      b.style.top = (i * 32) + 'px';
+      b.style.zIndex = 41;
     });
   }
 
@@ -3040,6 +3072,10 @@ function setupToolGroups(root) {
     wrap.dataset.currentMain = savedMain;
     btns.forEach(b => { b.style.display = (b.dataset.tool === savedMain) ? '' : 'none'; });
 
+    const menuBg = document.createElement('span');
+    menuBg.className = 'tool-group-menu-bg';
+    wrap.appendChild(menuBg);
+
     const corner = document.createElement('span');
     corner.className = 'tool-group-corner';
     corner.title = 'More tools';
@@ -3054,14 +3090,7 @@ function setupToolGroups(root) {
         if (g !== wrap) closeGroup(g, Array.from(g.querySelectorAll('.tool-btn')));
       });
       if (wasOpen) { closeGroup(wrap, btns); return; }
-      wrap.classList.add('open');
-      btns.forEach((b, i) => {
-        b.style.display = 'flex';
-        b.style.position = 'absolute';
-        b.style.left = '0';
-        b.style.top = (i * 32) + 'px';
-        b.style.zIndex = 40;
-      });
+      openGroup(wrap, btns, menuBg);
     });
 
     // El click de CUALQUIER botón del grupo (sea el visible de siempre o
@@ -3084,6 +3113,8 @@ document.addEventListener('click', e => {
   document.querySelectorAll('.tool-group.open').forEach(g => {
     if (g.contains(e.target)) return;
     g.classList.remove('open');
+    const bg = g.querySelector('.tool-group-menu-bg');
+    if (bg) bg.style.display = 'none';
     g.querySelectorAll('.tool-btn').forEach(b => {
       if (b.dataset.tool !== g.dataset.currentMain) b.style.display = 'none';
       b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.zIndex = '';
