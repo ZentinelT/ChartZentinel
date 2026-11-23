@@ -2086,6 +2086,14 @@
         <circle cx="20" cy="10" r="1.6" fill="currentColor" stroke="none"/>
       </svg>
     </button>
+    <button class="tool-btn" data-tip="Gann Square" data-tool="gann" onclick="setTool(this,'gann')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="3" y="3" width="18" height="18"/>
+        <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
+        <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+        <line x1="3" y1="3" x2="21" y2="21"/>
+      </svg>
+    </button>
     <div class="tool-sep"></div>
     <button class="tool-btn" id="btn-magnet" data-tip="Magnet: off" onclick="toggleMagnet()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3656,6 +3664,7 @@ function renderLayoutGrid(n){
     { tool:'text', tip:'Text Label', icon:'<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>' },
     { tool:'path', tip:'Path (click multiple points, double-click or Esc to finish)', icon:'<polyline points="3 19 8 9 13 15 21 5"/><circle cx="3" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="8" cy="9" r="1.6" fill="currentColor" stroke="none"/><circle cx="13" cy="15" r="1.6" fill="currentColor" stroke="none"/>' },
     { tool:'curve', tip:'Curve (drag the midpoint handle to bend it)', icon:'<path d="M4 18 Q12 2 20 10"/><circle cx="4" cy="18" r="1.6" fill="currentColor" stroke="none"/><circle cx="20" cy="10" r="1.6" fill="currentColor" stroke="none"/>' },
+    { tool:'gann', tip:'Gann Square', strokeWidth:'1.6', icon:'<rect x="3" y="3" width="18" height="18"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="3" y1="3" x2="21" y2="21"/>' },
   ];
   shellToolbar.innerHTML = TOOL_DEFS.map(t => t===null ? '<div class="tool-sep"></div>' :
     `<button class="tool-btn${t.tool==='cursor'?' active':''}" data-tool="${t.tool}" data-tip="${t.tip}" onclick="shellSetTool(this,'${t.tool}')">
@@ -5343,6 +5352,7 @@ function serializeDrawings(){
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
       lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
       anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined,
+      diagEl:undefined, gridEls:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5357,7 +5367,7 @@ window.applyExternalDrawings = function(list){
     [...drawings].forEach(d => removeDrawingById(d.id));
     deselectDrawing();
     (list || []).forEach(data => {
-      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined };
+      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined, diagEl:undefined, gridEls:undefined };
       drawings.push(d);
       if (d.type === 'text') {
         const fontSize = d.fontSize || 14, bgColor = d.bgColor || '#0a0a0c';
@@ -5635,6 +5645,13 @@ function restyleDrawingAppearance(d) {
       d.curveEl.setAttribute('stroke-width', lw);
       d.curveEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     }
+  } else if (d.type === 'gann') {
+    if (d.fillEl instanceof Element) d.fillEl.setAttribute('fill', C);
+    if (d.diagEl instanceof Element) { d.diagEl.setAttribute('stroke', C); d.diagEl.setAttribute('stroke-width', Math.max(lw,2)); }
+    (d.gridEls||[]).forEach(el => {
+      el.setAttribute('stroke', C+'77'); el.setAttribute('stroke-width', lw);
+      el.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    });
   } else if (d.type === 'rect') {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
@@ -6123,6 +6140,10 @@ function updateDrawingGeometry(d) {
     syncCurveSvg(d);
     ok = true;
 
+  } else if (d.type === 'gann') {
+    syncGannSvg(d);
+    ok = true;
+
   } else if ((d.type === 'long' || d.type === 'short') && d.series.length === 3) {
     // positionToolRenderTimes en vez de d.p1.time/d.p2.time crudos: exige
     // tiempos estrictamente ascendentes (sin esto, un dibujo sincronizado
@@ -6196,6 +6217,8 @@ function removeDrawingById(id) {
   if (d.pathEl instanceof Element) d.pathEl.remove();
   if (d.arrowEl instanceof Element) d.arrowEl.remove();
   if (d.curveEl instanceof Element) d.curveEl.remove();
+  if (d.diagEl instanceof Element) d.diagEl.remove();
+  if (Array.isArray(d.gridEls)) d.gridEls.forEach(el => el.remove());
   if (d.fillEl instanceof Element) d.fillEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
@@ -6267,6 +6290,60 @@ function syncCurveSvg(d) {
   if (!a || !b || !c) { d.curveEl.style.display = 'none'; return; }
   d.curveEl.style.display = '';
   d.curveEl.setAttribute('d', `M ${a.x},${a.y} Q ${c.x},${c.y} ${b.x},${b.y}`);
+}
+
+// Reposiciona el Gann Square — grilla NxN + diagonal 1x1 + relleno, todo
+// overlay SVG recalculado entero cada frame (mismo criterio que Path/
+// Curve: más simple que mantener estado intermedio sincronizado a mano).
+// Alcance acotado a propósito: sin fan ni arcs (eso de TradingView queda
+// pendiente si hace falta más adelante) — grilla + diagonal es el núcleo
+// de lo que el usuario pidió ("cuadrícula de Gann").
+function syncGannSvg(d) {
+  if (!(d.fillEl instanceof Element)) return;
+  const toXY = p => {
+    const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
+    const y = candleSeries.priceToCoordinate(p.price);
+    return (x===null||y===null) ? null : {x,y};
+  };
+  const a = toXY(d.p1), b = toXY(d.p2);
+  const hide = () => {
+    d.fillEl.style.display = 'none';
+    if (d.diagEl instanceof Element) d.diagEl.style.display = 'none';
+    (d.gridEls||[]).forEach(el => el.style.display = 'none');
+  };
+  if (!a || !b) { hide(); return; }
+  const left = Math.min(a.x,b.x), right = Math.max(a.x,b.x);
+  const top  = Math.min(a.y,b.y), bottom = Math.max(a.y,b.y);
+
+  d.fillEl.style.display = '';
+  d.fillEl.setAttribute('x', left); d.fillEl.setAttribute('y', top);
+  d.fillEl.setAttribute('width', right-left); d.fillEl.setAttribute('height', bottom-top);
+
+  if (d.diagEl instanceof Element) {
+    d.diagEl.style.display = '';
+    // La diagonal sigue la dirección REAL del arrastre (p1→p2), no
+    // necesariamente top-left→bottom-right — así el "1x1" apunta para el
+    // lado que el usuario lo dibujó.
+    d.diagEl.setAttribute('x1', a.x); d.diagEl.setAttribute('y1', a.y);
+    d.diagEl.setAttribute('x2', b.x); d.diagEl.setAttribute('y2', b.y);
+  }
+
+  const N = d.gridDivisions || 4;
+  (d.gridEls||[]).forEach((el,i) => {
+    el.style.display = '';
+    if (i < N+1) {
+      // líneas verticales i=0..N (incluye los 2 bordes)
+      const x = left + i*(right-left)/N;
+      el.setAttribute('x1', x); el.setAttribute('y1', top);
+      el.setAttribute('x2', x); el.setAttribute('y2', bottom);
+    } else {
+      // líneas horizontales
+      const j = i - (N+1);
+      const y = top + j*(bottom-top)/N;
+      el.setAttribute('x1', left); el.setAttribute('y1', y);
+      el.setAttribute('x2', right); el.setAttribute('y2', y);
+    }
+  });
 }
 
 // Vuelve a ubicar la línea vertical de un dibujo (se llama cada frame y
@@ -7232,6 +7309,37 @@ function buildDrawingOnChart(d) {
     d.curveEl.setAttribute('stroke-width', lw);
     d.curveEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     syncCurveSvg(d);
+
+  } else if (d.type === 'gann') {
+    // Overlay SVG puro, igual que Path/Curve/vline — ver syncGannSvg.
+    if (!(d.fillEl instanceof Element)) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      window._drawingLayerSvg.insertBefore(r, window._drawingLayerSvg.firstChild);
+      d.fillEl = r;
+    }
+    if (!(d.diagEl instanceof Element)) {
+      const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+      window._drawingLayerSvg.appendChild(l);
+      d.diagEl = l;
+    }
+    const N = d.gridDivisions || 4;
+    const needed = 2*(N+1);
+    if (!Array.isArray(d.gridEls) || d.gridEls.length !== needed) {
+      (d.gridEls||[]).forEach(el => el.remove());
+      d.gridEls = [];
+      for (let i=0;i<needed;i++){
+        const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+        window._drawingLayerSvg.appendChild(l);
+        d.gridEls.push(l);
+      }
+    }
+    d.fillEl.setAttribute('fill', C); d.fillEl.setAttribute('fill-opacity', '0.06');
+    d.diagEl.setAttribute('stroke', C); d.diagEl.setAttribute('stroke-width', Math.max(lw,2));
+    d.gridEls.forEach(el => {
+      el.setAttribute('stroke', C+'77'); el.setAttribute('stroke-width', lw);
+      el.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    });
+    syncGannSvg(d);
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
@@ -7309,6 +7417,9 @@ function highlightSelectedSvg(id) {
       addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
       addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
       addHandle(timeToX(safeLineTime(d.pc.time)), priceToY(d.pc.price), id, 'pc');
+    } else if (d.type === 'gann') {
+      addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
+      addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
     } else if (d.type === 'long' || d.type === 'short') {
       // Mismo motivo que en isClickOnDrawing: usar los tiempos RENDERIZADOS
       // (ajustados a este panel), no los crudos — si no, las manijas de un
@@ -7442,6 +7553,9 @@ function applyHandleDrag(d, role, price, time) {
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
     else if (role === 'pc') { d.pc.price = price; d.pc.time = time; }
+  } else if (d.type === 'gann') {
+    if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
+    else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
   } else if (d.type === 'long' || d.type === 'short') {
     if (role === 'entry') {
       // Arrastrar la línea de entrada mueve TODO el bloque (entrada, SL,
@@ -8216,6 +8330,8 @@ function initChart() {
         syncPathSvg(d);
       } else if (d.type==='curve') {
         syncCurveSvg(d);
+      } else if (d.type==='gann') {
+        syncGannSvg(d);
       } else if (d.type==='rect') {
         syncRectFill(d);
       } else if (d.type==='vp') {
@@ -8578,6 +8694,15 @@ function initDrawingLayer() {
         prev = cur;
       }
       return false;
+    }
+    if (d.type === 'gann') {
+      // Caja completa clickeable (como long/short) — es una grilla rellena,
+      // no tiene sentido exigirle acertarle a un borde fino en particular.
+      const hi=Math.max(d.p1.price,d.p2.price), lo=Math.min(d.p1.price,d.p2.price);
+      const t1=safeLineTime(Math.min(d.p1.time,d.p2.time)), t2=safeLineTime(Math.max(d.p1.time,d.p2.time));
+      const x1=timeToX(t1), x2=timeToX(t2), y1=priceToY(hi), y2=priceToY(lo);
+      if (x1===null||x2===null||y1===null||y2===null) return false;
+      return mx>=Math.min(x1,x2) && mx<=Math.max(x1,x2) && my>=Math.min(y1,y2) && my<=Math.max(y1,y2);
     }
     if (d.type === 'long' || d.type === 'short') {
       // Caja completa (del SL al TP) clickeable en cualquier punto interno
@@ -9147,7 +9272,7 @@ function initDrawingLayer() {
       line.setAttribute('stroke', GOLDA); line.setAttribute('stroke-width', toolDefaults.width);
       line.setAttribute('stroke-dasharray', '4,3');
       svg.appendChild(line); previewEl = line;
-    } else if (tool === 'rect' || tool === 'vp' || tool === 'long' || tool === 'short') {
+    } else if (tool === 'rect' || tool === 'vp' || tool === 'long' || tool === 'short' || tool === 'gann') {
       const rx=Math.min(drawStart.x,x2), ry=Math.min(drawStart.y,y2);
       const rw=Math.abs(x2-drawStart.x), rh=Math.abs(y2-drawStart.y);
       const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -9231,6 +9356,11 @@ function initDrawingLayer() {
       const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
       if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
       d = { id:genId(), type:'rect', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
+    } else if (tool === 'gann') {
+      // Arrastre simple de 2 puntos, como rect/vp — la grilla y la
+      // diagonal se calculan solas a partir de esa caja (ver syncGannSvg).
+      if (Math.abs(price2-drawStart.price)<0.0001 || time2===drawStart.time) { drawStart=null; return; }
+      d = { id:genId(), type:'gann', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, gridDivisions:4, p1:{price:drawStart.price,time:drawStart.time}, p2:{price:price2,time:time2} };
     } else if (tool === 'vp') {
       // Perfil de volumen de rango fijo: igual que 'rect' (una caja de
       // precio/tiempo arrastrada a mano), pero en vez de un simple relleno
