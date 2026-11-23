@@ -810,7 +810,12 @@
      "hitbox" invisible alrededor es lo que crece. */
   .tool-group-corner {
     position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px;
-    cursor: pointer; z-index: 3;
+    cursor: pointer;
+    /* Más alto que el ícono principal (42, ver positionGroup) — están
+       superpuestos ahí abajo a la derecha, así que si el principal tiene
+       más z-index le termina ganando el click al triangulito (reportado
+       por el usuario: "no funciona bien el botón de la esquina"). */
+    z-index: 43;
   }
   .tool-group-corner::after {
     content: ''; position: absolute; right: 3px; bottom: 3px; width: 0; height: 0;
