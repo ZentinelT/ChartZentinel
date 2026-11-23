@@ -8266,6 +8266,14 @@ function drawBehindDrawingSeries(ctx, d) {
 // actualizándose en el DOM normal, solo se ocultan con visibility:hidden,
 // ver applyDrawingZOrder) y redibujar un rect/línea equivalente leyendo esos
 // mismos atributos ya calculados, adentro de drawBackground().
+// parsea un atributo "points" de <polyline>/<polygon> ("x1,y1 x2,y2 ...")
+// a un array de {x,y} — lo usan Path/flecha/Triangle más abajo.
+function _svgPoints(str) {
+  return (str||'').trim().split(/\s+/).filter(Boolean).map(pair => {
+    const [x,y] = pair.split(',').map(Number);
+    return {x,y};
+  });
+}
 function drawBehindDrawingSvgParts(ctx, d) {
   function fillRectEl(el) {
     if (!(el instanceof Element) || el.style.display === 'none') return;
@@ -8275,6 +8283,126 @@ function drawBehindDrawingSvgParts(ctx, d) {
     ctx.globalAlpha = parseFloat(el.getAttribute('fill-opacity') || '1');
     ctx.fillStyle = el.getAttribute('fill') || '#000';
     ctx.fillRect(parseFloat(el.getAttribute('x')), parseFloat(el.getAttribute('y')), w, h);
+    ctx.restore();
+  }
+  function strokeLineEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    ctx.save();
+    ctx.strokeStyle = el.getAttribute('stroke') || d.color;
+    ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+    const dash = el.getAttribute('stroke-dasharray');
+    ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+    ctx.beginPath();
+    ctx.moveTo(parseFloat(el.getAttribute('x1')), parseFloat(el.getAttribute('y1')));
+    ctx.lineTo(parseFloat(el.getAttribute('x2')), parseFloat(el.getAttribute('y2')));
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Path (polilínea abierta, solo borde) y su flecha final (polígono
+  // relleno) — ver syncPathSvg. Mismo motivo que el resto: nunca se
+  // dibujaban detrás de las velas porque este primitive no sabía leer un
+  // <polyline>/<polygon>, solo <rect>/<line> (bug reportado por el usuario).
+  function strokePolylineEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    const pts = _svgPoints(el.getAttribute('points'));
+    if (pts.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = el.getAttribute('stroke') || d.color;
+    ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+    const dash = el.getAttribute('stroke-dasharray');
+    ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+  function fillPolygonEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    const pts = _svgPoints(el.getAttribute('points'));
+    if (pts.length < 3) return;
+    ctx.save();
+    ctx.fillStyle = el.getAttribute('fill') || d.color;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  // Triangle: un único <polygon> hace de borde Y relleno (showBorder/
+  // showFill ya resueltos como stroke="none"/fill-opacity="0" por
+  // buildDrawingOnChart) — a diferencia de la flecha de Path, acá SÍ hace
+  // falta trazar el borde además de rellenar.
+  function strokeFillPolygonEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    const pts = _svgPoints(el.getAttribute('points'));
+    if (pts.length < 3) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    const fillOpacity = parseFloat(el.getAttribute('fill-opacity') || '1');
+    if (fillOpacity > 0) {
+      ctx.globalAlpha = fillOpacity;
+      ctx.fillStyle = el.getAttribute('fill') || d.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const stroke = el.getAttribute('stroke');
+    if (stroke && stroke !== 'none') {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+      const dash = el.getAttribute('stroke-dasharray');
+      ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // Ellipse: mismo criterio que Triangle (un solo elemento = borde +
+  // relleno), pero geometría de óvalo (cx/cy/rx/ry, ver syncEllipseSvg).
+  function strokeFillEllipseEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    const cx=parseFloat(el.getAttribute('cx')), cy=parseFloat(el.getAttribute('cy'));
+    const rx=parseFloat(el.getAttribute('rx')), ry=parseFloat(el.getAttribute('ry'));
+    if (!(rx>0) || !(ry>0)) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+    const fillOpacity = parseFloat(el.getAttribute('fill-opacity') || '1');
+    if (fillOpacity > 0) {
+      ctx.globalAlpha = fillOpacity;
+      ctx.fillStyle = el.getAttribute('fill') || d.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const stroke = el.getAttribute('stroke');
+    if (stroke && stroke !== 'none') {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+      const dash = el.getAttribute('stroke-dasharray');
+      ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // Curve: <path> con comando "Q" (cuadrática) — ver syncCurveSvg, siempre
+  // "M ax,ay Q cx,cy bx,by".
+  function strokeQuadPathEl(el) {
+    if (!(el instanceof Element) || el.style.display === 'none') return;
+    const m = /M\s*([\d.-]+),([\d.-]+)\s*Q\s*([\d.-]+),([\d.-]+)\s*([\d.-]+),([\d.-]+)/.exec(el.getAttribute('d') || '');
+    if (!m) return;
+    const [ax,ay,cx,cy,bx,by] = m.slice(1).map(Number);
+    ctx.save();
+    ctx.strokeStyle = el.getAttribute('stroke') || d.color;
+    ctx.lineWidth = parseFloat(el.getAttribute('stroke-width') || '1');
+    const dash = el.getAttribute('stroke-dasharray');
+    ctx.setLineDash(dash && dash !== 'none' ? dash.split(',').map(Number) : []);
+    ctx.beginPath();
+    ctx.moveTo(ax,ay);
+    ctx.quadraticCurveTo(cx,cy,bx,by);
+    ctx.stroke();
     ctx.restore();
   }
   fillRectEl(d.fillEl);
@@ -8293,6 +8421,13 @@ function drawBehindDrawingSvgParts(ctx, d) {
     ctx.stroke();
     ctx.restore();
   }
+  strokePolylineEl(d.pathEl);
+  fillPolygonEl(d.arrowEl);
+  strokeQuadPathEl(d.curveEl);
+  strokeLineEl(d.diagEl);
+  if (Array.isArray(d.gridEls)) d.gridEls.forEach(strokeLineEl);
+  strokeFillEllipseEl(d.ellipseEl);
+  strokeFillPolygonEl(d.triangleEl);
 }
 // El cartel de la herramienta Text, repintado a mano en el canvas cuando
 // d.sendToBack está activo (ver applyDrawingZOrder, que oculta el <div>
@@ -8343,9 +8478,17 @@ function segmentIntendedVisible(d, i) {
 // para que el dibujo siga siendo legible/arrastrable aunque esté "atrás".
 function applyDrawingZOrder(d) {
   const back = !!d.sendToBack;
-  [d.fillEl, d.vLineEl, d.profitFillEl, d.lossFillEl, d.ellipseEl, d.triangleEl].forEach(el => {
+  // Path/Curve/Gann/Ellipse/Triangle viven enteros como overlay SVG (sin
+  // ninguna serie del chart que "ocultar") — les faltaba entrar en esta
+  // lista, así que "Send to back" los dejaba viviendo arriba de las velas
+  // igual (visibility nunca se tocaba) y drawBehindDrawingSvgParts no tenía
+  // nada que redibujar detrás: el dibujo quedaba invisible del todo
+  // (reportado por el usuario: "los puedo seleccionar pero no se ven").
+  [d.fillEl, d.vLineEl, d.profitFillEl, d.lossFillEl, d.ellipseEl, d.triangleEl,
+   d.pathEl, d.arrowEl, d.curveEl, d.diagEl].forEach(el => {
     if (el instanceof Element) el.style.visibility = back ? 'hidden' : '';
   });
+  if (Array.isArray(d.gridEls)) d.gridEls.forEach(el => { el.style.visibility = back ? 'hidden' : ''; });
   // El cartel de texto, a diferencia del resto (que son series del chart o
   // <rect>/<line> SVG), es un <div> HTML normal — mismo truco: se oculta
   // con visibility:hidden (nunca display:none, eso lo pisarían las
