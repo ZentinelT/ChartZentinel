@@ -2133,6 +2133,12 @@
     <button class="tool-btn" data-tip="Rectangle" data-tool="rect" onclick="setTool(this,'rect')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg>
     </button>
+    <button class="tool-btn" data-tip="Ellipse" data-tool="ellipse" onclick="setTool(this,'ellipse')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="6"/></svg>
+    </button>
+    <button class="tool-btn" data-tip="Triangle" data-tool="triangle" onclick="setTool(this,'triangle')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 4 21 20 3 20"/></svg>
+    </button>
     <button class="tool-btn" data-tip="Volume Profile" data-tool="vp" onclick="setTool(this,'vp')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="4" width="11" height="3"/><rect x="3" y="9" width="17" height="3"/><rect x="3" y="14" width="7" height="3"/><rect x="3" y="19" width="14" height="3"/>
@@ -3089,6 +3095,7 @@ if (!_lsOK) console.warn('Zentinel: localStorage not available (blocked by the b
 //  generada desde TOOL_DEFS) — ver sus llamadas a setupToolGroups.
 const TOOL_GROUPS = [
   ['trendline', 'hline', 'vline', 'path', 'curve'],
+  ['rect', 'ellipse', 'triangle'],
   ['fib', 'fibext', 'gann', 'vp'],
   ['long', 'short'],
 ];
@@ -3891,6 +3898,8 @@ function renderLayoutGrid(n){
     { tool:'hline', tip:'Horizontal Line', icon:'<line x1="2" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="2" fill="currentColor"/>' },
     { tool:'vline', tip:'Vertical Line', icon:'<line x1="12" y1="2" x2="12" y2="22"/><circle cx="12" cy="12" r="2" fill="currentColor"/>' },
     { tool:'rect', tip:'Rectangle', icon:'<rect x="3" y="6" width="18" height="12" rx="1"/>' },
+    { tool:'ellipse', tip:'Ellipse', icon:'<ellipse cx="12" cy="12" rx="9" ry="6"/>' },
+    { tool:'triangle', tip:'Triangle', icon:'<polygon points="12 4 21 20 3 20"/>' },
     { tool:'vp', tip:'Volume Profile', icon:'<rect x="3" y="4" width="11" height="3"/><rect x="3" y="9" width="17" height="3"/><rect x="3" y="14" width="7" height="3"/><rect x="3" y="19" width="14" height="3"/>' },
     { tool:'fib', tip:'Fibonacci', strokeWidth:'1.6', icon:'<line x1="2" y1="3.5" x2="22" y2="3.5"/><line x1="2" y1="8.3" x2="15" y2="8.3"/><line x1="2" y1="13" x2="20" y2="13"/><line x1="2" y1="17.7" x2="11" y2="17.7"/><line x1="2" y1="22.5" x2="22" y2="22.5"/>' },
     { tool:'fibext', tip:'Fib Extension', strokeWidth:'1.6', icon:'<polyline points="3 18 10 6 15 13"/><line x1="15" y1="13" x2="21" y2="13" stroke-dasharray="2,2"/><line x1="15" y1="8" x2="21" y2="8" stroke-dasharray="2,2"/><line x1="15" y1="3.5" x2="21" y2="3.5" stroke-dasharray="2,2"/>' },
@@ -5477,10 +5486,11 @@ function captureDrawingStyle(d){
       fibLabelMode: d.fibLabelMode || 'percent',
     });
   }
-  if (d.type === 'rect') {
+  if (d.type === 'rect' || d.type === 'ellipse' || d.type === 'triangle') {
     // Mismo caso que showLabels arriba: mostrar/ocultar borde y relleno por
     // separado son toggles reales (ver onDtbToggleRectPart) que tampoco
-    // entraban en el template.
+    // entraban en el template. Ellipse/Triangle comparten el mismo toggle
+    // que Rectangle (ver dtb-rect-border/dtb-rect-fill, reusados para las 3).
     return Object.assign(base, { color: d.color, showBorder: d.showBorder !== false, showFill: d.showFill !== false });
   }
   if (d.type === 'vp') {
@@ -5526,7 +5536,7 @@ function saveDrawingTemplatesStore(){ lsSet('td_drawing_templates', JSON.stringi
 // restyleDrawingAppearance() no sabe aplicar porque no toca visibilidad/
 // opciones por fuera de color-ancho-estilo, solo repinta las series que YA
 // existen. Para estos hace falta reconstruir entero.
-const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'fibext', 'rect', 'vp', 'long', 'short', 'hline', 'trendline']);
+const DRAWING_TYPES_NEED_REBUILD_ON_TEMPLATE = new Set(['fib', 'fibext', 'rect', 'ellipse', 'triangle', 'vp', 'long', 'short', 'hline', 'trendline']);
 function applyStyleObjectToDrawing(d, style){
   captureUndoSnapshot();
   Object.assign(d, style);
@@ -5602,7 +5612,7 @@ function serializeDrawings(){
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
       lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
       anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined,
-      diagEl:undefined, gridEls:undefined,
+      diagEl:undefined, gridEls:undefined, ellipseEl:undefined, triangleEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5617,7 +5627,7 @@ window.applyExternalDrawings = function(list){
     [...drawings].forEach(d => removeDrawingById(d.id));
     deselectDrawing();
     (list || []).forEach(data => {
-      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined, diagEl:undefined, gridEls:undefined };
+      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined, curveEl:undefined, diagEl:undefined, gridEls:undefined, ellipseEl:undefined, triangleEl:undefined };
       drawings.push(d);
       if (d.type === 'text') {
         const fontSize = d.fontSize || 14, bgColor = d.bgColor || '#0a0a0c';
@@ -5804,8 +5814,9 @@ function selectDrawing(id) {
   document.getElementById('dtb-ext-right').style.display = (extendApplies && d.type!=='vp' && d.type!=='hline') ? '' : 'none';
   document.getElementById('dtb-ext-left').classList.toggle('active', !!d.extLeft);
   document.getElementById('dtb-ext-right').classList.toggle('active', !!d.extRight);
-  document.getElementById('dtb-rect-border').style.display = d.type==='rect' ? '' : 'none';
-  document.getElementById('dtb-rect-fill').style.display   = d.type==='rect' ? '' : 'none';
+  const hasBorderFillToggle = (d.type==='rect' || d.type==='ellipse' || d.type==='triangle');
+  document.getElementById('dtb-rect-border').style.display = hasBorderFillToggle ? '' : 'none';
+  document.getElementById('dtb-rect-fill').style.display   = hasBorderFillToggle ? '' : 'none';
   document.getElementById('dtb-rect-border').classList.toggle('active', d.showBorder !== false);
   document.getElementById('dtb-rect-fill').classList.toggle('active', d.showFill !== false);
   document.getElementById('dtb-pos-labels').style.display = isPosition ? '' : 'none';
@@ -5906,6 +5917,18 @@ function restyleDrawingAppearance(d) {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
     syncRectFill(d);
+  } else if (d.type === 'ellipse' || d.type === 'triangle') {
+    // Igual criterio que Gann: un solo elemento SVG hace de borde Y relleno
+    // a la vez (ver buildDrawingOnChart) — mismo showBorder/showFill que
+    // 'rect', pero sin series propias que repintar.
+    const el = d.type === 'ellipse' ? d.ellipseEl : d.triangleEl;
+    if (el instanceof Element) {
+      el.setAttribute('stroke', d.showBorder === false ? 'none' : C);
+      el.setAttribute('stroke-width', lw);
+      el.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+      el.setAttribute('fill', C);
+      el.setAttribute('fill-opacity', d.showFill === false ? '0' : '0.12');
+    }
   } else if (d.type === 'vp') {
     // [0-3] borde (sigue a d.color/width/style, el selector genérico de la
     // barra). POC/VAH/VAL y los 4 colores de las barras tienen sus propios
@@ -6078,9 +6101,9 @@ function _syncLabelPosBtns(pos, isVline) {
     btn.classList.toggle('active', btn.dataset.pos === pos);
   });
 }
-// Solo para 'rect': apaga/prende el borde o el relleno sin tocar el otro.
+// Para 'rect'/'ellipse'/'triangle': apaga/prende el borde o el relleno sin tocar el otro.
 function onDtbToggleRectPart(field) {
-  const d = getSelected(); if (!d || d.type!=='rect') return;
+  const d = getSelected(); if (!d || (d.type!=='rect' && d.type!=='ellipse' && d.type!=='triangle')) return;
   captureUndoSnapshot();
   d[field] = (d[field] === false) ? true : false; // default true -> primer click apaga
   const btnId = field === 'showBorder' ? 'dtb-rect-border' : 'dtb-rect-fill';
@@ -6394,6 +6417,14 @@ function updateDrawingGeometry(d) {
     syncGannSvg(d);
     ok = true;
 
+  } else if (d.type === 'ellipse') {
+    syncEllipseSvg(d);
+    ok = true;
+
+  } else if (d.type === 'triangle') {
+    syncTriangleSvg(d);
+    ok = true;
+
   } else if ((d.type === 'long' || d.type === 'short') && d.series.length === 3) {
     // positionToolRenderTimes en vez de d.p1.time/d.p2.time crudos: exige
     // tiempos estrictamente ascendentes (sin esto, un dibujo sincronizado
@@ -6470,6 +6501,8 @@ function removeDrawingById(id) {
   if (d.diagEl instanceof Element) d.diagEl.remove();
   if (Array.isArray(d.gridEls)) d.gridEls.forEach(el => el.remove());
   if (d.fillEl instanceof Element) d.fillEl.remove();
+  if (d.ellipseEl instanceof Element) d.ellipseEl.remove();
+  if (d.triangleEl instanceof Element) d.triangleEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
   if (d.profitFillEl instanceof Element) d.profitFillEl.remove();
@@ -6594,6 +6627,44 @@ function syncGannSvg(d) {
       el.setAttribute('x2', right); el.setAttribute('y2', y);
     }
   });
+}
+
+// Reposiciona el Óvalo — misma caja p1/p2 que 'rect', pero un único
+// <ellipse> SVG hace de borde y relleno a la vez (no hay forma de expresar
+// una elipse con series nativas del chart, igual que Gann/Path/Curve).
+function syncEllipseSvg(d) {
+  if (!(d.ellipseEl instanceof Element)) return;
+  const toXY = p => {
+    const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
+    const y = candleSeries.priceToCoordinate(p.price);
+    return (x===null||y===null) ? null : {x,y};
+  };
+  const a = toXY(d.p1), b = toXY(d.p2);
+  if (!a || !b) { d.ellipseEl.style.display = 'none'; return; }
+  const left = Math.min(a.x,b.x), right = Math.max(a.x,b.x);
+  const top  = Math.min(a.y,b.y), bottom = Math.max(a.y,b.y);
+  d.ellipseEl.style.display = '';
+  d.ellipseEl.setAttribute('cx', (left+right)/2);
+  d.ellipseEl.setAttribute('cy', (top+bottom)/2);
+  d.ellipseEl.setAttribute('rx', (right-left)/2);
+  d.ellipseEl.setAttribute('ry', (bottom-top)/2);
+}
+
+// Reposiciona el Triángulo — 3 vértices independientes (p1/p2/p3, igual
+// patrón de almacenamiento que la Extensión de Fib), recalculado entero
+// cada frame a partir de sus posiciones en pantalla actuales, igual que
+// Curve con su <path>.
+function syncTriangleSvg(d) {
+  if (!(d.triangleEl instanceof Element)) return;
+  const toXY = p => {
+    const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
+    const y = candleSeries.priceToCoordinate(p.price);
+    return (x===null||y===null) ? null : {x,y};
+  };
+  const a = toXY(d.p1), b = toXY(d.p2), c = toXY(d.p3);
+  if (!a || !b || !c) { d.triangleEl.style.display = 'none'; return; }
+  d.triangleEl.style.display = '';
+  d.triangleEl.setAttribute('points', `${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y}`);
 }
 
 // Vuelve a ubicar la línea vertical de un dibujo (se llama cada frame y
@@ -7590,6 +7661,41 @@ function buildDrawingOnChart(d) {
       el.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     });
     syncGannSvg(d);
+
+  } else if (d.type === 'ellipse') {
+    // Óvalo: igual criterio que Gann — vive entero como overlay SVG (un
+    // <ellipse> no se puede expresar como serie nativa del chart). Borde y
+    // relleno se apagan por separado (ver dtb-rect-border/dtb-rect-fill,
+    // reusados acá) con el mismo toggle que 'rect'.
+    if (!(d.ellipseEl instanceof Element)) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+      window._drawingLayerSvg.insertBefore(el, window._drawingLayerSvg.firstChild);
+      d.ellipseEl = el;
+    }
+    d.ellipseEl.setAttribute('stroke', d.showBorder === false ? 'none' : C);
+    d.ellipseEl.setAttribute('stroke-width', lw);
+    d.ellipseEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    d.ellipseEl.setAttribute('fill', C);
+    d.ellipseEl.setAttribute('fill-opacity', d.showFill === false ? '0' : '0.12');
+    syncEllipseSvg(d);
+
+  } else if (d.type === 'triangle') {
+    // Triángulo de 3 vértices independientes (nace de un arrastre simple,
+    // ver tool==='triangle' en mouseup: apex arriba-centro, base abajo a
+    // izquierda/derecha — después cada vértice se puede mover solo con su
+    // manija, igual que la Extensión de Fib). Mismo criterio SVG puro que
+    // Ellipse, con el mismo toggle de borde/relleno.
+    if (!(d.triangleEl instanceof Element)) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      window._drawingLayerSvg.insertBefore(el, window._drawingLayerSvg.firstChild);
+      d.triangleEl = el;
+    }
+    d.triangleEl.setAttribute('stroke', d.showBorder === false ? 'none' : C);
+    d.triangleEl.setAttribute('stroke-width', lw);
+    d.triangleEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    d.triangleEl.setAttribute('fill', C);
+    d.triangleEl.setAttribute('fill-opacity', d.showFill === false ? '0' : '0.12');
+    syncTriangleSvg(d);
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
@@ -7652,7 +7758,7 @@ function highlightSelectedSvg(id) {
       addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
       addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
       if (d.type === 'fibext') addHandle(timeToX(safeLineTime(d.p3.time)), priceToY(d.p3.price), id, 'p3');
-    } else if (d.type === 'rect' || d.type === 'vp') {
+    } else if (d.type === 'rect' || d.type === 'vp' || d.type === 'ellipse') {
       const hi = Math.max(d.p1.price, d.p2.price);
       const lo = Math.min(d.p1.price, d.p2.price);
       const t1 = safeLineTime(Math.min(d.p1.time, d.p2.time));
@@ -7681,6 +7787,12 @@ function highlightSelectedSvg(id) {
     } else if (d.type === 'gann') {
       addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
       addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
+    } else if (d.type === 'triangle') {
+      // 3 vértices independientes, igual patrón que Curve (p1/p2/pc) pero
+      // sin ningún punto "especial" — cualquiera de los 3 se mueve solo.
+      addHandle(timeToX(safeLineTime(d.p1.time)), priceToY(d.p1.price), id, 'p1');
+      addHandle(timeToX(safeLineTime(d.p2.time)), priceToY(d.p2.price), id, 'p2');
+      addHandle(timeToX(safeLineTime(d.p3.time)), priceToY(d.p3.price), id, 'p3');
     } else if (d.type === 'long' || d.type === 'short') {
       // Mismo motivo que en isClickOnDrawing: usar los tiempos RENDERIZADOS
       // (ajustados a este panel), no los crudos — si no, las manijas de un
@@ -7792,7 +7904,7 @@ function applyHandleDrag(d, role, price, time) {
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
     else if (role === 'p3') { d.p3.price = price; d.p3.time = time; }
-  } else if (d.type === 'rect' || d.type === 'vp') {
+  } else if (d.type === 'rect' || d.type === 'vp' || d.type === 'ellipse') {
     let hi = Math.max(d.p1.price, d.p2.price), lo = Math.min(d.p1.price, d.p2.price);
     let t1 = Math.min(d.p1.time, d.p2.time), t2 = Math.max(d.p1.time, d.p2.time);
     if (role === 't1hi') { t1 = time; hi = price; }
@@ -7817,6 +7929,10 @@ function applyHandleDrag(d, role, price, time) {
   } else if (d.type === 'gann') {
     if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
     else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
+  } else if (d.type === 'triangle') {
+    if (role === 'p1') { d.p1.price = price; d.p1.time = time; }
+    else if (role === 'p2') { d.p2.price = price; d.p2.time = time; }
+    else if (role === 'p3') { d.p3.price = price; d.p3.time = time; }
   } else if (d.type === 'long' || d.type === 'short') {
     if (role === 'entry') {
       // Arrastrar la línea de entrada mueve TODO el bloque (entrada, SL,
@@ -8227,7 +8343,7 @@ function segmentIntendedVisible(d, i) {
 // para que el dibujo siga siendo legible/arrastrable aunque esté "atrás".
 function applyDrawingZOrder(d) {
   const back = !!d.sendToBack;
-  [d.fillEl, d.vLineEl, d.profitFillEl, d.lossFillEl].forEach(el => {
+  [d.fillEl, d.vLineEl, d.profitFillEl, d.lossFillEl, d.ellipseEl, d.triangleEl].forEach(el => {
     if (el instanceof Element) el.style.visibility = back ? 'hidden' : '';
   });
   // El cartel de texto, a diferencia del resto (que son series del chart o
@@ -8978,6 +9094,31 @@ function initDrawingLayer() {
       if (x1===null||x2===null||y1===null||y2===null) return false;
       return mx>=Math.min(x1,x2) && mx<=Math.max(x1,x2) && my>=Math.min(y1,y2) && my<=Math.max(y1,y2);
     }
+    if (d.type === 'ellipse') {
+      // Dentro de la elipse inscripta en la caja p1/p2, no solo dentro del
+      // rectángulo que la contiene (ver ecuación normalizada más abajo).
+      const hi=Math.max(d.p1.price,d.p2.price), lo=Math.min(d.p1.price,d.p2.price);
+      const t1=safeLineTime(Math.min(d.p1.time,d.p2.time)), t2=safeLineTime(Math.max(d.p1.time,d.p2.time));
+      const x1=timeToX(t1), x2=timeToX(t2), y1=priceToY(hi), y2=priceToY(lo);
+      if (x1===null||x2===null||y1===null||y2===null) return false;
+      const cx=(x1+x2)/2, cy=(y1+y2)/2, rx=Math.abs(x2-x1)/2, ry=Math.abs(y2-y1)/2;
+      if (rx<1||ry<1) return false;
+      const nx=(mx-cx)/rx, ny=(my-cy)/ry;
+      return (nx*nx+ny*ny) <= 1;
+    }
+    if (d.type === 'triangle') {
+      // Test de signo de área respecto a los 3 lados — barato y exacto para
+      // un triángulo (a diferencia de Path/Curve, que necesitan muestrear).
+      const a={x:timeToX(safeLineTime(d.p1.time)),y:priceToY(d.p1.price)};
+      const b={x:timeToX(safeLineTime(d.p2.time)),y:priceToY(d.p2.price)};
+      const c={x:timeToX(safeLineTime(d.p3.time)),y:priceToY(d.p3.price)};
+      if (a.x===null||a.y===null||b.x===null||b.y===null||c.x===null||c.y===null) return false;
+      const sign = (p1,p2,p3) => (p1.x-p3.x)*(p2.y-p3.y) - (p2.x-p3.x)*(p1.y-p3.y);
+      const p = {x:mx,y:my};
+      const d1 = sign(p,a,b), d2 = sign(p,b,c), d3 = sign(p,c,a);
+      const hasNeg = (d1<0)||(d2<0)||(d3<0), hasPos = (d1>0)||(d2>0)||(d3>0);
+      return !(hasNeg && hasPos);
+    }
     if (d.type === 'long' || d.type === 'short') {
       // Caja completa (del SL al TP) clickeable en cualquier punto interno
       // — igual que un rect, no hace falta acertarle a un borde fino.
@@ -9586,6 +9727,36 @@ function initDrawingLayer() {
       group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
       group.appendChild(mkNodeMarker(x2, y2));
       svg.appendChild(group); previewEl = group;
+    } else if (tool === 'ellipse') {
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+      const cx=(drawStart.x+x2)/2, cy=(drawStart.y+y2)/2, rx=Math.abs(x2-drawStart.x)/2, ry=Math.abs(y2-drawStart.y)/2;
+      const el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+      el.setAttribute('cx',cx); el.setAttribute('cy',cy); el.setAttribute('rx',rx); el.setAttribute('ry',ry);
+      el.setAttribute('stroke', GOLDA); el.setAttribute('stroke-width', toolDefaults.width);
+      el.setAttribute('stroke-dasharray','4,3');
+      el.setAttribute('fill', 'rgba(201,168,76,0.06)');
+      group.appendChild(el);
+      group.appendChild(mkNodeMarker(drawStart.x, drawStart.y));
+      group.appendChild(mkNodeMarker(x2, y2));
+      svg.appendChild(group); previewEl = group;
+    } else if (tool === 'triangle') {
+      // Vista previa ya con la forma final (apex arriba-centro, base abajo
+      // a izquierda/derecha de la caja arrastrada — ver tool==='triangle'
+      // en mouseup, mismo criterio).
+      const group = document.createElementNS('http://www.w3.org/2000/svg','g');
+      const left=Math.min(drawStart.x,x2), right=Math.max(drawStart.x,x2);
+      const top=Math.min(drawStart.y,y2), bottom=Math.max(drawStart.y,y2);
+      const apex={x:(left+right)/2,y:top}, baseL={x:left,y:bottom}, baseR={x:right,y:bottom};
+      const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      poly.setAttribute('points', `${apex.x},${apex.y} ${baseL.x},${baseL.y} ${baseR.x},${baseR.y}`);
+      poly.setAttribute('stroke', GOLDA); poly.setAttribute('stroke-width', toolDefaults.width);
+      poly.setAttribute('stroke-dasharray','4,3');
+      poly.setAttribute('fill', 'rgba(201,168,76,0.06)');
+      group.appendChild(poly);
+      group.appendChild(mkNodeMarker(apex.x, apex.y));
+      group.appendChild(mkNodeMarker(baseL.x, baseL.y));
+      group.appendChild(mkNodeMarker(baseR.x, baseR.y));
+      svg.appendChild(group); previewEl = group;
     } else if (tool === 'fib') {
       // ly acá tiene que coincidir con el mismo criterio que la creación
       // real (ver tool==='fib' en mouseup, p1=0% en el punto de suelta/y2):
@@ -9666,6 +9837,21 @@ function initDrawingLayer() {
       const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
       if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
       d = { id:genId(), type:'rect', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:toolDefaults.extRight, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
+    } else if (tool === 'ellipse') {
+      const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
+      const t1=Math.min(drawStart.time,time2),   t2=Math.max(drawStart.time,time2);
+      if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
+      d = { id:genId(), type:'ellipse', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:drawStart.price,time:t1}, p2:{price:price2,time:t2} };
+    } else if (tool === 'triangle') {
+      // Nace de un arrastre simple (como rect): apex = precio más alto en
+      // el horario medio de la caja, base = precio más bajo en los dos
+      // extremos de tiempo — después cada vértice se mueve independiente
+      // con su propia manija (ver applyHandleDrag).
+      const t1=Math.min(drawStart.time,time2), t2=Math.max(drawStart.time,time2);
+      const hi=Math.max(drawStart.price,price2), lo=Math.min(drawStart.price,price2);
+      if (t1===t2||Math.abs(hi-lo)<0.0001) { drawStart=null; return; }
+      const tMid = (t1+t2)/2;
+      d = { id:genId(), type:'triangle', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, p1:{price:hi,time:tMid}, p2:{price:lo,time:t1}, p3:{price:lo,time:t2} };
     } else if (tool === 'gann') {
       // Arrastre simple de 2 puntos, como rect/vp — la grilla y la
       // diagonal se calculan solas a partir de esa caja (ver syncGannSvg).
