@@ -799,14 +799,23 @@
      esquina, que las despliega flotando debajo sin correr el resto de
      la toolbar (igual criterio visual que TradingView). */
   .tool-group { position: relative; display: inline-block; }
+  /* El elemento clickeable es más grande (12x12) que el triángulo que se
+     ve (6x6, dibujado con ::after) — un triángulo de 5x5 como área de
+     click real es casi imposible de acertar con el mouse; el usuario lo
+     reportó ("toco la esquina y no pasa nada", en realidad le pegaba al
+     botón principal de al lado). El triángulo visual se queda chico, el
+     "hitbox" invisible alrededor es lo que crece. */
   .tool-group-corner {
-    position: absolute; right: 1px; bottom: 1px; width: 0; height: 0;
-    border-style: solid; border-width: 0 0 5px 5px;
-    border-color: transparent transparent var(--text-dim) transparent;
+    position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px;
     cursor: pointer; z-index: 3;
   }
-  .tool-group:hover .tool-group-corner,
-  .tool-group.open .tool-group-corner { border-bottom-color: var(--gold); }
+  .tool-group-corner::after {
+    content: ''; position: absolute; right: 3px; bottom: 3px; width: 0; height: 0;
+    border-style: solid; border-width: 0 0 6px 6px;
+    border-color: transparent transparent var(--text-dim) transparent;
+  }
+  .tool-group:hover .tool-group-corner::after,
+  .tool-group.open .tool-group-corner::after { border-bottom-color: var(--gold); }
   .tool-group.open { z-index: 60; }
 
   /* ─── SIDEBAR ─────────────────────────────────────────── */
