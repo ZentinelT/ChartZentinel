@@ -792,6 +792,23 @@
   }
   .tool-btn:hover::after { opacity: 1; }
 
+  /* ─── GRUPOS DE HERRAMIENTAS (toolbar agrupada por tipo) ─────────────
+     Cada grupo (ver TOOL_GROUPS/setupToolGroups) muestra SOLO la última
+     herramienta usada de ese grupo en el lugar de siempre — las demás
+     quedan con display:none hasta que se abre el triangulito de la
+     esquina, que las despliega flotando debajo sin correr el resto de
+     la toolbar (igual criterio visual que TradingView). */
+  .tool-group { position: relative; display: inline-block; }
+  .tool-group-corner {
+    position: absolute; right: 1px; bottom: 1px; width: 0; height: 0;
+    border-style: solid; border-width: 0 0 5px 5px;
+    border-color: transparent transparent var(--text-dim) transparent;
+    cursor: pointer; z-index: 3;
+  }
+  .tool-group:hover .tool-group-corner,
+  .tool-group.open .tool-group-corner { border-bottom-color: var(--gold); }
+  .tool-group.open { z-index: 60; }
+
   /* ─── SIDEBAR ─────────────────────────────────────────── */
   /* ¿Por qué un wrapper interno de ancho fijo? Animar el "width" de
      #sidebar directamente (como estaba antes) hacía que TODO su contenido
@@ -2973,6 +2990,99 @@ function lsSet(key, val){ if(!_lsOK){ _lsMem[key]=val; return; } try { localStor
 if (!_lsOK) console.warn('Zentinel: localStorage not available (blocked by the browser) — settings will not persist across reloads.');
 
 // ══════════════════════════════════════════════════════════
+//  GRUPOS DE HERRAMIENTAS DE DIBUJO — pedido explícito del usuario: en vez
+//  de mostrar cada herramienta como un botón suelto, las parecidas se
+//  agrupan bajo UNA sola (la última usada de ese grupo) con un
+//  triangulito en la esquina que despliega las demás. Misma función sirve
+//  tanto para la toolbar del panel único (#toolbar, estática en el HTML)
+//  como para la del shell de la grilla multi-chart (shellToolbar,
+//  generada desde TOOL_DEFS) — ver sus llamadas a setupToolGroups.
+const TOOL_GROUPS = [
+  ['trendline', 'hline', 'vline'],
+  ['rect', 'vp'],
+  ['fib', 'fibext', 'gann'],
+  ['long', 'short'],
+  ['text', 'path', 'curve'],
+];
+function setupToolGroups(root) {
+  if (!root || root.dataset.toolGroupsInit) return;
+  root.dataset.toolGroupsInit = '1';
+
+  function closeGroup(wrap, btns) {
+    wrap.classList.remove('open');
+    btns.forEach(b => {
+      if (b.dataset.tool !== wrap.dataset.currentMain) b.style.display = 'none';
+      b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.zIndex = '';
+    });
+  }
+
+  TOOL_GROUPS.forEach(tools => {
+    const btns = tools.map(t => root.querySelector(`.tool-btn[data-tool="${t}"]`)).filter(Boolean);
+    if (btns.length < 2) return; // esta toolbar no tiene (todavía) los botones de este grupo
+
+    const groupKey = 'td_tool_group_' + tools[0];
+    let savedMain = lsGet(groupKey);
+    if (!tools.includes(savedMain)) savedMain = tools[0];
+
+    const wrap = document.createElement('span');
+    wrap.className = 'tool-group';
+    btns[0].parentNode.insertBefore(wrap, btns[0]);
+    btns.forEach(b => wrap.appendChild(b)); // mueve los botones YA existentes, no los clona
+    wrap.dataset.currentMain = savedMain;
+    btns.forEach(b => { b.style.display = (b.dataset.tool === savedMain) ? '' : 'none'; });
+
+    const corner = document.createElement('span');
+    corner.className = 'tool-group-corner';
+    corner.title = 'More tools';
+    wrap.appendChild(corner);
+
+    corner.addEventListener('click', e => {
+      e.stopPropagation();
+      const wasOpen = wrap.classList.contains('open');
+      // Cerrar cualquier otro grupo abierto (de esta u otra toolbar) antes
+      // de abrir este — nunca dos flyouts pisándose a la vez.
+      document.querySelectorAll('.tool-group.open').forEach(g => {
+        if (g !== wrap) closeGroup(g, Array.from(g.querySelectorAll('.tool-btn')));
+      });
+      if (wasOpen) { closeGroup(wrap, btns); return; }
+      wrap.classList.add('open');
+      btns.forEach((b, i) => {
+        b.style.display = 'flex';
+        b.style.position = 'absolute';
+        b.style.left = '0';
+        b.style.top = (i * 32) + 'px';
+        b.style.zIndex = 40;
+      });
+    });
+
+    // El click de CUALQUIER botón del grupo (sea el visible de siempre o
+    // uno desplegado en el flyout) ya dispara su propio onclick inline
+    // (setTool/shellSetTool) tal cual estaba — acá solo hace falta, DESPUÉS
+    // de eso, dejarlo como el nuevo "principal" visible del grupo y
+    // recordarlo para la próxima carga.
+    btns.forEach(b => {
+      b.addEventListener('click', () => {
+        wrap.dataset.currentMain = b.dataset.tool;
+        lsSet(groupKey, b.dataset.tool);
+        closeGroup(wrap, btns);
+      });
+    });
+  });
+}
+// Un solo listener global (no uno por grupo) para cerrar el flyout abierto
+// al clickear afuera — sea cual sea la toolbar donde esté.
+document.addEventListener('click', e => {
+  document.querySelectorAll('.tool-group.open').forEach(g => {
+    if (g.contains(e.target)) return;
+    g.classList.remove('open');
+    g.querySelectorAll('.tool-btn').forEach(b => {
+      if (b.dataset.tool !== g.dataset.currentMain) b.style.display = 'none';
+      b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.zIndex = '';
+    });
+  });
+});
+
+// ══════════════════════════════════════════════════════════
 //  La cantidad de paneles también se recuerda
 //
 //  La app siempre se abre en index.html sin parámetros (ver main.js), y la
@@ -3702,6 +3812,8 @@ function renderLayoutGrid(n){
     </button>
     <div class="tool-sep"></div>
     <button class="tool-btn theme-toggle-btn" data-tip="Cambiar tema" onclick="toggleTheme()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>`;
+
+  setupToolGroups(shellToolbar);
 
   // Inject favorite-star badges into shell toolbar buttons
   (function(){
@@ -10323,6 +10435,7 @@ function toggleMagnet() {
   renderMagnetBtn();
 }
 renderMagnetBtn();
+setupToolGroups(document.getElementById('toolbar'));
 
 // Radio (en px de pantalla) dentro del cual el magnet "weak" considera que
 // el mouse ya está "cerca" de un punto como para ajustarlo.
