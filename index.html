@@ -1843,19 +1843,21 @@
      ícono, como una bandeja/badge normal en vez de un tatuaje encima. */
   .tool-btn .tool-fav-star {
     display: none; position: absolute; top: 1px; right: 1px;
-    width: 12px; height: 12px; border-radius: 50%;
+    width: 9px; height: 9px; border-radius: 50%;
     align-items: center; justify-content: center;
     background: var(--bg-panel);
     color: var(--text-dim);
     cursor: pointer; z-index: 2;
   }
   .tool-fav-star svg { display: block; }
-  /* Solo adentro de un flyout desplegado — pedido explícito del usuario:
-     en la barra principal (el botón que queda siempre visible de cada
-     grupo, y las herramientas sueltas como Cursor/Rectangle/Text) no
-     hace falta, ahí ya está a la vista sin necesidad de marcarla. */
-  .tool-group-flyout-item:hover .tool-fav-star { display: flex; }
-  .tool-group-flyout-item .tool-fav-star.on { display: flex; color: var(--gold); }
+  /* Solo con el flyout de su grupo ABIERTO — ahí adentro el ícono
+     principal también aparece como una fila más (pedido explícito del
+     usuario: "deben aparecer en los flyouts también para que tengan la
+     estrella"), así que la condición es .tool-group.open, no depende de
+     si el botón es el principal o uno de los flyout-item. Con el grupo
+     cerrado (barra fija normal) ninguna estrella se muestra. */
+  .tool-group.open .tool-btn:hover .tool-fav-star { display: flex; }
+  .tool-group.open .tool-btn .tool-fav-star.on { display: flex; color: var(--gold); }
   #tool-fav-bar {
     position: fixed; z-index: 500;
     display: none;
@@ -3946,7 +3948,7 @@ function renderLayoutGrid(n){
       // CSS — en el navegador del usuario eso dejaba la estrella enorme
       // ("pintada" encima del ícono) pase lo que pase con el CSS. Un SVG
       // no es texto, así que no le aplica esa configuración.
-      star.innerHTML = '<svg viewBox="0 0 24 24" width="8" height="8" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7L2 9.2l7.1-.6z"/></svg>';
+      star.innerHTML = '<svg viewBox="0 0 24 24" width="6" height="6" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7L2 9.2l7.1-.6z"/></svg>';
       star.title = 'Toggle favorite';
       star.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
       star.addEventListener('click', e => {
@@ -19459,7 +19461,7 @@ function _initGridFavBar(toolBtns){
     star.className = 'tool-fav-star' + (getFavs().includes(tool) ? ' on' : '');
     // Ver comentario en la versión de esto para el shell: SVG en vez de
     // texto, así no le aplica el "tamaño mínimo de fuente" de Chrome.
-    star.innerHTML = '<svg viewBox="0 0 24 24" width="8" height="8" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7L2 9.2l7.1-.6z"/></svg>';
+    star.innerHTML = '<svg viewBox="0 0 24 24" width="6" height="6" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7L2 9.2l7.1-.6z"/></svg>';
     star.title = 'Toggle favorite';
     star.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
     star.addEventListener('click', e => {
