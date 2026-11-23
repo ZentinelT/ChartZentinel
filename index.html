@@ -1844,8 +1844,12 @@
     font-size: 8px; line-height: 1; color: var(--text-dim);
     cursor: pointer; z-index: 2;
   }
-  .tool-btn:hover .tool-fav-star { display: flex; }
-  .tool-btn .tool-fav-star.on { display: flex; color: var(--gold); }
+  /* Solo adentro de un flyout desplegado — pedido explícito del usuario:
+     en la barra principal (el botón que queda siempre visible de cada
+     grupo, y las herramientas sueltas como Cursor/Rectangle/Text) no
+     hace falta, ahí ya está a la vista sin necesidad de marcarla. */
+  .tool-group-flyout-item:hover .tool-fav-star { display: flex; }
+  .tool-group-flyout-item .tool-fav-star.on { display: flex; color: var(--gold); }
   #tool-fav-bar {
     position: fixed; z-index: 500;
     display: none;
