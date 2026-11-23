@@ -2071,6 +2071,14 @@
         <line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
       </svg>
     </button>
+    <button class="tool-btn" data-tip="Path (click multiple points, double-click or Esc to finish)" data-tool="path" onclick="setTool(this,'path')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="3 19 8 9 13 15 21 5"/>
+        <circle cx="3" cy="19" r="1.6" fill="currentColor" stroke="none"/>
+        <circle cx="8" cy="9" r="1.6" fill="currentColor" stroke="none"/>
+        <circle cx="13" cy="15" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
     <div class="tool-sep"></div>
     <button class="tool-btn" id="btn-magnet" data-tip="Magnet: off" onclick="toggleMagnet()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3639,6 +3647,7 @@ function renderLayoutGrid(n){
     { tool:'short', tip:'Short Position', icon:'<rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" fill-opacity="0.25" stroke="none"/><rect x="3" y="3" width="18" height="7" rx="1" fill="none"/><line x1="2" y1="13.5" x2="22" y2="13.5"/><polyline points="9 8 12 5 15 8"/>' },
     null,
     { tool:'text', tip:'Text Label', icon:'<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>' },
+    { tool:'path', tip:'Path (click multiple points, double-click or Esc to finish)', icon:'<polyline points="3 19 8 9 13 15 21 5"/><circle cx="3" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="8" cy="9" r="1.6" fill="currentColor" stroke="none"/><circle cx="13" cy="15" r="1.6" fill="currentColor" stroke="none"/>' },
   ];
   shellToolbar.innerHTML = TOOL_DEFS.map(t => t===null ? '<div class="tool-sep"></div>' :
     `<button class="tool-btn${t.tool==='cursor'?' active':''}" data-tool="${t.tool}" data-tip="${t.tip}" onclick="shellSetTool(this,'${t.tool}')">
@@ -5325,7 +5334,7 @@ function serializeDrawings(){
       vpBarEls:undefined, vpBins:undefined, fibLabelEls:undefined,
       extSvgEl:undefined, extSvgEls:undefined, vTimeLabelEl:undefined,
       lineLabelEl:undefined, extSvgEl2:undefined, vLineEl2:undefined, vLabelEl:undefined,
-      anchorDotEl:undefined,
+      anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined,
     }));
     if (d.type === 'text') plain.text = d.label ? d.label.textContent : '';
     return plain;
@@ -5340,7 +5349,7 @@ window.applyExternalDrawings = function(list){
     [...drawings].forEach(d => removeDrawingById(d.id));
     deselectDrawing();
     (list || []).forEach(data => {
-      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined };
+      const d = { ...data, series:[], svgEls:[], label:null, fibLabelEls:undefined, anchorDotEl:undefined, pathEl:undefined, arrowEl:undefined };
       drawings.push(d);
       if (d.type === 'text') {
         const fontSize = d.fontSize || 14, bgColor = d.bgColor || '#0a0a0c';
@@ -5605,6 +5614,13 @@ function restyleDrawingAppearance(d) {
       d.vLineEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
     }
     if (d.vTimeLabelEl instanceof Element) d.vTimeLabelEl.style.background = C;
+  } else if (d.type === 'path') {
+    if (d.pathEl instanceof Element) {
+      d.pathEl.setAttribute('stroke', C);
+      d.pathEl.setAttribute('stroke-width', lw);
+      d.pathEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    }
+    if (d.arrowEl instanceof Element) d.arrowEl.setAttribute('fill', C);
   } else if (d.type === 'rect') {
     d.series.forEach(s => { try { s.applyOptions({ color: C+'aa', lineWidth: lw, lineStyle: ls }); } catch(e){} });
     if (d.fillEl) d.fillEl.setAttribute('fill', C);
@@ -6085,6 +6101,10 @@ function updateDrawingGeometry(d) {
     syncVLine(d);
     ok = true;
 
+  } else if (d.type === 'path') {
+    syncPathSvg(d);
+    ok = true;
+
   } else if ((d.type === 'long' || d.type === 'short') && d.series.length === 3) {
     // positionToolRenderTimes en vez de d.p1.time/d.p2.time crudos: exige
     // tiempos estrictamente ascendentes (sin esto, un dibujo sincronizado
@@ -6155,6 +6175,8 @@ function removeDrawingById(id) {
   if (d.lineLabelEl instanceof Element) d.lineLabelEl.remove();
   if (d.vLineEl2 instanceof Element) d.vLineEl2.remove();
   if (d.vLabelEl instanceof Element) d.vLabelEl.remove();
+  if (d.pathEl instanceof Element) d.pathEl.remove();
+  if (d.arrowEl instanceof Element) d.arrowEl.remove();
   if (d.fillEl instanceof Element) d.fillEl.remove();
   if (Array.isArray(d.vpBarEls)) d.vpBarEls.forEach(p => { p.upEl.remove(); p.downEl.remove(); });
   if (Array.isArray(d.fibLabelEls)) d.fibLabelEls.forEach(el => el.remove());
@@ -6165,6 +6187,39 @@ function removeDrawingById(id) {
   if (d.slTextEl instanceof Element) d.slTextEl.remove();
   drawings.splice(idx,1);
   markDrawingsDirty();
+}
+
+// Reposiciona la polilínea de un Path contra window._lastCandles actual —
+// se oculta entera si CUALQUIER punto cae fuera de lo cargado/visible
+// (timeToCoordinate/priceToCoordinate devuelven null), igual que hline/
+// trendline/vline con safeLineTime.
+function syncPathSvg(d) {
+  if (!(d.pathEl instanceof Element)) return;
+  const pts = (d.points||[]).map(p => {
+    const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
+    const y = candleSeries.priceToCoordinate(p.price);
+    return (x===null||y===null) ? null : {x,y};
+  });
+  if (pts.length < 2 || pts.some(p => p===null)) {
+    d.pathEl.style.display = 'none';
+    if (d.arrowEl instanceof Element) d.arrowEl.style.display = 'none';
+    return;
+  }
+  d.pathEl.style.display = '';
+  d.pathEl.setAttribute('points', pts.map(p=>`${p.x},${p.y}`).join(' '));
+  // Flecha al final (como en TV): triángulo chico apuntando en la
+  // dirección del último segmento, recalculado cada vez por si cambió.
+  if (d.arrowEl instanceof Element) {
+    const n = pts.length;
+    const pEnd = pts[n-1], pPrev = pts[n-2];
+    const ang = Math.atan2(pEnd.y-pPrev.y, pEnd.x-pPrev.x);
+    const AL = 9, AW = 4.5;
+    const bx = pEnd.x - AL*Math.cos(ang), by = pEnd.y - AL*Math.sin(ang);
+    const leftX = bx - AW*Math.sin(ang), leftY = by + AW*Math.cos(ang);
+    const rightX = bx + AW*Math.sin(ang), rightY = by - AW*Math.cos(ang);
+    d.arrowEl.style.display = '';
+    d.arrowEl.setAttribute('points', `${pEnd.x},${pEnd.y} ${leftX},${leftY} ${rightX},${rightY}`);
+  }
 }
 
 // Vuelve a ubicar la línea vertical de un dibujo (se llama cada frame y
@@ -7090,6 +7145,30 @@ function buildDrawingOnChart(d) {
     d.tpTextEl.setAttribute('fill', profitColor);
     d.slTextEl.setAttribute('fill', lossColor);
     syncPositionTool(d);
+
+  } else if (d.type === 'path') {
+    // Polilínea de N puntos (sin límite) — a diferencia de trendline/fib
+    // acá el tiempo de los puntos no tiene por qué ser creciente (el
+    // usuario puede ir y volver, como en un zigzag de Elliott), así que no
+    // se puede expresar como una serie nativa del chart (exige tiempos en
+    // orden estricto) — se dibuja entera como overlay SVG, igual que
+    // vline/rect fill, reposicionada cada frame por syncPathSvg.
+    if (!(d.pathEl instanceof Element)) {
+      const pl = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      pl.setAttribute('fill', 'none');
+      window._drawingLayerSvg.appendChild(pl);
+      d.pathEl = pl;
+    }
+    if (!(d.arrowEl instanceof Element)) {
+      const ar = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      window._drawingLayerSvg.appendChild(ar);
+      d.arrowEl = ar;
+    }
+    d.pathEl.setAttribute('stroke', C);
+    d.pathEl.setAttribute('stroke-width', lw);
+    d.pathEl.setAttribute('stroke-dasharray', ls===1?'2,3':ls===2?'6,4':'none');
+    d.arrowEl.setAttribute('fill', C);
+    syncPathSvg(d);
   }
 
   d.series.forEach(s => { s._drawingId = d.id; });
@@ -7159,6 +7238,10 @@ function highlightSelectedSvg(id) {
       addHandle(timeToX(t2), yMid, id, 'right');
     } else if (d.type === 'vline') {
       addHandle(timeToX(safeLineTime(d.p1.time)), container.clientHeight * 0.5, id, 'vtime');
+    } else if (d.type === 'path') {
+      (d.points||[]).forEach((p,i) => {
+        addHandle(timeToX(safeLineTime(p.time)), priceToY(p.price), id, 'pt'+i);
+      });
     } else if (d.type === 'long' || d.type === 'short') {
       // Mismo motivo que en isClickOnDrawing: usar los tiempos RENDERIZADOS
       // (ajustados a este panel), no los crudos — si no, las manijas de un
@@ -7285,6 +7368,9 @@ function applyHandleDrag(d, role, price, time) {
     d.p2 = { time: Math.max(t1,t2), price: Math.min(hi,lo) };
   } else if (d.type === 'vline') {
     d.p1.time = time; d.p2.time = time;
+  } else if (d.type === 'path') {
+    const m = /^pt(\d+)$/.exec(role||'');
+    if (m && d.points[+m[1]]) { d.points[+m[1]] = { price, time }; }
   } else if (d.type === 'long' || d.type === 'short') {
     if (role === 'entry') {
       // Arrastrar la línea de entrada mueve TODO el bloque (entrada, SL,
@@ -8055,6 +8141,8 @@ function initChart() {
         if (x!==null&&y!==null){ d.label.style.left=(x+6)+'px'; d.label.style.top=(y-10)+'px'; }
       } else if (d.type==='vline') {
         syncVLine(d);
+      } else if (d.type==='path') {
+        syncPathSvg(d);
       } else if (d.type==='rect') {
         syncRectFill(d);
       } else if (d.type==='vp') {
@@ -8107,6 +8195,33 @@ function initDrawingLayer() {
   let fibExtPending = null;
   window._cancelFibExtPending = function() {
     if (fibExtPending) { fibExtPending = null; clearPreview(); }
+  };
+  // Path: cada clic agrega un punto (sin arrastre, al revés de todo lo
+  // demás) — se acumulan acá hasta el doble clic o Escape que cierra el
+  // dibujo (ver mousedown/mousemove/keydown más abajo). _lastPathClickTime
+  // es lo único que distingue "agregar un punto más" de "doble clic para
+  // terminar" (no hay evento 'dblclick' nativo fiable acá: el primer click
+  // del doble ya disparó su propio mousedown y agregó un punto).
+  let pathPending = null;
+  let _lastPathClickTime = 0;
+  function finishPathDrawing() {
+    if (!pathPending) return;
+    const pts = pathPending.points;
+    pathPending = null;
+    clearPreview();
+    if (pts.length < 2) return; // no alcanza para una polilínea real
+    const d = { id:genId(), type:'path', series:[], svgEls:[], label:null, locked:false, color:toolDefaults.color, width:toolDefaults.width, style:toolDefaults.style, extLeft:false, extRight:false, points: pts };
+    captureUndoSnapshot();
+    drawings.push(d);
+    buildDrawingOnChart(d);
+    selectDrawing(d.id);
+    backToCursor();
+  }
+  window._cancelPathPending = function() {
+    if (pathPending) { pathPending = null; clearPreview(); }
+  };
+  window._finishPathPending = function() {
+    if (pathPending) finishPathDrawing();
   };
 
   function syncSvgSize() { syncOverlaySvgSize(svg, container); }
@@ -8362,6 +8477,17 @@ function initDrawingLayer() {
       const x = timeToX(safeLineTime(d.p1.time));
       return x!==null && Math.abs(mx-x) < THRESH;
     }
+    if (d.type === 'path') {
+      const pts = (d.points||[]).map(p => {
+        const x = timeToX(safeLineTime(p.time)), y = priceToY(p.price);
+        return (x===null||y===null) ? null : {x,y};
+      });
+      for (let i=0;i<pts.length-1;i++){
+        if (!pts[i]||!pts[i+1]) continue;
+        if (distToSegment(pts[i].x,pts[i].y,pts[i+1].x,pts[i+1].y,mx,my) < THRESH) return true;
+      }
+      return false;
+    }
     if (d.type === 'long' || d.type === 'short') {
       // Caja completa (del SL al TP) clickeable en cualquier punto interno
       // — igual que un rect, no hace falta acertarle a un borde fino.
@@ -8480,6 +8606,7 @@ function initDrawingLayer() {
         kind:'body', drawing:hit, startPrice:price, startTime:time,
         origP1:{...hit.p1}, origP2: hit.p2?{...hit.p2}:null,
         origP3: hit.p3?{...hit.p3}:null,
+        origPoints: Array.isArray(hit.points) ? hit.points.map(p=>({...p})) : null,
         origTargetPrice: hit.targetPrice,
         labelLeft: hit.label?parseFloat(hit.label.style.left):0,
         labelTop:  hit.label?parseFloat(hit.label.style.top):0,
@@ -8550,6 +8677,13 @@ function initDrawingLayer() {
       } else if (d.type === 'text') {
         d.label.style.left = (mx - 6) + 'px';
         d.label.style.top  = (my - 10) + 'px';
+      } else if (d.type === 'path') {
+        if (price!==null && time!==null && window._dragSession.origPoints) {
+          const dPrice = price - window._dragSession.startPrice;
+          const dTime  = time  - window._dragSession.startTime;
+          d.points = window._dragSession.origPoints.map(p => ({ price: p.price + dPrice, time: p.time + dTime }));
+          if (!updateDrawingGeometry(d)) redrawDrawing(d);
+        }
       } else if (price!==null && time!==null) {
         const dPrice = price - window._dragSession.startPrice;
         const dTime  = time  - window._dragSession.startTime;
@@ -8721,6 +8855,9 @@ function initDrawingLayer() {
         if (d.p3.price != null) d.p3.price += dPrice;
         if (d.p3.time  != null) d.p3.time  += dTime;
       }
+      if (Array.isArray(d.points)) {
+        d.points.forEach(p => { p.price += dPrice; p.time += dTime; });
+      }
       if (d.targetPrice != null) d.targetPrice += dPrice;
       if (d.type === 'long' || d.type === 'short') {
         // Mismo recorte que el drag con mouse del cuerpo entero (ver el
@@ -8765,6 +8902,25 @@ function initDrawingLayer() {
       buildDrawingOnChart(d);
       selectDrawing(d.id);
       backToCursor();
+      return;
+    }
+
+    // Path: cada clic agrega un punto más (sin arrastrar) — doble clic
+    // (dos mousedown seguidos en menos de 400ms, ver _lastPathClickTime) o
+    // Escape (ver keydown) cierran el dibujo con los puntos acumulados.
+    if (tool === 'path') {
+      const now = Date.now();
+      const isDbl = pathPending && (now - _lastPathClickTime) < 400;
+      _lastPathClickTime = now;
+      if (!pathPending) {
+        pathPending = { points: [{ price, time }] };
+      } else if (isDbl) {
+        // El segundo clic del doble (éste) no suma un punto nuevo — ya
+        // tenemos el anterior, que es el que el usuario quiso dejar fijo.
+        finishPathDrawing();
+      } else {
+        pathPending.points.push({ price, time });
+      }
       return;
     }
 
@@ -8842,6 +8998,27 @@ function initDrawingLayer() {
             group.appendChild(line);
           });
           svg.appendChild(group); previewEl = group;
+        }
+      } else if (tool === 'path' && pathPending) {
+        // Vista previa: los segmentos ya fijados + un tramo "de goma"
+        // siguiendo el mouse hasta el próximo clic.
+        e.preventDefault();
+        clearPreview();
+        const pts = pathPending.points.map(p => {
+          const x = chart.timeScale().timeToCoordinate(safeLineTime(p.time));
+          const y = candleSeries.priceToCoordinate(p.price);
+          return (x===null||y===null) ? null : `${x},${y}`;
+        }).filter(Boolean);
+        const { x: xm, y: ym } = getCoords(e);
+        pts.push(`${xm},${ym}`);
+        if (pts.length >= 2) {
+          const pl = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+          pl.setAttribute('points', pts.join(' '));
+          pl.setAttribute('fill','none');
+          pl.setAttribute('stroke', toolDefaults.color + '88');
+          pl.setAttribute('stroke-width', toolDefaults.width);
+          pl.setAttribute('stroke-dasharray','4,3');
+          svg.appendChild(pl); previewEl = pl;
         }
       }
       return;
@@ -9038,7 +9215,14 @@ function initDrawingLayer() {
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { deselectDrawing(); window._cancelFibExtPending(); }
+    if (e.key === 'Escape') {
+      deselectDrawing();
+      window._cancelFibExtPending();
+      // Path: Escape CIERRA el dibujo con los puntos que ya haya (como en
+      // TV) en vez de descartarlo — solo lo descarta si no llegó a tener
+      // los 2 puntos mínimos para ser una polilínea real.
+      if (pathPending) finishPathDrawing();
+    }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
       if (document.activeElement.tagName === 'INPUT') return;
       onDtbDelete();
@@ -9858,6 +10042,10 @@ function setTool(btn, name) {
   // hacer — si no, quedaba "pending" colgado y el próximo clic en fibext
   // (más adelante, otra vez) lo retomaba con puntos de otra selección.
   if (name !== 'fibext' && window._cancelFibExtPending) window._cancelFibExtPending();
+  // Cambiar de herramienta a mitad de un Path (ya hay puntos puestos,
+  // todavía no se cerró) lo cierra con lo que haya en vez de perderlo
+  // silenciosamente — mismo criterio que Escape, ver finishPathDrawing.
+  if (name !== 'path' && window._finishPathPending) window._finishPathPending();
   STATE.activeTool = name;
   refreshToolDefaultsFor(name);
   if (name !== 'cursor') deselectDrawing();
