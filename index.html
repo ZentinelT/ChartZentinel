@@ -3111,7 +3111,12 @@ function setupToolGroups(root) {
       if (b.dataset.tool === main) {
         b.style.left = '0';
         b.style.marginLeft = '0';
-        b.style.zIndex = '2';
+        // Más alto que el panel de fondo (z-index 40) y que los demás
+        // ítems (41) — si no, apenas el panel se abre (ahora cubre
+        // también el slot 0, donde vive el principal) el fondo quedaba
+        // PINTADO ENCIMA del ícono principal, tapándolo por completo
+        // (reportado por el usuario: "desaparece y queda encimada").
+        b.style.zIndex = '42';
         b.classList.remove('tool-group-flyout-item');
       } else {
         b.style.left = (flyoutIdx*TOOL_GROUP_STEP) + 'px';
