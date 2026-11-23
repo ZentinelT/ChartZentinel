@@ -3149,7 +3149,10 @@ function setupToolGroups(root) {
 
     const corner = document.createElement('span');
     corner.className = 'tool-group-corner';
-    corner.title = 'More tools';
+    // Sin title: el tooltip NATIVO del navegador (estilo propio, posición
+    // que no controlamos) quedaba mal — aparecía pegado debajo del panel
+    // recién abierto, con otra tipografía/fondo (reportado por el
+    // usuario, captura). El triangulito ya es autoexplicativo.
     wrap.appendChild(corner);
 
     corner.addEventListener('click', e => {
