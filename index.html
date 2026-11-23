@@ -3076,13 +3076,12 @@ const TOOL_GROUPS = [
   ['fib', 'fibext', 'gann', 'vp'],
   ['long', 'short'],
 ];
-// Separación entre el ícono principal y el panel desplegado, y paso entre
-// cada ítem DENTRO del panel — ver positionGroup. El flyout se abre hacia
-// la DERECHA (afuera de la columna angosta de la toolbar, flotando sobre
-// el chart) en vez de apilarse pegado abajo: look de submenú real, con
-// una separación clara del ícono que lo abrió (reportado por el usuario:
-// "queda muy cerca").
-const TOOL_GROUP_GAP = 8;
+// Paso en píxeles entre cada ítem del panel desplegado (30px de botón +
+// 2px de separación) — ver positionGroup. El flyout se abre hacia la
+// DERECHA (afuera de la columna angosta de la toolbar, flotando sobre el
+// chart) como UN solo panel contiguo que arranca en el propio ícono
+// principal (slot 0) y seguido por el resto — todas las herramientas del
+// grupo juntas, no solo "las que faltan" (pedido explícito del usuario).
 const TOOL_GROUP_STEP = 32;
 function setupToolGroups(root) {
   if (!root || root.dataset.toolGroupsInit) return;
@@ -3096,27 +3095,35 @@ function setupToolGroups(root) {
   // Solo cambia estilo inline de POSICIÓN; visibilidad/transición quedan
   // en CSS (.tool-group-flyout-item / .tool-group.open), así que esto se
   // puede llamar con el grupo abierto o cerrado sin que se note un salto.
+  // El principal queda SIEMPRE en el lugar de siempre (left:0, igual que
+  // suelto) — lo que cambia acá es que el panel desplegado (bg) ahora
+  // arranca desde ESE mismo x:0, en vez de recién después de un espacio,
+  // para que al abrir se vea como UN solo panel con TODAS las
+  // herramientas del grupo adentro (principal incluida) — pedido
+  // explícito del usuario: antes el ícono principal quedaba afuera, como
+  // si el flyout mostrara solo "las que faltan".
   function positionGroup(wrap, btns) {
     const main = wrap.dataset.currentMain;
-    let flyoutIdx = 0;
+    let flyoutIdx = 1; // arranca en 1: el slot 0 es el principal
     btns.forEach(b => {
       b.style.position = 'absolute';
       b.style.top = '0';
       if (b.dataset.tool === main) {
         b.style.left = '0';
+        b.style.marginLeft = '0';
         b.style.zIndex = '2';
         b.classList.remove('tool-group-flyout-item');
       } else {
-        b.style.left = '100%';
-        b.style.marginLeft = (TOOL_GROUP_GAP + flyoutIdx*TOOL_GROUP_STEP) + 'px';
+        b.style.left = (flyoutIdx*TOOL_GROUP_STEP) + 'px';
+        b.style.marginLeft = '0';
         b.classList.add('tool-group-flyout-item');
         flyoutIdx++;
       }
     });
     const bg = wrap.querySelector('.tool-group-menu-bg');
     if (bg) {
-      bg.style.left = '100%';
-      bg.style.marginLeft = TOOL_GROUP_GAP + 'px';
+      bg.style.left = '0';
+      bg.style.marginLeft = '0';
       bg.style.width = Math.max(0, flyoutIdx*TOOL_GROUP_STEP - 2) + 'px';
     }
   }
