@@ -3022,11 +3022,9 @@ if (!_lsOK) console.warn('Zentinel: localStorage not available (blocked by the b
 //  como para la del shell de la grilla multi-chart (shellToolbar,
 //  generada desde TOOL_DEFS) — ver sus llamadas a setupToolGroups.
 const TOOL_GROUPS = [
-  ['trendline', 'hline', 'vline'],
-  ['rect', 'vp'],
-  ['fib', 'fibext', 'gann'],
+  ['trendline', 'hline', 'vline', 'path', 'curve'],
+  ['fib', 'fibext', 'gann', 'vp'],
   ['long', 'short'],
-  ['text', 'path', 'curve'],
 ];
 function setupToolGroups(root) {
   if (!root || root.dataset.toolGroupsInit) return;
