@@ -5235,7 +5235,7 @@ const STATE = {
   // guardada de quien ya lo tenía prendido.
   magnetMode: (() => { const v = lsGet(lsKey('td_magnet')); return (v==='strong'||v==='1') ? 'strong' : v==='weak' ? 'weak' : 'off'; })(),
   watchtower: Object.assign({
-    enabled:false, killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
+    killzones:true, pdLevels:true, pwLevels:true, mno:true, org:true, bias:true,
     orgColor:'#ffeb3b', boxOpacity:10, histDays:3,
     labelColor:'#ffffff', // legacy — ya no se usa (cada sección tiene su propio color)
     behindCandles:false,
@@ -5249,13 +5249,10 @@ const STATE = {
     biasPosition:'Bottom Right', biasLookbackDays:1, biasThreshold:0.3,
     biasBullColor:'#26a69a', biasBearColor:'#ef5350',
   }, _wtSaved, { kz: _wtKz }),
-  // Prueba piloto: mismo cálculo de killzones+PDH/PDL que Watchtower (lee
-  // STATE.watchtower.kz/pdColor/etc, no tiene config propia a propósito —
-  // ver WatchtowerCanvasPrimitive) pero pintado en el canvas de la
-  // librería (Series Primitive) en vez de un SVG del DOM, para validar si
-  // eso resuelve el desfasaje reportado en zoom vertical rápido con
-  // indicadores pesados activos. Sin tocar Watchtower real: queda aparte,
-  // se puede prender/apagar independiente para comparar.
+  // Flag de activación de Watchtower 2.0 (el único Watchtower, ver
+  // WatchtowerCanvasPrimitive) — separado de STATE.watchtower porque esa
+  // config (killzones/pdColor/etc, arriba) es la data del indicador, no si
+  // está prendido o no.
   watchtowerCanvas: { enabled: false },
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
@@ -5288,7 +5285,6 @@ const STATE = {
   // en todos.
   workspaces: JSON.parse(lsGet('td_workspaces') || '{}'),
 };
-STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
 STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower 2.0');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
@@ -5306,8 +5302,7 @@ function toggleIndicatorVisibility(name){
   if (i === -1) STATE.hiddenIndicators.push(name); else STATE.hiddenIndicators.splice(i, 1);
   saveHiddenIndicatorsState();
   renderIndicatorChips();
-  if (name === 'Watchtower') renderWatchtower();
-  else if (name === 'Watchtower 2.0') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+  if (name === 'Watchtower 2.0') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
@@ -5342,7 +5337,7 @@ function saveIndicatorTemplatesState(){ lsSet('td_ind_templates', JSON.stringify
 // Watchtower/Sniper/Sweeps es su propio STATE.xxx; para cualquier otro
 // indicador "simple" (EMA, RSI...) es su entrada en indicatorStyles.
 function getIndSettingsObject(name){
-  if (name === 'Watchtower' || name === 'Watchtower 2.0') return STATE.watchtower;
+  if (name === 'Watchtower 2.0') return STATE.watchtower;
   if (name === 'Sniper') return STATE.sniper;
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
@@ -5352,9 +5347,9 @@ function getIndSettingsObject(name){
   return getIndicatorStyle(name, def || {});
 }
 function setIndSettingsObject(name, obj){
-  if (name === 'Watchtower' || name === 'Watchtower 2.0') {
-    STATE.watchtower = Object.assign({}, obj, { enabled: STATE.watchtower.enabled });
-    saveWatchtowerState(); renderWatchtower();
+  if (name === 'Watchtower 2.0') {
+    STATE.watchtower = Object.assign({}, obj);
+    saveWatchtowerState();
     ensureWeeklyHistoryForWatchtower();
     if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   } else if (name === 'Sniper') {
@@ -8057,20 +8052,9 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._watchtowerSvg, window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMap2Svg, window._drawingLayerSvg]
+  [window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMap2Svg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
-function initWatchtowerLayer() {
-  const container = document.getElementById('chart-container');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:15;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-  window._watchtowerSvg = svg;
-  function syncSize(){ syncOverlaySvgSize(svg, container); }
-  new ResizeObserver(syncSize).observe(container);
-  syncSize();
-}
-
 // Doble click sobre CUALQUIER dibujo de un indicador custom abre su panel
 // de settings — vale para Watchtower hoy y para cualquier indicador que se
 // agregue después, sin tener que tocar ninguno de estos dos listeners.
@@ -8187,9 +8171,6 @@ class ZentinelBehindDrawingsPrimitive {
             });
             if (STATE.statMap2 && STATE.statMap2.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._statMap2Svg);
-            }
-            if (STATE.watchtower && STATE.watchtower.behindCandles) {
-              paintSvgLayerBehindCandles(ctx, window._watchtowerSvg);
             }
             if (STATE.sniper && STATE.sniper.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._sniperSvg);
@@ -8777,7 +8758,6 @@ function initChart() {
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
     if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
-    renderWatchtower();
     renderSniper();
     renderSweeps();
     renderFractalModel();
@@ -8807,7 +8787,6 @@ function initChart() {
     // pedido bastante antes (300 velas de margen) da tiempo a que la
     // respuesta ya esté lista cuando el usuario realmente llega al borde.
     if (range && range.from < 800) loadMoreHistory();
-    renderWatchtower();
     renderSniper();
     renderSweeps();
     renderFractalModel();
@@ -8828,9 +8807,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -8903,7 +8882,6 @@ function initChart() {
     _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
   }, { capture:true, passive:false });
 
-  initWatchtowerLayer();
   initSniperLayer();
   initSweepsLayer();
   initFractalModelLayer();
@@ -11104,7 +11082,6 @@ const INDICATOR_DEFS = [
   { name:'SMA 50',  desc:'Simple MA 50',        color:'#f0a060', calc:d=>sma(d,50)  },
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
   { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
-  { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
   { name:'Watchtower 2.0', desc:'Watchtower (killzones, PD/PW levels, MNO, ORG, bias) pintado en canvas (Series Primitive) en vez de SVG — no atrasa durante zoom vertical rápido', color:'#6bd4a0', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
@@ -11132,8 +11109,7 @@ function applyIndicators() {
     if(selected.includes(name)) return;
     const def=INDICATOR_DEFS.find(d=>d.name===name);
     if(def && def.custom){
-      if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
-      else if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+      if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
@@ -11157,8 +11133,7 @@ function applyIndicators() {
 function addIndicatorSeries(name) {
   const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
   if(def.custom){
-    if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); }
-    else if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+    if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
@@ -11256,10 +11231,7 @@ function openIndicatorSettings(name) {
   if (window._indSettingsResetPosition) window._indSettingsResetPosition();
   document.getElementById('ind-settings-title').textContent = name + ' — Settings';
   const body = document.getElementById('ind-settings-body');
-  if (name === 'Watchtower' || name === 'Watchtower 2.0') {
-    // Watchtower 2.0 no tiene config propia a propósito (ver
-    // STATE.watchtowerCanvas) — lee/escribe el MISMO STATE.watchtower que
-    // el Watchtower real, así que comparte este panel tal cual.
+  if (name === 'Watchtower 2.0') {
     const togglesHtml = WT_TOGGLE_DEFS.map(t => `
       <label class="wt-set-row">
         <span>${t.label}</span>
@@ -11693,7 +11665,7 @@ function saveIndicatorSettings() {
 // guardar lo que el usuario tiene tipeado AHORA, no lo último persistido)
 // sin cerrar el modal debajo del prompt() del nombre.
 function applyIndSettingsForm() {
-  if (_indSettingsTarget === 'Watchtower' || _indSettingsTarget === 'Watchtower 2.0') {
+  if (_indSettingsTarget === 'Watchtower 2.0') {
     document.querySelectorAll('#ind-settings-body [data-wt-key]').forEach(inp => {
       STATE.watchtower[inp.dataset.wtKey] = inp.checked;
     });
@@ -11745,11 +11717,9 @@ function applyIndSettingsForm() {
     if (biasBullEl) STATE.watchtower.biasBullColor = biasBullEl.value;
     if (biasBearEl) STATE.watchtower.biasBearColor = biasBearEl.value;
     saveWatchtowerState();
-    renderWatchtower();
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
-    // Watchtower 2.0 lee el MISMO STATE.watchtower — alcanza con pedirle
-    // un repintado, su cache (ver _wtCanvasComputeCalls) ya invalida solo
-    // porque el JSON.stringify(STATE.watchtower) de la key cambió.
+    // Pedido de repintado: su cache (ver _wtCanvasComputeCalls) ya invalida
+    // solo porque el JSON.stringify(STATE.watchtower) de la key cambió.
     if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   } else if (_indSettingsTarget === 'Sniper') {
     const g = id => document.getElementById(id);
@@ -11890,8 +11860,7 @@ function applyIndSettingsForm() {
 function removeIndicator(name){
   const def=INDICATOR_DEFS.find(d=>d.name===name);
   if(def && def.custom){
-    if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); }
-    else if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+    if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
@@ -12422,8 +12391,8 @@ function wtLabel(svg,t,y,text,color,indName){
 }
 
 // Graba (sin cambiar nada de cómo dibujan) cada llamada a wtRect/wtLine/
-// wtLabel mientras _wtRecordBuf esté activo — ver el cache de
-// renderWatchtower más abajo. Reasignar el nombre de función en vez de
+// wtLabel mientras _wtRecordBuf esté activo — ver _wtCanvasComputeCalls
+// más abajo. Reasignar el nombre de función en vez de
 // tocar cada call site (45 en todo el archivo, entre Watchtower/Sniper/
 // Sweeps/Fractal Model/Stat Map 2) para no arriesgar romper ninguno de
 // esos renders: siguen llamando a wtRect/wtLine/wtLabel exactamente
@@ -12674,10 +12643,10 @@ async function wtEnsureOrgBoundaries(cacheKey, symbol, prevEndTime, todayStartTi
     wtFetchBoundaryPrice(symbol, todayStartTime),
   ]);
   _wtOrgCache[cacheKey] = (prevClose!=null && todayOpen!=null) ? {prevClose, todayOpen} : null;
-  renderWatchtower(); // ya tenemos el dato preciso — redibuja con eso en vez de la aproximación
-  // Watchtower 2.0 (ver _wtCanvasComputeCalls) ya incluye _wtOrgCache en
-  // su cache key, así que el próximo paint recalcula solo — esto apenas
-  // adelanta ESE repintado en vez de esperar al próximo cambio del chart.
+  // _wtCanvasComputeCalls ya incluye _wtOrgCache en su cache key, así que
+  // alcanza con pedir un repintado para que recalcule con el dato preciso
+  // en vez de la aproximación — ya tenemos el dato, no hace falta esperar
+  // al próximo cambio del chart.
   if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
 }
 
@@ -12797,7 +12766,7 @@ function renderWtBias(byDate, dateKeys, lastTime){
   el.style.display='flex';
   el.style.pointerEvents='auto';
   el.style.cursor='pointer';
-  el.dataset.indicatorName='Watchtower';
+  el.dataset.indicatorName='Watchtower 2.0';
   // Despegarlo de la escala de precio (derecha) y el eje de tiempo (abajo)
   // para que no los tape — ambos cambian de ancho/alto según el chart.
   const priceScaleW = chart.priceScale('right').width() || 0;
@@ -12829,96 +12798,26 @@ function renderWtBias(byDate, dateKeys, lastTime){
   }
 }
 
-let _wtDrawCache = null; // {key, calls} — ver cache dentro de renderWatchtower
-function renderWatchtower(){
-  if(!window._watchtowerSvg) return;
-  const svg=window._watchtowerSvg;
-  while(svg.firstChild) svg.removeChild(svg.firstChild);
-  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Watchtower');
-  document.getElementById('watchtower-bias-badge').style.display='none';
-  // Con behindCandles activo, el primitive (ZentinelBehindDrawingsPrimitive,
-  // ver paintSvgLayerBehindCandles) repinta estos mismos elementos a mano
-  // DETRÁS de las velas — la capa SVG real se oculta para no verla
-  // duplicada por encima (el badge de bias de arriba es HTML aparte, no
-  // vive en esta capa, así que sigue siempre visible sin importar esto).
-  svg.style.visibility = STATE.watchtower.behindCandles ? 'hidden' : '';
-  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
-  if(!STATE.watchtower.enabled || isIndicatorHidden('Watchtower')) return;
-  const candles=window._lastCandles||[];
-  if(candles.length<2) return;
-  const wt=STATE.watchtower;
-  // Antes: candles[1].time-candles[0].time — el hueco REAL entre esas dos
-  // velas puntuales. Anda bien en TF intradía (hueco uniforme), pero en
-  // Diario/Semanal/Mensual ese par puede cruzar un fin de semana: el "ancho
-  // de vela" medido ahí da 3 días en vez de 1, y LEVEL_EXTEND_BARS*barStep
-  // (la extensión del nivel del día/semana ACTUAL hacia el futuro, más
-  // abajo) termina apuntando mucho más lejos de lo que el gráfico tiene
-  // whitespace dibujado — timeToCoordinate devuelve null ahí y esa línea
-  // (justo la del día/semana más reciente, la que más importa) no se
-  // dibuja. tfToSeconds ya existe para esto exacto: un ancho NOMINAL del
-  // TF, sin depender de qué par de velas se mire.
-  const barStep=tfToSeconds(STATE.timeframe);
-  const lastTime=candles[candles.length-1].time;
-  const { byDate, dateKeys } = wtGroupByDayCached(candles);
-
-  // renderWtKillzones/PrevDay/PrevWeek/MNO/ORG recorren TODAS las velas del
-  // historial (agrupar por día, filtrar por sesión, armar pivots) para
-  // decidir QUÉ cajas/líneas van — eso no cambia mientras no cambien las
-  // velas ni la config de Watchtower, solo cambia la ESCALA de precio con
-  // la que se dibujan. Medido: esa lógica sola tarda 5-10ms (por encima del
-  // presupuesto de 16ms de un frame si hay otro indicador pesado activo a
-  // la vez) — eso es lo que reportó el usuario como "los dibujos van más
-  // lento que las velas" durante zoom vertical rápido con la rueda (corre
-  // en cada frame del gesto, ver _wtDragLoop). Se cachea la LISTA de
-  // llamadas a wtRect/wtLine/wtLabel (grabadas en su valor real de precio/
-  // tiempo, no en píxeles) por huella de velas+config de Watchtower; en un
-  // cache-hit se reproducen esas llamadas directo — cada una recalcula su
-  // posición en pantalla con priceToCoordinate/timeToCoordinate real, así
-  // que el resultado sigue siendo exacto para la escala ACTUAL, nunca una
-  // aproximación. Las funciones renderWt* de abajo no se tocan.
-  const cacheKey = _candlesFingerprint(candles) + '|' + barStep + '|' + JSON.stringify(wt);
-  if (_wtDrawCache && _wtDrawCache.key === cacheKey) {
-    _wtDrawCache.calls.forEach(([fn,args]) => fn(...args));
-  } else {
-    _wtRecordBuf = [];
-    if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
-    if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep);
-    if(wt.pwLevels)  renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep);
-    if(wt.mno)       renderWtMNO(svg, byDate, dateKeys, lastTime, barStep);
-    if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
-    _wtDrawCache = { key: cacheKey, calls: _wtRecordBuf };
-    _wtRecordBuf = null;
-  }
-  // El badge de bias es HTML aparte (no SVG, no entra en el cache de
-  // arriba) y su costo ya es insignificante (~0.1ms) — se recalcula
-  // siempre, cache-hit o no.
-  if(wt.bias) renderWtBias(byDate, dateKeys, lastTime);
-}
-
 // ══════════════════════════════════════════════════════════
-//  WATCHTOWER 2.0 — indicador piloto, ver STATE.watchtowerCanvas más
-//  arriba. Validado en vivo (2026-11-25): con scroll rápido sobre el eje
-//  de precio queda pegado a las velas donde el Watchtower SVG se atrasaba
-//  — confirma que la causa de fondo era SVG-del-DOM vs canvas, no la
-//  lógica. Réplica completa de Watchtower (killzones, PDH/PDL, PWH/PWL,
-//  MNO, ORG, bias) — reutiliza renderWtKillzones/PrevDay/PrevWeek/MNO/ORG/
-//  Bias TAL CUAL, sin tocarlas (cero riesgo para el Watchtower que ya
-//  funciona), pero en vez de dibujar en un <svg> del DOM, pinta en el
-//  canvas de la librería vía un Series Primitive (mismo mecanismo que ya
-//  usa ZentinelBehindDrawingsPrimitive más arriba para "enviar detrás de
-//  las velas"). La diferencia de fondo: la librería llama a este draw()
-//  como parte de SU PROPIO repintado (cada cambio de scaleMargins, pan,
-//  tick nuevo...), siempre en el mismo paint que las velas — no hace
-//  falta ningún loop manual de requestAnimationFrame como el que usa el
-//  Watchtower SVG (_wtDragLoop) para "seguir" el zoom vertical con la
-//  rueda. Siguiente paso posible: migrar Watchtower real a esta
-//  arquitectura (y después Sniper/Sweeps/Fractal Model/Stat Map 2, que
-//  comparten las mismas wtRect/wtLine/wtLabel) y borrar el SVG viejo.
+//  WATCHTOWER 2.0 — único Watchtower (el viejo SVG, renderWatchtower(),
+//  se eliminó: lag confirmado con scroll rápido sobre el eje de precio,
+//  resuelto pintando en canvas en vez de <svg> del DOM). Reutiliza
+//  renderWtKillzones/PrevDay/PrevWeek/MNO/ORG/Bias TAL CUAL (misma lógica
+//  ICT de siempre, sin reimplementar nada), pero en vez de dibujar en un
+//  <svg>, pinta en el canvas de la librería vía un Series Primitive
+//  (mismo mecanismo que ya usa ZentinelBehindDrawingsPrimitive más arriba
+//  para "enviar detrás de las velas"). La diferencia de fondo: la
+//  librería llama a este draw() como parte de SU PROPIO repintado (cada
+//  cambio de scaleMargins, pan, tick nuevo...), siempre en el mismo paint
+//  que las velas — no hace falta ningún loop manual de
+//  requestAnimationFrame para "seguir" el zoom vertical con la rueda.
+//  Siguiente paso: migrar Sniper/Sweeps/Fractal Model/Stat Map 2 (que
+//  comparten las mismas wtRect/wtLine/wtLabel) a esta misma arquitectura.
 //
 // Para obtener QUÉ dibujar sin reimplementar la lógica ICT: se llama a
 // las funciones reales de arriba pasándoles un <svg> DESCARTABLE (nunca
 // se agrega al documento) mientras _wtRecordBuf está activo — el mismo
-// mecanismo de grabación que ya usa el cache de renderWatchtower. Eso da
+// mismo mecanismo de grabación de arriba (wtRect/wtLine/wtLabel). Eso da
 // la lista de llamadas wtRect/wtLine/wtLabel con sus argumentos REALES de
 // precio/tiempo; acá no se reproducen esas llamadas (eso dibujaría SVG de
 // nuevo) sino que se traducen a comandos de canvas, recalculando la
@@ -12948,15 +12847,13 @@ function _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep){
   while (_wtCanvasScratchSvg.firstChild) _wtCanvasScratchSvg.removeChild(_wtCanvasScratchSvg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
   _wtCanvasDrawCache = { key: cacheKey, calls };
-  // El badge de bias es HTML aparte (no entra en los "calls" de arriba) —
-  // mismo criterio que renderWatchtower: se recalcula junto con el resto
-  // de la lógica pesada, no en cada paint. Comparte el mismo elemento que
-  // el Watchtower real (misma config, mismo resultado) — si los dos están
-  // activos a la vez no importa cuál lo haya escrito último.
-  if (wt.bias) renderWtBias(byDate, dateKeys, lastTime);
   return calls;
 }
 function paintWatchtowerCanvas(ctx){
+  // Reset incondicional, igual que hacía el renderWatchtower() SVG viejo —
+  // sin esto, el badge de bias se queda pegado en su último estado al
+  // apagar Watchtower 2.0 o su opción de bias (nada más lo vuelve a tocar).
+  document.getElementById('watchtower-bias-badge').style.display='none';
   if (!STATE.watchtowerCanvas.enabled || isIndicatorHidden('Watchtower 2.0')) return;
   const candles = window._lastCandles || [];
   if (candles.length < 2) return;
@@ -12964,6 +12861,10 @@ function paintWatchtowerCanvas(ctx){
   const lastTime = candles[candles.length-1].time;
   const { byDate, dateKeys } = wtGroupByDayCached(candles);
   const calls = _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep);
+  // El badge de bias es HTML aparte (no entra en "calls"): se recalcula en
+  // CADA paint, cache-hit o no — igual que el reset de arriba, si no
+  // quedaría pegado al último valor con candles/config cacheados.
+  if (STATE.watchtower.bias) renderWtBias(byDate, dateKeys, lastTime);
   calls.forEach(([fn, args]) => {
     if (fn === _wtRectReal) {
       const [, t1, t2, top, bottom, fill, opacity, stroke] = args;
@@ -13708,7 +13609,7 @@ function renderSniper(){
   const svg = window._sniperSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sniper');
-  // Ídem renderStatMap/renderWatchtower — ver paintSvgLayerBehindCandles.
+  // Ídem renderStatMap2 — ver paintSvgLayerBehindCandles.
   svg.style.visibility = STATE.sniper.behindCandles ? 'hidden' : '';
   if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
   if (!STATE.sniper.enabled || isIndicatorHidden('Sniper')) return;
@@ -15461,7 +15362,6 @@ function restoreIndicatorsAndTools(s){
   STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(s.fractalModel || {})));
   STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(JSON.stringify(s.statMap2 || {})));
   STATE.indicators = [...(s.indicators || [])];
-  STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
@@ -15481,7 +15381,6 @@ function restoreIndicatorsAndTools(s){
   renderTfBar();
   setActiveTF(STATE.timeframe);
   renderIndList();
-  renderWatchtower();
   renderSniper();
   renderSweeps();
   renderFractalModel();
@@ -16772,7 +16671,6 @@ function renderSeries(timeframe){
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
   renderRsi();
-  renderWatchtower();
   renderSniper();
   renderSweeps();
   renderFractalModel();
@@ -16816,7 +16714,6 @@ function updateFormingCandleLive(bar){
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
   renderRsi();
-  renderWatchtower();
   renderSniper();
   renderSweeps();
   renderFractalModel();
@@ -17249,7 +17146,7 @@ async function loadMoreHistory(){
 // abajo tomara la rama equivocada (shift en vez de scrollToRealTime) y el
 // chart terminara en blanco.
 async function ensureWeeklyHistoryForWatchtower(justLoaded){
-  if (!STATE.watchtower.enabled || !STATE.watchtower.pwLevels) return;
+  if (!STATE.watchtowerCanvas.enabled || !STATE.watchtower.pwLevels) return;
   if (!window._lastCandles || !window._lastCandles.length) return;
   // Mismo mutex que loadMoreHistory (ver su comentario) — si el usuario
   // está scrolleando y dispara el suyo justo cuando esto arranca, mejor
@@ -17508,19 +17405,20 @@ function _resyncChartLayout(){
   // el layout real.
   renderRsi();
   scrollToRealTimeReliably();
-  // El resize de arriba por sí solo NO corrige nada de Watchtower/Sniper/
-  // Sweeps ni de las líneas/manijas de los dibujos propios — esas cajas y
-  // líneas se dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN
-  // EL MOMENTO en que se llama a cada render*; si ese primer renderSeries()
+  // El resize de arriba por sí solo NO corrige nada de Sniper/Sweeps ni de
+  // las líneas/manijas de los dibujos propios — esas cajas y líneas se
+  // dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN EL
+  // MOMENTO en que se llama a cada render*; si ese primer renderSeries()
   // de loadChart corrió con el tamaño todavía mal (la razón de todo este
   // resync), sus cajas quedaron calculadas con esas coordenadas viejas y
   // se quedan ahí, gigantes/corridas, por más que el chart de velas de
   // abajo ya esté bien — nada las vuelve a dibujar solas. Mismo combo que
   // usa el ResizeObserver normal del chart (ver su .observe(container)
-  // más arriba) para este mismo caso, pero disparado a mano acá.
+  // más arriba) para este mismo caso, pero disparado a mano acá. Watchtower
+  // 2.0 no lo necesita: pinta vía Series Primitive, así que la librería lo
+  // repinta solo como parte de su propio resize.
   clearSvgHighlights();
   if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
-  renderWatchtower();
   renderSniper();
   renderSweeps();
   renderFractalModel();
@@ -17948,8 +17846,7 @@ window.addEventListener('message', (e) => {
       if (msg.indicators.includes(name)) return;
       const def=INDICATOR_DEFS.find(d=>d.name===name);
       if(def && def.custom){
-        if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
-        else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
+        if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
         else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
         else if(name==='RSI'){ destroyRsiChart(); }
       }
