@@ -8849,6 +8849,64 @@ function initChart() {
   // viendo que además hacía zoom de tiempo/general. Hay que interceptarlo
   // en fase de CAPTURA (afuera hacia adentro, así corre primero) y cortar
   // la propagación para que nunca llegue al canvas.
+  //
+  // Reportado por el usuario: con Watchtower (o Sniper/Sweeps/Fractal
+  // Model/StatMap2) activos, scrolleando RÁPIDO las velas seguían el
+  // cursor 1:1 pero esos indicadores se quedaban atrás, con retardo
+  // visible. Causa: _wtDragLoop (de más arriba) hace un render COMPLETO
+  // de esos indicadores en cada frame — recalculan TODO desde cero
+  // (Sniper hasta re-simula el historial entero, ver su comentario) — y
+  // eso no llega a terminar en los 16ms de un frame si hay muchos niveles/
+  // cajas, así que se atrasan sin importar cuántos frames corra el loop.
+  // El zoom de margen en sí (scaleMargins) es puramente afín en Y, así
+  // que mientras dura el gesto NO recalculamos esos indicadores: les
+  // aplicamos un CSS transform (matrix) barato que reproduce EXACTO el
+  // mismo desplazamiento/escala que sufrió el panel (medido con dos
+  // coordenadas de referencia vía priceToCoordinate, no adivinado), y
+  // recién al soltar el scroll (_vzoomSettle, mismo debounce de 150ms que
+  // ya usa el resto del drag/wheel) se hace el render real y se saca el
+  // transform.
+  const _VZOOM_HEAVY_LAYERS = ['_watchtowerSvg','_sniperSvg','_sweepsSvg','_fractalModelSvg','_statMap2Svg'];
+  let _vzoomM = 1, _vzoomC = 0; // transform acumulado del gesto en curso (identidad = sin transform)
+  function _vzoomApplyTransform(){
+    const t = (_vzoomM === 1 && _vzoomC === 0) ? '' : `matrix(1,0,0,${_vzoomM},0,${_vzoomC})`;
+    _VZOOM_HEAVY_LAYERS.forEach(k => { const el = window[k]; if (el) el.style.transform = t; });
+  }
+  let _vzoomSettleTimer = null;
+  function _vzoomSettle(){
+    _vzoomSettleTimer = null;
+    _vzoomM = 1; _vzoomC = 0;
+    _VZOOM_HEAVY_LAYERS.forEach(k => { const el = window[k]; if (el) el.style.transform = ''; });
+    renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions();
+  }
+  let _vzoomPendingStep = 0, _vzoomRafId = null;
+  function _vzoomApplyFrame(){
+    _vzoomRafId = null;
+    if (_vzoomPendingStep === 0) return;
+    const step = _vzoomPendingStep; _vzoomPendingStep = 0;
+    const H = container.clientHeight;
+    const ps = chart.priceScale('right');
+    const cur = ps.options().scaleMargins || { top:0.1, bottom:0.1 };
+    const top = Math.min(0.45, Math.max(0.01, cur.top + step));
+    const bottom = Math.min(0.45, Math.max(0.01, cur.bottom + step));
+    // Dos precios de referencia (bordes superior/inferior del panel ANTES
+    // del cambio) — comparar sus coordenadas antes/después da la escala y
+    // el corrimiento real sin asumir la fórmula interna de la librería.
+    const p0 = H > 0 ? candleSeries.coordinateToPrice(0) : null;
+    const p1 = H > 0 ? candleSeries.coordinateToPrice(H) : null;
+    ps.applyOptions({ scaleMargins: { top, bottom } });
+    if (p0 != null && p1 != null) {
+      const y0 = candleSeries.priceToCoordinate(p0);
+      const y1 = candleSeries.priceToCoordinate(p1);
+      if (y0 != null && y1 != null && H > 0) {
+        const m2 = (y1 - y0) / H, c2 = y0;
+        _vzoomM = m2 * _vzoomM;
+        _vzoomC = m2 * _vzoomC + c2;
+        _vzoomApplyTransform();
+      }
+    }
+    syncOverlayPositions();
+  }
   container.addEventListener('wheel', (e) => {
     if (!STATE.chartSettings.verticalScrollZoom) return;
     const scaleW = chart.priceScale('right').width() || 0;
@@ -8861,19 +8919,10 @@ function initChart() {
     if (localX < boundary) return; // scroll fuera del eje de precio: comportamiento normal
     e.preventDefault();
     e.stopPropagation(); // corta acá: nunca llega al listener nativo de la librería
-    const ps = chart.priceScale('right');
-    const cur = ps.options().scaleMargins || { top:0.1, bottom:0.1 };
-    const step = e.deltaY < 0 ? -0.01 : 0.01;
-    const top = Math.min(0.45, Math.max(0.01, cur.top + step));
-    const bottom = Math.min(0.45, Math.max(0.01, cur.bottom + step));
-    ps.applyOptions({ scaleMargins: { top, bottom } });
-    // Al cortar la propagación más arriba, este evento nunca llega al
-    // listener de más arriba que mantiene vivo a Watchtower durante el
-    // wheel — se replica acá mismo para que no se "congele" mientras se
-    // hace zoom vertical con la rueda.
-    _wtStartLoop();
-    clearTimeout(_wtWheelTimer);
-    _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
+    _vzoomPendingStep += (e.deltaY < 0 ? -0.01 : 0.01);
+    if (_vzoomRafId == null) _vzoomRafId = requestAnimationFrame(_vzoomApplyFrame);
+    clearTimeout(_vzoomSettleTimer);
+    _vzoomSettleTimer = setTimeout(_vzoomSettle, 150);
   }, { capture:true, passive:false });
 
   initWatchtowerLayer();
