@@ -5305,7 +5305,7 @@ function toggleIndicatorVisibility(name){
   if (name === 'Watchtower 2.0') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
   else if (name === 'Sniper') { if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
   else if (name === 'Sweeps') { if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
-  else if (name === 'Fractal Model') renderFractalModel();
+  else if (name === 'Fractal Model') { if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
   else if (name === 'Stat Map 2') { if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
   else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
@@ -5362,7 +5362,8 @@ function setIndSettingsObject(name, obj){
     if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate();
   } else if (name === 'Fractal Model') {
     STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, obj, { enabled: STATE.fractalModel.enabled });
-    saveFractalModelState(); renderFractalModel();
+    saveFractalModelState();
+    if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate();
   } else if (name === 'Stat Map 2') {
     STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, obj, { enabled: STATE.statMap2.enabled });
     saveStatMap2State();
@@ -8055,7 +8056,7 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._fractalModelSvg, window._drawingLayerSvg]
+  [window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
 // Doble click sobre CUALQUIER dibujo de un indicador custom abre su panel
@@ -8755,7 +8756,6 @@ function initChart() {
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
     if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
-    renderFractalModel();
     syncOverlayPositions();
   }
   new ResizeObserver(_forceFullRedraw).observe(container);
@@ -8782,7 +8782,6 @@ function initChart() {
     // pedido bastante antes (300 velas de margen) da tiempo a que la
     // respuesta ya esté lista cuando el usuario realmente llega al borde.
     if (range && range.from < 800) loadMoreHistory();
-    renderFractalModel();
     syncOverlayPositions();
   });
 
@@ -8800,9 +8799,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderFractalModel(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -8842,12 +8841,13 @@ function initChart() {
   // después porque autoScale (prendido por default, y el chart recibe
   // precio en vivo todo el tiempo) podía recalcular el rango de precio por
   // su cuenta en paralelo sin que el transform se enterara, desincronizándolo
-  // de la escala real. Se abandonó ese camino: acá se usa el MISMO
-  // mecanismo ya probado que el arrastre del eje con mouse (_wtStartLoop/
-  // _wtStopLoop, más arriba) — render real en cada frame del gesto, sin
-  // atajos. Si la lentitud de Sniper/Watchtower con muchos niveles sigue
-  // siendo un problema real, hay que optimizar esos renders en sí, no
-  // esconderlo con un transform que puede desincronizarse.
+  // de la escala real. Se abandonó ese camino a favor de migrar los 5
+  // indicadores custom a Series Primitive (canvas) — ver WatchtowerCanvasPrimitive
+  // más abajo: ahí la librería los repinta sola en cada paint del gesto,
+  // sin loop manual. _wtStartLoop/_wtStopLoop ya no tocan ningún
+  // indicador (todos se auto-repintan solos); lo único que siguen
+  // sosteniendo acá es syncOverlayPositions() para las manijas/etiquetas
+  // de los dibujos propios del usuario durante el gesto.
   container.addEventListener('wheel', (e) => {
     if (!STATE.chartSettings.verticalScrollZoom) return;
     const scaleW = chart.priceScale('right').width() || 0;
@@ -8874,8 +8874,6 @@ function initChart() {
     clearTimeout(_wtWheelTimer);
     _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
   }, { capture:true, passive:false });
-
-  initFractalModelLayer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
   // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
@@ -11126,7 +11124,7 @@ function addIndicatorSeries(name) {
     if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
-    else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
+    else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
     else if(name==='RSI'){ renderRsi(); }
     return;
@@ -11779,7 +11777,7 @@ function applyIndSettingsForm() {
     STATE.fractalModel.tSpotBullColor = snRgba(g('fm-tspot-bull-color').value, Number(g('fm-tspot-bull-tr').value)||0);
     STATE.fractalModel.tSpotBearColor = snRgba(g('fm-tspot-bear-color').value, Number(g('fm-tspot-bear-tr').value)||0);
     saveFractalModelState();
-    renderFractalModel();
+    if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate();
   } else if (_indSettingsTarget === 'Stat Map 2') {
     const g = id => document.getElementById(id);
     const s2 = STATE.statMap2;
@@ -11853,7 +11851,7 @@ function removeIndicator(name){
     if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
-    else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
+    else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
     else if(name==='RSI'){ destroyRsiChart(); }
   }
@@ -13760,19 +13758,9 @@ class SweepsCanvasPrimitive {
 //  FRACTAL_MODEL_DEFAULTS arriba para el alcance exacto). Reusa el mismo
 //  mapeo LTF->HTF que ya usa Sniper (SNIPER_HTF_MAP/snHtfBucketKey): en
 //  los TF sin HTF asociado el indicador simplemente no dibuja nada, igual
-//  que Sniper.
+//  que Sniper. Pintado en canvas (Series Primitive), ver
+//  FractalModelCanvasPrimitive más abajo — ya no tiene capa <svg> propia.
 // ══════════════════════════════════════════════════════════
-function initFractalModelLayer() {
-  const container = document.getElementById('chart-container');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:17;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-  window._fractalModelSvg = svg;
-  function syncSize(){ syncOverlaySvgSize(svg, container); }
-  new ResizeObserver(syncSize).observe(container);
-  syncSize();
-}
-
 // Agrupa las velas cargadas en períodos HTF igual que snBuildHtfRunning,
 // pero además rastrea el ÍNDICE de vela (no solo el precio) del high/low
 // corrido de CADA período — el Pine original necesita ese índice para
@@ -14024,78 +14012,113 @@ function fmReplayCached(candles, cfg, p){
   return result;
 }
 
-function renderFractalModel(){
-  if (!window._fractalModelSvg) return;
-  const svg = window._fractalModelSvg;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Fractal Model');
-  if (!STATE.fractalModel.enabled || isIndicatorHidden('Fractal Model')) return;
-  const candles = window._lastCandles||[];
-  if (candles.length<20) return;
+// Migrado a canvas (Series Primitive) — misma arquitectura que Watchtower
+// 2.0/Stat Map 2/Sniper/Sweeps. fmReplayCached ya cacheaba el replay
+// completo por huella de velas+cfg+config (mismo patrón que snReplayCached
+// de Sniper), así que acá tampoco hizo falta tocar esa parte, solo migrar
+// el pintado. Usa únicamente wtRect/wtLine/wtLabel (igual que Sniper), sin
+// helpers propios, y tampoco tiene "draw behind candles" (igual que
+// Sweeps) — primitive con una sola rama draw().
+let _fmCanvasScratchSvg = null;
+let _fmCanvasDrawCache = null; // {key, calls}
+function _fmCanvasComputeCalls(candles){
   const fm = STATE.fractalModel;
+  const cacheKey = _candlesFingerprint(candles) + '|' + STATE.timeframe + '|' + JSON.stringify(fm);
+  if (_fmCanvasDrawCache && _fmCanvasDrawCache.key === cacheKey) return _fmCanvasDrawCache.calls;
+  if (!_fmCanvasScratchSvg) _fmCanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
+  const svg = _fmCanvasScratchSvg;
+  const hrBefore = (window._indicatorHitRegions||[]).length;
+  _wtRecordBuf = [];
+
   const cfg = SNIPER_HTF_MAP[STATE.timeframe];
-  if (!cfg) return; // mismo criterio que Sniper: sin HTF mapeado para este TF, no dibuja nada
-
-  const { setups, earlyCisdBull, earlyCisdBear } = fmReplayCached(candles, cfg, {
-    biasFilter: fm.biasFilter, showEarlyCisd: fm.showEarlyCisd,
-  });
-
-  if (fm.showEarlyCisd){
-    [{list:earlyCisdBull,color:fm.earlyCisdBullColor,txt:'+CISD'},{list:earlyCisdBear,color:fm.earlyCisdBearColor,txt:'-CISD'}].forEach(({list,color,txt})=>{
-      list.forEach(e => {
-        if (e.startIdx==null || e.startIdx>=candles.length || e.endIdx>=candles.length) return;
-        const t1 = candles[e.startIdx].time, t2 = candles[Math.min(e.endIdx+3, candles.length-1)].time;
-        wtLine(svg, t1, t2, e.level, color, 1, '4,3', 'Fractal Model');
-        if (fm.showLabels) wtLabel(svg, t2, e.level, txt, color, 'Fractal Model');
-      });
+  if (cfg) { // mismo criterio que Sniper: sin HTF mapeado para este TF, no dibuja nada
+    const { setups, earlyCisdBull, earlyCisdBear } = fmReplayCached(candles, cfg, {
+      biasFilter: fm.biasFilter, showEarlyCisd: fm.showEarlyCisd,
     });
-  }
 
-  const bullSetups = setups.filter(s=>s.isBull).slice(-fm.showHistory);
-  const bearSetups = setups.filter(s=>!s.isBull).slice(-fm.showHistory);
-  // El setup todavía "vivo" al final del replay no pasa por finishSetup
-  // salvo en el cierre forzado de fmReplay — ya viene incluido en
-  // `setups` (ver finishSetup(buySetup/sellSetup, n-1) al final).
+    if (fm.showEarlyCisd){
+      [{list:earlyCisdBull,color:fm.earlyCisdBullColor,txt:'+CISD'},{list:earlyCisdBear,color:fm.earlyCisdBearColor,txt:'-CISD'}].forEach(({list,color,txt})=>{
+        list.forEach(e => {
+          if (e.startIdx==null || e.startIdx>=candles.length || e.endIdx>=candles.length) return;
+          const t1 = candles[e.startIdx].time, t2 = candles[Math.min(e.endIdx+3, candles.length-1)].time;
+          wtLine(svg, t1, t2, e.level, color, 1, '4,3', 'Fractal Model');
+          if (fm.showLabels) wtLabel(svg, t2, e.level, txt, color, 'Fractal Model');
+        });
+      });
+    }
 
-  function drawSetup(s){
-    if (s.sweepFromBar!=null && s.sweepFromBar<candles.length && fm.showSweep){
-      // Pine: drawSweepLine(sweepFromBar, sweepFromPrice, bar_index) se
-      // llama UNA sola vez, al crear el setup (processC2 -> newSetup) — la
-      // línea queda fija ahí para siempre, nunca se extiende con el resto
-      // del setup (no hay line.set_x2 para c1SweepLines). s.c3StartBar es
-      // ESA misma vela (ver fmNewSetup: c3StartBar=c2Bar=bar_index de ese
-      // momento) — usar s.extendToBar en cambio (que sigue creciendo
-      // mientras el setup vive) era lo que hacía que esta línea quedara
-      // larga de más.
-      const t1 = candles[s.sweepFromBar].time;
-      const t2 = candles[Math.min(s.c3StartBar, candles.length-1)].time;
-      wtLine(svg, t1, t2, s.sweepFromPrice, fm.sweepColor, fm.sweepWidth, null, 'Fractal Model');
-    }
-    if (s.extremeBar!=null && s.extremeBar<candles.length && fm.showLabels){
-      wtLabel(svg, candles[s.extremeBar].time, s.extreme, s.xc2?'XC2':'C2', s.xc2?'#ef5350':(s.isBull?'#26a69a':'#ef5350'), 'Fractal Model');
-    }
-    const cisdColor = s.isBull ? fm.cisdBullColor : fm.cisdBearColor;
-    if (fm.showCisd && s.cisdConfirmed && s.cisdLevel!=null && s.cisdIdx!=null && s.cisdIdx<candles.length){
-      const t1 = candles[s.cisdIdx].time;
-      const endBar = Math.min((s.cisdConfirmBar!=null?s.cisdConfirmBar:s.extendToBar)+3, candles.length-1);
-      const t2 = candles[endBar].time;
-      wtLine(svg, t1, t2, s.cisdLevel, cisdColor, fm.cisdWidth, null, 'Fractal Model');
-      if (fm.showLabels) wtLabel(svg, t2, s.cisdLevel, 'CISD', cisdColor, 'Fractal Model');
-    }
-    if (fm.showTSpot && s.c3StartBar!=null && s.c3StartBar<candles.length){
-      const boxColor = s.isBull ? fm.tSpotBullColor : fm.tSpotBearColor;
-      const c3EndBar = Math.min(s.c4StartBar!=null ? s.c4StartBar : s.extendToBar, candles.length-1);
-      wtRect(svg, candles[s.c3StartBar].time, candles[c3EndBar].time, s.c3Top, s.c3Bottom, boxColor, 1, 'none', 'Fractal Model');
-      if (fm.showLabels) wtLabel(svg, candles[c3EndBar].time, s.isBull?s.c3Bottom:s.c3Top, 'C3', s.isBull?'#26a69a':'#ef5350', 'Fractal Model');
-      if (s.c4StartBar!=null && s.c4StartBar<candles.length){
-        const c4EndBar = Math.min(s.extendToBar, candles.length-1);
-        wtRect(svg, candles[s.c4StartBar].time, candles[c4EndBar].time, s.c4Top, s.c4Bottom, boxColor, 1, 'none', 'Fractal Model');
-        if (fm.showLabels) wtLabel(svg, candles[c4EndBar].time, s.c4Invalid?(s.isBull?s.c4Bottom:s.c4Top):(s.isBull?s.c4Bottom:s.c4Top), s.c4Invalid?'XC4':'C4', s.c4Invalid?'#ef5350':(s.isBull?'#26a69a':'#ef5350'), 'Fractal Model');
+    const bullSetups = setups.filter(s=>s.isBull).slice(-fm.showHistory);
+    const bearSetups = setups.filter(s=>!s.isBull).slice(-fm.showHistory);
+    // El setup todavía "vivo" al final del replay no pasa por finishSetup
+    // salvo en el cierre forzado de fmReplay — ya viene incluido en
+    // `setups` (ver finishSetup(buySetup/sellSetup, n-1) al final).
+
+    const drawSetup = (s) => {
+      if (s.sweepFromBar!=null && s.sweepFromBar<candles.length && fm.showSweep){
+        // Pine: drawSweepLine(sweepFromBar, sweepFromPrice, bar_index) se
+        // llama UNA sola vez, al crear el setup (processC2 -> newSetup) — la
+        // línea queda fija ahí para siempre, nunca se extiende con el resto
+        // del setup (no hay line.set_x2 para c1SweepLines). s.c3StartBar es
+        // ESA misma vela (ver fmNewSetup: c3StartBar=c2Bar=bar_index de ese
+        // momento) — usar s.extendToBar en cambio (que sigue creciendo
+        // mientras el setup vive) era lo que hacía que esta línea quedara
+        // larga de más.
+        const t1 = candles[s.sweepFromBar].time;
+        const t2 = candles[Math.min(s.c3StartBar, candles.length-1)].time;
+        wtLine(svg, t1, t2, s.sweepFromPrice, fm.sweepColor, fm.sweepWidth, null, 'Fractal Model');
       }
-    }
+      if (s.extremeBar!=null && s.extremeBar<candles.length && fm.showLabels){
+        wtLabel(svg, candles[s.extremeBar].time, s.extreme, s.xc2?'XC2':'C2', s.xc2?'#ef5350':(s.isBull?'#26a69a':'#ef5350'), 'Fractal Model');
+      }
+      const cisdColor = s.isBull ? fm.cisdBullColor : fm.cisdBearColor;
+      if (fm.showCisd && s.cisdConfirmed && s.cisdLevel!=null && s.cisdIdx!=null && s.cisdIdx<candles.length){
+        const t1 = candles[s.cisdIdx].time;
+        const endBar = Math.min((s.cisdConfirmBar!=null?s.cisdConfirmBar:s.extendToBar)+3, candles.length-1);
+        const t2 = candles[endBar].time;
+        wtLine(svg, t1, t2, s.cisdLevel, cisdColor, fm.cisdWidth, null, 'Fractal Model');
+        if (fm.showLabels) wtLabel(svg, t2, s.cisdLevel, 'CISD', cisdColor, 'Fractal Model');
+      }
+      if (fm.showTSpot && s.c3StartBar!=null && s.c3StartBar<candles.length){
+        const boxColor = s.isBull ? fm.tSpotBullColor : fm.tSpotBearColor;
+        const c3EndBar = Math.min(s.c4StartBar!=null ? s.c4StartBar : s.extendToBar, candles.length-1);
+        wtRect(svg, candles[s.c3StartBar].time, candles[c3EndBar].time, s.c3Top, s.c3Bottom, boxColor, 1, 'none', 'Fractal Model');
+        if (fm.showLabels) wtLabel(svg, candles[c3EndBar].time, s.isBull?s.c3Bottom:s.c3Top, 'C3', s.isBull?'#26a69a':'#ef5350', 'Fractal Model');
+        if (s.c4StartBar!=null && s.c4StartBar<candles.length){
+          const c4EndBar = Math.min(s.extendToBar, candles.length-1);
+          wtRect(svg, candles[s.c4StartBar].time, candles[c4EndBar].time, s.c4Top, s.c4Bottom, boxColor, 1, 'none', 'Fractal Model');
+          if (fm.showLabels) wtLabel(svg, candles[c4EndBar].time, s.c4Invalid?(s.isBull?s.c4Bottom:s.c4Top):(s.isBull?s.c4Bottom:s.c4Top), s.c4Invalid?'XC4':'C4', s.c4Invalid?'#ef5350':(s.isBull?'#26a69a':'#ef5350'), 'Fractal Model');
+        }
+      }
+    };
+    bullSetups.forEach(drawSetup);
+    bearSetups.forEach(drawSetup);
   }
-  bullSetups.forEach(drawSetup);
-  bearSetups.forEach(drawSetup);
+
+  const calls = _wtRecordBuf;
+  _wtRecordBuf = null;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
+  _fmCanvasDrawCache = { key: cacheKey, calls };
+  return calls;
+}
+function paintFractalModelCanvas(ctx){
+  if (!STATE.fractalModel.enabled || isIndicatorHidden('Fractal Model')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 20) return;
+  _paintWtCallsToCanvas(ctx, _fmCanvasComputeCalls(candles));
+}
+class FractalModelCanvasPrimitive {
+  attached(param) { window._fractalModelCanvasRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._fractalModelCanvasRequestUpdate) delete window._fractalModelCanvasRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'top',
+      renderer: () => ({
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintFractalModelCanvas(ctx)); },
+      }),
+    }];
+  }
 }
 
 function smDash(styleStr){ return styleStr === 'dashed' ? '6,4' : styleStr === 'dotted' ? '2,2' : null; }
@@ -15480,12 +15503,12 @@ function restoreIndicatorsAndTools(s){
   renderTfBar();
   setActiveTF(STATE.timeframe);
   renderIndList();
-  renderFractalModel();
   renderRsi();
   if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
   if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
   if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate();
+  if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -16179,6 +16202,7 @@ function createMainSeries(){
   candleSeries.attachPrimitive(new StatMap2CanvasPrimitive());
   candleSeries.attachPrimitive(new SniperCanvasPrimitive());
   candleSeries.attachPrimitive(new SweepsCanvasPrimitive());
+  candleSeries.attachPrimitive(new FractalModelCanvasPrimitive());
   applyMainSeriesColors();
 }
 
@@ -16773,7 +16797,6 @@ function renderSeries(timeframe){
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
   renderRsi();
-  renderFractalModel();
   renderTradeMarkers();
   renderAlertLines();
 }
@@ -16813,7 +16836,6 @@ function updateFormingCandleLive(bar){
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
   renderRsi();
-  renderFractalModel();
   renderTradeMarkers();
 }
 
@@ -17501,22 +17523,21 @@ function _resyncChartLayout(){
   // el layout real.
   renderRsi();
   scrollToRealTimeReliably();
-  // El resize de arriba por sí solo NO corrige nada de Fractal Model ni de
-  // las líneas/manijas de los dibujos propios — esas cajas y líneas se
-  // dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN EL
-  // MOMENTO en que se llama a cada render*; si ese primer renderSeries()
-  // de loadChart corrió con el tamaño todavía mal (la razón de todo este
-  // resync), sus cajas quedaron calculadas con esas coordenadas viejas y
-  // se quedan ahí, gigantes/corridas, por más que el chart de velas de
-  // abajo ya esté bien — nada las vuelve a dibujar solas. Mismo combo que
-  // usa el ResizeObserver normal del chart (ver su .observe(container)
-  // más arriba) para este mismo caso, pero disparado a mano acá. Watchtower
-  // 2.0, Stat Map 2, Sniper y Sweeps no lo necesitan: pintan vía Series
-  // Primitive, así que la librería los repinta solo como parte de su
-  // propio resize.
+  // El resize de arriba por sí solo NO corrige las líneas/manijas de los
+  // dibujos propios del usuario — esas sí se dibujan a mano (SVG)
+  // convirtiendo tiempo/precio a píxeles EN EL MOMENTO en que se llaman;
+  // si ese primer renderSeries() de loadChart corrió con el tamaño
+  // todavía mal (la razón de todo este resync), quedaron calculadas con
+  // esas coordenadas viejas y se quedan ahí, gigantes/corridas, por más
+  // que el chart de velas de abajo ya esté bien — nada las vuelve a
+  // dibujar solas. Mismo combo que usa el ResizeObserver normal del chart
+  // (ver su .observe(container) más arriba) para este mismo caso, pero
+  // disparado a mano acá. Los 5 indicadores custom (Watchtower 2.0, Stat
+  // Map 2, Sniper, Sweeps, Fractal Model) no lo necesitan: pintan vía
+  // Series Primitive, así que la librería los repinta sola como parte de
+  // su propio resize.
   clearSvgHighlights();
   if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
-  renderFractalModel();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
