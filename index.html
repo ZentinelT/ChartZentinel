@@ -11104,7 +11104,7 @@ const INDICATOR_DEFS = [
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
   { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
-  { name:'Watchtower Canvas', desc:'Piloto: killzones+PDH/PDL de Watchtower pintados en canvas (Series Primitive) en vez de SVG, para probar si así no atrasa durante zoom vertical rápido', color:'#6bd4a0', custom:true },
+  { name:'Watchtower Canvas', desc:'Watchtower (killzones, PD/PW levels, MNO, ORG, bias) pintado en canvas (Series Primitive) en vez de SVG — no atrasa durante zoom vertical rápido', color:'#6bd4a0', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
@@ -12667,6 +12667,10 @@ async function wtEnsureOrgBoundaries(cacheKey, symbol, prevEndTime, todayStartTi
   ]);
   _wtOrgCache[cacheKey] = (prevClose!=null && todayOpen!=null) ? {prevClose, todayOpen} : null;
   renderWatchtower(); // ya tenemos el dato preciso — redibuja con eso en vez de la aproximación
+  // Watchtower Canvas (ver _wtCanvasComputeCalls) ya incluye _wtOrgCache en
+  // su cache key, así que el próximo paint recalcula solo — esto apenas
+  // adelanta ESE repintado en vez de esperar al próximo cambio del chart.
+  if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
 }
 
 function renderWtORG(svg, byDate, dateKeys, lastTime, barStep){
@@ -12884,24 +12888,27 @@ function renderWatchtower(){
 }
 
 // ══════════════════════════════════════════════════════════
-//  WATCHTOWER CANVAS — prueba piloto, ver STATE.watchtowerCanvas más
-//  arriba. Mismo cálculo de killzones+PDH/PDL que Watchtower real
-//  (reutiliza renderWtKillzones/renderWtPrevDay TAL CUAL, sin tocarlas —
-//  cero riesgo para el Watchtower que ya funciona), pero en vez de
-//  dibujar en un <svg> del DOM, se pinta en el canvas de la librería vía
-//  un Series Primitive (mismo mecanismo que ya usa
-//  ZentinelBehindDrawingsPrimitive más arriba para "enviar detrás de las
-//  velas"). La diferencia clave: la librería llama a este draw() como
-//  parte de SU PROPIO repintado (cada cambio de scaleMargins, pan, tick
-//  nuevo...), siempre en el mismo paint que las velas — no hace falta
-//  ningún loop manual de requestAnimationFrame como el que usa el
+//  WATCHTOWER CANVAS — indicador piloto, ver STATE.watchtowerCanvas más
+//  arriba. Validado en vivo (2026-11-25): con scroll rápido sobre el eje
+//  de precio queda pegado a las velas donde el Watchtower SVG se atrasaba
+//  — confirma que la causa de fondo era SVG-del-DOM vs canvas, no la
+//  lógica. Réplica completa de Watchtower (killzones, PDH/PDL, PWH/PWL,
+//  MNO, ORG, bias) — reutiliza renderWtKillzones/PrevDay/PrevWeek/MNO/ORG/
+//  Bias TAL CUAL, sin tocarlas (cero riesgo para el Watchtower que ya
+//  funciona), pero en vez de dibujar en un <svg> del DOM, pinta en el
+//  canvas de la librería vía un Series Primitive (mismo mecanismo que ya
+//  usa ZentinelBehindDrawingsPrimitive más arriba para "enviar detrás de
+//  las velas"). La diferencia de fondo: la librería llama a este draw()
+//  como parte de SU PROPIO repintado (cada cambio de scaleMargins, pan,
+//  tick nuevo...), siempre en el mismo paint que las velas — no hace
+//  falta ningún loop manual de requestAnimationFrame como el que usa el
 //  Watchtower SVG (_wtDragLoop) para "seguir" el zoom vertical con la
-//  rueda. Si esto resuelve el desfasaje reportado, el camino sería migrar
-//  Watchtower (y después Sniper/Sweeps/Fractal Model/Stat Map 2, que
-//  comparten las mismas wtRect/wtLine/wtLabel) a esta arquitectura.
+//  rueda. Siguiente paso posible: migrar Watchtower real a esta
+//  arquitectura (y después Sniper/Sweeps/Fractal Model/Stat Map 2, que
+//  comparten las mismas wtRect/wtLine/wtLabel) y borrar el SVG viejo.
 //
 // Para obtener QUÉ dibujar sin reimplementar la lógica ICT: se llama a
-// renderWtKillzones/renderWtPrevDay pasándoles un <svg> DESCARTABLE (nunca
+// las funciones reales de arriba pasándoles un <svg> DESCARTABLE (nunca
 // se agrega al documento) mientras _wtRecordBuf está activo — el mismo
 // mecanismo de grabación que ya usa el cache de renderWatchtower. Eso da
 // la lista de llamadas wtRect/wtLine/wtLabel con sus argumentos REALES de
@@ -12912,23 +12919,33 @@ function renderWatchtower(){
 let _wtCanvasScratchSvg = null;
 let _wtCanvasDrawCache = null; // {key, calls}
 function _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep){
-  const cacheKey = _candlesFingerprint(candles) + '|' + barStep + '|' + JSON.stringify(STATE.watchtower);
+  const cacheKey = _candlesFingerprint(candles) + '|' + barStep + '|' + JSON.stringify(STATE.watchtower) + '|' + JSON.stringify(_wtOrgCache);
   if (_wtCanvasDrawCache && _wtCanvasDrawCache.key === cacheKey) return _wtCanvasDrawCache.calls;
   if (!_wtCanvasScratchSvg) _wtCanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
-  // renderWtKillzones/renderWtPrevDay llaman a wtRect/wtLine sin pasar
-  // indName -> quedan tageadas 'Watchtower' (su default) en
-  // registerIndicatorHit, aunque el Watchtower real esté apagado. Como acá
-  // no nos interesa esa región de hit-test (la pinta el canvas, no hay SVG
-  // clickeable), se recorta lo que se haya agregado durante este cálculo.
+  const wt = STATE.watchtower;
+  // renderWtKillzones/PrevDay/PrevWeek/MNO/ORG llaman a wtRect/wtLine/
+  // wtLabel sin pasar indName -> quedan tageadas 'Watchtower' (su default)
+  // en registerIndicatorHit, aunque el Watchtower real esté apagado. Como
+  // acá no nos interesa esa región de hit-test (la pinta el canvas, no hay
+  // SVG clickeable), se recorta lo que se haya agregado durante este cálculo.
   const hrBefore = (window._indicatorHitRegions||[]).length;
   _wtRecordBuf = [];
-  renderWtKillzones(_wtCanvasScratchSvg, byDate, dateKeys, barStep);
-  renderWtPrevDay(_wtCanvasScratchSvg, byDate, dateKeys, lastTime, barStep);
+  if (wt.killzones) renderWtKillzones(_wtCanvasScratchSvg, byDate, dateKeys, barStep);
+  if (wt.pdLevels)  renderWtPrevDay(_wtCanvasScratchSvg, byDate, dateKeys, lastTime, barStep);
+  if (wt.pwLevels)  renderWtPrevWeek(_wtCanvasScratchSvg, candles, dateKeys, lastTime, barStep);
+  if (wt.mno)       renderWtMNO(_wtCanvasScratchSvg, byDate, dateKeys, lastTime, barStep);
+  if (wt.org)       renderWtORG(_wtCanvasScratchSvg, byDate, dateKeys, lastTime, barStep);
   const calls = _wtRecordBuf;
   _wtRecordBuf = null;
   while (_wtCanvasScratchSvg.firstChild) _wtCanvasScratchSvg.removeChild(_wtCanvasScratchSvg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
   _wtCanvasDrawCache = { key: cacheKey, calls };
+  // El badge de bias es HTML aparte (no entra en los "calls" de arriba) —
+  // mismo criterio que renderWatchtower: se recalcula junto con el resto
+  // de la lógica pesada, no en cada paint. Comparte el mismo elemento que
+  // el Watchtower real (misma config, mismo resultado) — si los dos están
+  // activos a la vez no importa cuál lo haya escrito último.
+  if (wt.bias) renderWtBias(byDate, dateKeys, lastTime);
   return calls;
 }
 function paintWatchtowerCanvas(ctx){
@@ -12941,13 +12958,22 @@ function paintWatchtowerCanvas(ctx){
   const calls = _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep);
   calls.forEach(([fn, args]) => {
     if (fn === _wtRectReal) {
-      const [, t1, t2, top, bottom, fill, opacity] = args;
+      const [, t1, t2, top, bottom, fill, opacity, stroke] = args;
       const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
       const y1 = candleSeries.priceToCoordinate(top), y2 = candleSeries.priceToCoordinate(bottom);
       if (x1==null||x2==null||y1==null||y2==null) return;
+      const rx = Math.min(x1,x2), ry = Math.min(y1,y2), rw = Math.max(1,Math.abs(x2-x1)), rh = Math.max(1,Math.abs(y2-y1));
       if (fill && fill !== 'none') {
         ctx.save(); ctx.globalAlpha = opacity ?? 1; ctx.fillStyle = fill;
-        ctx.fillRect(Math.min(x1,x2), Math.min(y1,y2), Math.max(1,Math.abs(x2-x1)), Math.max(1,Math.abs(y2-y1)));
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.restore();
+      }
+      // Mismo default que wtRect: 'none' explícito = sin borde, cualquier
+      // otra cosa (incluido undefined) = borde del color de stroke o, si
+      // no vino, del mismo fill.
+      if (stroke !== 'none') {
+        ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = stroke || fill; ctx.lineWidth = 1;
+        ctx.strokeRect(rx, ry, rw, rh);
         ctx.restore();
       }
     } else if (fn === _wtLineReal) {
