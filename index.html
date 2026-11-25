@@ -8840,8 +8840,15 @@ function initChart() {
   // directamente, lo logramos corriendo scaleMargins (mismo mecanismo que
   // ya usa Settings para separar las velas del borde superior/inferior):
   // scroll hacia arriba achica los márgenes (las velas ocupan más alto =
-  // zoom in), hacia abajo los agranda (zoom out). preventDefault acá evita
-  // que ese mismo scroll también dispare el zoom de tiempo de la librería.
+  // zoom in), hacia abajo los agranda (zoom out).
+  //
+  // NO alcanza con preventDefault: la librería tiene SU PROPIO listener de
+  // 'wheel' atado directo al canvas del eje (un descendiente de container),
+  // y ese canvas recibe el evento ANTES que nuestro listener en bubble
+  // (bubbling va de adentro hacia afuera) — por eso el usuario seguía
+  // viendo que además hacía zoom de tiempo/general. Hay que interceptarlo
+  // en fase de CAPTURA (afuera hacia adentro, así corre primero) y cortar
+  // la propagación para que nunca llegue al canvas.
   container.addEventListener('wheel', (e) => {
     if (!STATE.chartSettings.verticalScrollZoom) return;
     const scaleW = chart.priceScale('right').width() || 0;
@@ -8853,13 +8860,21 @@ function initChart() {
     const localX = e.clientX - container.getBoundingClientRect().left;
     if (localX < boundary) return; // scroll fuera del eje de precio: comportamiento normal
     e.preventDefault();
+    e.stopPropagation(); // corta acá: nunca llega al listener nativo de la librería
     const ps = chart.priceScale('right');
     const cur = ps.options().scaleMargins || { top:0.1, bottom:0.1 };
     const step = e.deltaY < 0 ? -0.01 : 0.01;
     const top = Math.min(0.45, Math.max(0.01, cur.top + step));
     const bottom = Math.min(0.45, Math.max(0.01, cur.bottom + step));
     ps.applyOptions({ scaleMargins: { top, bottom } });
-  }, { passive:false });
+    // Al cortar la propagación más arriba, este evento nunca llega al
+    // listener de más arriba que mantiene vivo a Watchtower durante el
+    // wheel — se replica acá mismo para que no se "congele" mientras se
+    // hace zoom vertical con la rueda.
+    _wtStartLoop();
+    clearTimeout(_wtWheelTimer);
+    _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
+  }, { capture:true, passive:false });
 
   initWatchtowerLayer();
   initSniperLayer();
