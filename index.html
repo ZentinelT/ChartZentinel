@@ -5289,7 +5289,7 @@ const STATE = {
   workspaces: JSON.parse(lsGet('td_workspaces') || '{}'),
 };
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
-STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower Canvas');
+STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower 2.0');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
@@ -5307,7 +5307,7 @@ function toggleIndicatorVisibility(name){
   saveHiddenIndicatorsState();
   renderIndicatorChips();
   if (name === 'Watchtower') renderWatchtower();
-  else if (name === 'Watchtower Canvas') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+  else if (name === 'Watchtower 2.0') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
@@ -5342,7 +5342,7 @@ function saveIndicatorTemplatesState(){ lsSet('td_ind_templates', JSON.stringify
 // Watchtower/Sniper/Sweeps es su propio STATE.xxx; para cualquier otro
 // indicador "simple" (EMA, RSI...) es su entrada en indicatorStyles.
 function getIndSettingsObject(name){
-  if (name === 'Watchtower' || name === 'Watchtower Canvas') return STATE.watchtower;
+  if (name === 'Watchtower' || name === 'Watchtower 2.0') return STATE.watchtower;
   if (name === 'Sniper') return STATE.sniper;
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
@@ -5352,7 +5352,7 @@ function getIndSettingsObject(name){
   return getIndicatorStyle(name, def || {});
 }
 function setIndSettingsObject(name, obj){
-  if (name === 'Watchtower' || name === 'Watchtower Canvas') {
+  if (name === 'Watchtower' || name === 'Watchtower 2.0') {
     STATE.watchtower = Object.assign({}, obj, { enabled: STATE.watchtower.enabled });
     saveWatchtowerState(); renderWatchtower();
     ensureWeeklyHistoryForWatchtower();
@@ -11105,7 +11105,7 @@ const INDICATOR_DEFS = [
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
   { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
-  { name:'Watchtower Canvas', desc:'Watchtower (killzones, PD/PW levels, MNO, ORG, bias) pintado en canvas (Series Primitive) en vez de SVG — no atrasa durante zoom vertical rápido', color:'#6bd4a0', custom:true },
+  { name:'Watchtower 2.0', desc:'Watchtower (killzones, PD/PW levels, MNO, ORG, bias) pintado en canvas (Series Primitive) en vez de SVG — no atrasa durante zoom vertical rápido', color:'#6bd4a0', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
@@ -11133,7 +11133,7 @@ function applyIndicators() {
     const def=INDICATOR_DEFS.find(d=>d.name===name);
     if(def && def.custom){
       if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
-      else if(name==='Watchtower Canvas'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+      else if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
@@ -11158,7 +11158,7 @@ function addIndicatorSeries(name) {
   const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
   if(def.custom){
     if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); }
-    else if(name==='Watchtower Canvas'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+    else if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
@@ -11256,8 +11256,8 @@ function openIndicatorSettings(name) {
   if (window._indSettingsResetPosition) window._indSettingsResetPosition();
   document.getElementById('ind-settings-title').textContent = name + ' — Settings';
   const body = document.getElementById('ind-settings-body');
-  if (name === 'Watchtower' || name === 'Watchtower Canvas') {
-    // Watchtower Canvas no tiene config propia a propósito (ver
+  if (name === 'Watchtower' || name === 'Watchtower 2.0') {
+    // Watchtower 2.0 no tiene config propia a propósito (ver
     // STATE.watchtowerCanvas) — lee/escribe el MISMO STATE.watchtower que
     // el Watchtower real, así que comparte este panel tal cual.
     const togglesHtml = WT_TOGGLE_DEFS.map(t => `
@@ -11693,7 +11693,7 @@ function saveIndicatorSettings() {
 // guardar lo que el usuario tiene tipeado AHORA, no lo último persistido)
 // sin cerrar el modal debajo del prompt() del nombre.
 function applyIndSettingsForm() {
-  if (_indSettingsTarget === 'Watchtower' || _indSettingsTarget === 'Watchtower Canvas') {
+  if (_indSettingsTarget === 'Watchtower' || _indSettingsTarget === 'Watchtower 2.0') {
     document.querySelectorAll('#ind-settings-body [data-wt-key]').forEach(inp => {
       STATE.watchtower[inp.dataset.wtKey] = inp.checked;
     });
@@ -11747,7 +11747,7 @@ function applyIndSettingsForm() {
     saveWatchtowerState();
     renderWatchtower();
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
-    // Watchtower Canvas lee el MISMO STATE.watchtower — alcanza con pedirle
+    // Watchtower 2.0 lee el MISMO STATE.watchtower — alcanza con pedirle
     // un repintado, su cache (ver _wtCanvasComputeCalls) ya invalida solo
     // porque el JSON.stringify(STATE.watchtower) de la key cambió.
     if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
@@ -11891,7 +11891,7 @@ function removeIndicator(name){
   const def=INDICATOR_DEFS.find(d=>d.name===name);
   if(def && def.custom){
     if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); }
-    else if(name==='Watchtower Canvas'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
+    else if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
@@ -12675,7 +12675,7 @@ async function wtEnsureOrgBoundaries(cacheKey, symbol, prevEndTime, todayStartTi
   ]);
   _wtOrgCache[cacheKey] = (prevClose!=null && todayOpen!=null) ? {prevClose, todayOpen} : null;
   renderWatchtower(); // ya tenemos el dato preciso — redibuja con eso en vez de la aproximación
-  // Watchtower Canvas (ver _wtCanvasComputeCalls) ya incluye _wtOrgCache en
+  // Watchtower 2.0 (ver _wtCanvasComputeCalls) ya incluye _wtOrgCache en
   // su cache key, así que el próximo paint recalcula solo — esto apenas
   // adelanta ESE repintado en vez de esperar al próximo cambio del chart.
   if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
@@ -12896,7 +12896,7 @@ function renderWatchtower(){
 }
 
 // ══════════════════════════════════════════════════════════
-//  WATCHTOWER CANVAS — indicador piloto, ver STATE.watchtowerCanvas más
+//  WATCHTOWER 2.0 — indicador piloto, ver STATE.watchtowerCanvas más
 //  arriba. Validado en vivo (2026-11-25): con scroll rápido sobre el eje
 //  de precio queda pegado a las velas donde el Watchtower SVG se atrasaba
 //  — confirma que la causa de fondo era SVG-del-DOM vs canvas, no la
@@ -12957,7 +12957,7 @@ function _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep){
   return calls;
 }
 function paintWatchtowerCanvas(ctx){
-  if (!STATE.watchtowerCanvas.enabled || isIndicatorHidden('Watchtower Canvas')) return;
+  if (!STATE.watchtowerCanvas.enabled || isIndicatorHidden('Watchtower 2.0')) return;
   const candles = window._lastCandles || [];
   if (candles.length < 2) return;
   const barStep = tfToSeconds(STATE.timeframe);
@@ -15466,7 +15466,7 @@ function restoreIndicatorsAndTools(s){
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
   STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
-  STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower Canvas');
+  STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower 2.0');
   if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
   saveIndicatorStylesState();
