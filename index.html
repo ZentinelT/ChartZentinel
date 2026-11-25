@@ -5303,7 +5303,7 @@ function toggleIndicatorVisibility(name){
   saveHiddenIndicatorsState();
   renderIndicatorChips();
   if (name === 'Watchtower 2.0') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
-  else if (name === 'Sniper') renderSniper();
+  else if (name === 'Sniper') { if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map 2') { if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
@@ -5354,7 +5354,8 @@ function setIndSettingsObject(name, obj){
     if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   } else if (name === 'Sniper') {
     STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, obj, { enabled: STATE.sniper.enabled });
-    saveSniperState(); renderSniper();
+    saveSniperState();
+    if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
   } else if (name === 'Sweeps') {
     STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, obj, { enabled: STATE.sweeps.enabled });
     saveSweepsState(); renderSweeps();
@@ -8053,7 +8054,7 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._drawingLayerSvg]
+  [window._sweepsSvg, window._fractalModelSvg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
 // Doble click sobre CUALQUIER dibujo de un indicador custom abre su panel
@@ -8170,9 +8171,6 @@ class ZentinelBehindDrawingsPrimitive {
               drawBehindDrawingSvgParts(ctx, d);
               drawBehindDrawingText(ctx, d);
             });
-            if (STATE.sniper && STATE.sniper.behindCandles) {
-              paintSvgLayerBehindCandles(ctx, window._sniperSvg);
-            }
           });
         },
       }),
@@ -8756,7 +8754,6 @@ function initChart() {
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
     if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
-    renderSniper();
     renderSweeps();
     renderFractalModel();
     syncOverlayPositions();
@@ -8785,7 +8782,6 @@ function initChart() {
     // pedido bastante antes (300 velas de margen) da tiempo a que la
     // respuesta ya esté lista cuando el usuario realmente llega al borde.
     if (range && range.from < 800) loadMoreHistory();
-    renderSniper();
     renderSweeps();
     renderFractalModel();
     syncOverlayPositions();
@@ -8805,9 +8801,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderSweeps(); renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderSweeps(); renderFractalModel(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -8880,7 +8876,6 @@ function initChart() {
     _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
   }, { capture:true, passive:false });
 
-  initSniperLayer();
   initSweepsLayer();
   initFractalModelLayer();
 
@@ -11131,7 +11126,7 @@ function addIndicatorSeries(name) {
   const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
   if(def.custom){
     if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
-    else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
+    else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
@@ -11754,7 +11749,7 @@ function applyIndSettingsForm() {
     STATE.sniper.h4BullColor = snRgba(g('sn-h4-bull-color').value, Number(g('sn-h4-bull-color-tr').value)||0);
     STATE.sniper.h4BearColor = snRgba(g('sn-h4-bear-color').value, Number(g('sn-h4-bear-color-tr').value)||0);
     saveSniperState();
-    renderSniper();
+    if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
   } else if (_indSettingsTarget === 'Sweeps') {
     const g = id => document.getElementById(id);
     STATE.sweeps.mostrarAlcista = g('sw-mostrar-alcista').checked;
@@ -11858,7 +11853,7 @@ function removeIndicator(name){
   const def=INDICATOR_DEFS.find(d=>d.name===name);
   if(def && def.custom){
     if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
-    else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
+    else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
@@ -12862,6 +12857,16 @@ function paintWatchtowerCanvas(ctx){
   // CADA paint, cache-hit o no — igual que el reset de arriba, si no
   // quedaría pegado al último valor con candles/config cacheados.
   if (STATE.watchtower.bias) renderWtBias(byDate, dateKeys, lastTime);
+  _paintWtCallsToCanvas(ctx, calls);
+}
+// Traduce una lista de llamadas grabadas de wtRect/wtLine/wtLabel (ver el
+// wrapper de grabación más arriba) a comandos de canvas, recalculando la
+// posición en pantalla con priceToCoordinate/timeToCoordinate REAL en cada
+// pintado — igual de exacto que el SVG, nunca una aproximación. Compartido
+// entre todos los indicadores migrados a canvas que usan estos 3 helpers
+// (Watchtower 2.0, Sniper...) — Stat Map 2 tiene el suyo propio porque usa
+// sm2Line/sm2Rect en vez de wtRect/wtLine.
+function _paintWtCallsToCanvas(ctx, calls){
   calls.forEach(([fn, args]) => {
     if (fn === _wtRectReal) {
       const [, t1, t2, top, bottom, fill, opacity, stroke] = args;
@@ -12944,17 +12949,6 @@ class WatchtowerCanvasPrimitive {
 //  fakeout, pruning). El resultado final es el mismo que el streaming de
 //  TradingView, solo cambia CÓMO se llega a él.
 // ══════════════════════════════════════════════════════════
-function initSniperLayer() {
-  const container = document.getElementById('chart-container');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:16;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-  window._sniperSvg = svg;
-  function syncSize(){ syncOverlaySvgSize(svg, container); }
-  new ResizeObserver(syncSize).observe(container);
-  syncSize();
-}
-
 function initSweepsLayer() {
   const container = document.getElementById('chart-container');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -13091,15 +13085,15 @@ function snComputeOB(candles, i, foundK, cnt, isBull){
 
 // snReplay recorre TODAS las velas cargadas (pueden ser miles, sobre todo
 // ahora que Watchtower trae más historial para la semana anterior) armando
-// desde cero toda la máquina de estados de sweep+CISD. renderSniper() se
-// llama en el mismo loop de 60fps que usa Watchtower durante pan/zoom/drag
-// (_wtDragLoop) — sin este cache, paneabas o hacías zoom con Sniper
-// prendido y se recalculaba el replay completo en cada frame sin que las
-// velas ni la configuración hubiesen cambiado un poco, lo cual se sentía
-// muy pesado/entrecortado. Cachea por una huella barata (largo + primer y
-// último timestamp de las velas + símbolo/TF + los parámetros que de verdad
-// afectan el resultado + cuándo se actualizaron los FVG de M15/H4) y solo
-// vuelve a correr el replay cuando esa huella cambia.
+// desde cero toda la máquina de estados de sweep+CISD. paintSniperCanvas()
+// se llama como parte del repintado propio de la librería (cada cambio de
+// scaleMargins, pan, tick...) — sin este cache, paneabas o hacías zoom con
+// Sniper prendido y se recalculaba el replay completo en cada frame sin
+// que las velas ni la configuración hubiesen cambiado un poco, lo cual se
+// sentía muy pesado/entrecortado. Cachea por una huella barata (largo +
+// primer y último timestamp de las velas + símbolo/TF + los parámetros que
+// de verdad afectan el resultado + cuándo se actualizaron los FVG de
+// M15/H4) y solo vuelve a correr el replay cuando esa huella cambia.
 let _snReplayCache = null; // {key, result}
 function snReplayCached(candles, cfg, p, fvgFetchedAt){
   const key = candles.length + '|' + (candles.length?candles[0].time:0) + '|' + (candles.length?candles[candles.length-1].time:0)
@@ -13396,14 +13390,14 @@ async function snEnsureFvgData(symbol){
   if (m15) entry.m15 = m15;
   if (h4) entry.h4 = h4;
   // Detectar los FVG acá (una vez cada vez que llega data nueva) en vez de
-  // en renderSniper — ese corre en el loop de 60fps durante pan/zoom/drag,
-  // y recorrer de nuevo 1000 velas de M15/H4 en cada frame sin que la data
-  // haya cambiado era puro desperdicio.
+  // en paintSniperCanvas — eso corre en cada repintado del chart (pan/zoom/
+  // tick), y recorrer de nuevo 1000 velas de M15/H4 cada vez sin que la
+  // data haya cambiado sería puro desperdicio.
   entry.m15Fvgs = entry.m15.length ? snDetectFvgs(entry.m15) : {bull:[],bear:[]};
   entry.h4Fvgs  = entry.h4.length  ? snDetectFvgs(entry.h4)  : {bull:[],bear:[]};
   entry.fetchedAt = Date.now();
   entry.pending = false;
-  renderSniper();
+  if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
 }
 
 async function snEnsureFvgDataReplay(symbol, cutTime, entry, targetBucket){
@@ -13421,7 +13415,7 @@ async function snEnsureFvgDataReplay(symbol, cutTime, entry, targetBucket){
   entry.h4Fvgs  = entry.h4.length  ? snDetectFvgs(entry.h4)  : {bull:[],bear:[]};
   entry.fetchedAt = Date.now();
   entry.pending = false;
-  renderSniper();
+  if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
 }
 
 const _snFvgReplayTimers = {}; // ver snGetFvgData — un debounce por símbolo
@@ -13601,26 +13595,28 @@ function snDrawFvgBoxes(svg, chartCandles, mtfCandles, list, color, showToggle, 
   });
 }
 
-function renderSniper(){
-  if (!window._sniperSvg) return;
-  const svg = window._sniperSvg;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sniper');
-  // Ídem renderSweeps/renderFractalModel — ver paintSvgLayerBehindCandles.
-  svg.style.visibility = STATE.sniper.behindCandles ? 'hidden' : '';
-  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
-  if (!STATE.sniper.enabled || isIndicatorHidden('Sniper')) return;
-  const candles = window._lastCandles||[];
-  if (candles.length<5) return;
+// Migrado a canvas (Series Primitive) — misma arquitectura que Watchtower
+// 2.0/Stat Map 2. snReplayCached ya cacheaba la máquina de estados del
+// sweep/CISD por fingerprint+cfg+fvgFetchedAt, así que acá solo hacía
+// falta migrar el PINTADO: snDrawFvgBoxes y el draw() de abajo ya llaman
+// únicamente a wtRect/wtLine/wtLabel (sin helpers propios, a diferencia de
+// Stat Map 2), así que el wrapper de grabación que ya existe les sirve tal
+// cual — no hizo falta ningún wrapper nuevo.
+let _snCanvasScratchSvg = null;
+let _snCanvasDrawCache = null; // {key, calls}
+function _snCanvasComputeCalls(candles, lastTime){
   const sn = STATE.sniper;
-  const lastTime = candles[candles.length-1].time;
+  const fvgData = snGetFvgData(STATE.symbol);
+  const cacheKey = _candlesFingerprint(candles) + '|' + STATE.timeframe + '|' + JSON.stringify(sn) + '|' + fvgData.fetchedAt;
+  if (_snCanvasDrawCache && _snCanvasDrawCache.key === cacheKey) return _snCanvasDrawCache.calls;
+  if (!_snCanvasScratchSvg) _snCanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
+  const svg = _snCanvasScratchSvg;
+  const hrBefore = (window._indicatorHitRegions||[]).length;
+  _wtRecordBuf = [];
 
   // FVG (M15/H4) primero, para que las cajas queden DEBAJO de las líneas
-  // de sweep/CISD en el orden de dibujo del SVG (z-order natural). Ya
-  // vienen detectados desde snEnsureFvgData — no tiene sentido re-escanear
-  // 1000 velas de M15/H4 en cada render (este corre en el loop de 60fps
-  // durante pan/zoom/drag) si la data no cambió.
-  const fvgData = snGetFvgData(STATE.symbol);
+  // de sweep/CISD en el orden de dibujo (z-order de "calls", igual que el
+  // z-order natural que tenía el <svg> viejo).
   const m15Fvgs = fvgData.m15Fvgs || {bull:[],bear:[]};
   const h4Fvgs  = fvgData.h4Fvgs  || {bull:[],bear:[]};
   if (fvgData.m15.length){
@@ -13635,37 +13631,66 @@ function renderSniper(){
   }
 
   const cfg = SNIPER_HTF_MAP[STATE.timeframe];
-  if (!cfg) return; // TF sin HTF en el Pine original -> el sweep/CISD no corre, igual que en TV (el FVG arriba sí queda)
-  const { bullSetups, bearSetups, barStep } = snReplayCached(candles, cfg, {
-    mostrarAlcista: sn.mostrarAlcista, mostrarBajista: sn.mostrarBajista,
-    margenReclamo: sn.margenReclamo, maxSetupAge: sn.maxSetupAge,
-    maxHtfVisibles: sn.maxHtfVisibles, largoCisd: sn.largoCisd,
-    detectIntraHtf: sn.detectIntraHtf, intraPivotStrength: sn.intraPivotStrength, maxIntraVisibles: sn.maxIntraVisibles,
-    requireHtfFvg: sn.requireHtfFvg, reqFvgM15: sn.reqFvgM15, reqFvgH4: sn.reqFvgH4,
-    fvgMinPenetration: sn.fvgMinPenetration,
-    fvgM15: fvgData.m15, fvgH4: fvgData.h4, m15Fvgs, h4Fvgs,
-  }, fvgData.fetchedAt);
+  if (cfg) {
+    const { bullSetups, bearSetups, barStep } = snReplayCached(candles, cfg, {
+      mostrarAlcista: sn.mostrarAlcista, mostrarBajista: sn.mostrarBajista,
+      margenReclamo: sn.margenReclamo, maxSetupAge: sn.maxSetupAge,
+      maxHtfVisibles: sn.maxHtfVisibles, largoCisd: sn.largoCisd,
+      detectIntraHtf: sn.detectIntraHtf, intraPivotStrength: sn.intraPivotStrength, maxIntraVisibles: sn.maxIntraVisibles,
+      requireHtfFvg: sn.requireHtfFvg, reqFvgM15: sn.reqFvgM15, reqFvgH4: sn.reqFvgH4,
+      fvgMinPenetration: sn.fvgMinPenetration,
+      fvgM15: fvgData.m15, fvgH4: fvgData.h4, m15Fvgs, h4Fvgs,
+    }, fvgData.fetchedAt);
 
-  function draw(setups, isBull){
-    const sweepColor = isBull ? sn.colorSweepLow : sn.colorSweepHigh;
-    const cisdColor  = isBull ? sn.colorCisdBull : sn.colorCisdBear;
-    setups.forEach(s=>{
-      if (s.sweepStart!=null && s.sweepStart < candles.length){
-        const t1 = candles[s.sweepStart].time;
-        const t2 = t1 + (s.sweepEnd - s.sweepStart) * barStep;
-        wtLine(svg, t1, t2, s.setNivel, sweepColor, sn.anchoLineaSweep, s.pendingHtf?'2,2':null, 'Sniper');
-      }
-      if (sn.showCisdLine && s.anchor>=0 && s.anchor<candles.length){
-        const t1 = candles[s.anchor].time;
-        const t2 = t1 + sn.largoCisd*barStep;
-        const confirmed = s.cisdLevel!=null;
-        wtLine(svg, t1, t2, s.level, cisdColor, sn.anchoCisd, confirmed?null:'2,2', 'Sniper');
-        wtLabel(svg, t2, s.level, confirmed?'CISD':'CISD?', cisdColor, 'Sniper');
-      }
-    });
+    const draw = (setups, isBull) => {
+      const sweepColor = isBull ? sn.colorSweepLow : sn.colorSweepHigh;
+      const cisdColor  = isBull ? sn.colorCisdBull : sn.colorCisdBear;
+      setups.forEach(s=>{
+        if (s.sweepStart!=null && s.sweepStart < candles.length){
+          const t1 = candles[s.sweepStart].time;
+          const t2 = t1 + (s.sweepEnd - s.sweepStart) * barStep;
+          wtLine(svg, t1, t2, s.setNivel, sweepColor, sn.anchoLineaSweep, s.pendingHtf?'2,2':null, 'Sniper');
+        }
+        if (sn.showCisdLine && s.anchor>=0 && s.anchor<candles.length){
+          const t1 = candles[s.anchor].time;
+          const t2 = t1 + sn.largoCisd*barStep;
+          const confirmed = s.cisdLevel!=null;
+          wtLine(svg, t1, t2, s.level, cisdColor, sn.anchoCisd, confirmed?null:'2,2', 'Sniper');
+          wtLabel(svg, t2, s.level, confirmed?'CISD':'CISD?', cisdColor, 'Sniper');
+        }
+      });
+    };
+    draw(bullSetups, true);
+    draw(bearSetups, false);
+  } // TF sin HTF en el Pine original -> el sweep/CISD no corre, igual que en TV (el FVG arriba sí queda)
+
+  const calls = _wtRecordBuf;
+  _wtRecordBuf = null;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
+  _snCanvasDrawCache = { key: cacheKey, calls };
+  return calls;
+}
+function paintSniperCanvas(ctx){
+  if (!STATE.sniper.enabled || isIndicatorHidden('Sniper')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 5) return;
+  const lastTime = candles[candles.length-1].time;
+  _paintWtCallsToCanvas(ctx, _snCanvasComputeCalls(candles, lastTime));
+}
+class SniperCanvasPrimitive {
+  attached(param) { window._sniperCanvasRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._sniperCanvasRequestUpdate) delete window._sniperCanvasRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'top',
+      renderer: () => ({
+        draw: (target) => { if (STATE.sniper.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintSniperCanvas(ctx)); },
+        drawBackground: (target) => { if (!STATE.sniper.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintSniperCanvas(ctx)); },
+      }),
+    }];
   }
-  draw(bullSetups, true);
-  draw(bearSetups, false);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -15434,12 +15459,12 @@ function restoreIndicatorsAndTools(s){
   renderTfBar();
   setActiveTF(STATE.timeframe);
   renderIndList();
-  renderSniper();
   renderSweeps();
   renderFractalModel();
   renderRsi();
   if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
+  if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -16131,6 +16156,7 @@ function createMainSeries(){
   candleSeries.attachPrimitive(new ZentinelBehindDrawingsPrimitive());
   candleSeries.attachPrimitive(new WatchtowerCanvasPrimitive());
   candleSeries.attachPrimitive(new StatMap2CanvasPrimitive());
+  candleSeries.attachPrimitive(new SniperCanvasPrimitive());
   applyMainSeriesColors();
 }
 
@@ -16725,7 +16751,6 @@ function renderSeries(timeframe){
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
   renderRsi();
-  renderSniper();
   renderSweeps();
   renderFractalModel();
   renderTradeMarkers();
@@ -16767,7 +16792,6 @@ function updateFormingCandleLive(bar){
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
   renderRsi();
-  renderSniper();
   renderSweeps();
   renderFractalModel();
   renderTradeMarkers();
@@ -17457,21 +17481,20 @@ function _resyncChartLayout(){
   // el layout real.
   renderRsi();
   scrollToRealTimeReliably();
-  // El resize de arriba por sí solo NO corrige nada de Sniper/Sweeps ni de
-  // las líneas/manijas de los dibujos propios — esas cajas y líneas se
-  // dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN EL
-  // MOMENTO en que se llama a cada render*; si ese primer renderSeries()
-  // de loadChart corrió con el tamaño todavía mal (la razón de todo este
-  // resync), sus cajas quedaron calculadas con esas coordenadas viejas y
-  // se quedan ahí, gigantes/corridas, por más que el chart de velas de
-  // abajo ya esté bien — nada las vuelve a dibujar solas. Mismo combo que
-  // usa el ResizeObserver normal del chart (ver su .observe(container)
-  // más arriba) para este mismo caso, pero disparado a mano acá. Watchtower
-  // 2.0 y Stat Map 2 no lo necesitan: pintan vía Series Primitive, así que
-  // la librería los repinta solo como parte de su propio resize.
+  // El resize de arriba por sí solo NO corrige nada de Sweeps ni de las
+  // líneas/manijas de los dibujos propios — esas cajas y líneas se dibujan
+  // a mano (SVG) convirtiendo tiempo/precio a píxeles EN EL MOMENTO en que
+  // se llama a cada render*; si ese primer renderSeries() de loadChart
+  // corrió con el tamaño todavía mal (la razón de todo este resync), sus
+  // cajas quedaron calculadas con esas coordenadas viejas y se quedan ahí,
+  // gigantes/corridas, por más que el chart de velas de abajo ya esté
+  // bien — nada las vuelve a dibujar solas. Mismo combo que usa el
+  // ResizeObserver normal del chart (ver su .observe(container) más
+  // arriba) para este mismo caso, pero disparado a mano acá. Watchtower
+  // 2.0, Stat Map 2 y Sniper no lo necesitan: pintan vía Series Primitive,
+  // así que la librería los repinta solo como parte de su propio resize.
   clearSvgHighlights();
   if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
-  renderSniper();
   renderSweeps();
   renderFractalModel();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
