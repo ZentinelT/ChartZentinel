@@ -12915,7 +12915,7 @@ function paintWatchtowerCanvas(ctx){
   // CADA paint, cache-hit o no — igual que el reset de arriba, si no
   // quedaría pegado al último valor con candles/config cacheados.
   if (STATE.watchtower.bias) renderWtBias(byDate, dateKeys, lastTime);
-  _paintWtCallsToCanvas(ctx, calls);
+  _paintWtCallsToCanvas(ctx, calls, 'Watchtower 2.0');
 }
 // Traduce una lista de llamadas grabadas de wtRect/wtLine/wtLabel (ver el
 // wrapper de grabación más arriba) a comandos de canvas, recalculando la
@@ -12924,7 +12924,21 @@ function paintWatchtowerCanvas(ctx){
 // entre todos los indicadores migrados a canvas que usan estos 3 helpers
 // (Watchtower 2.0, Sniper...) — Stat Map 2 tiene el suyo propio porque usa
 // sm2Line/sm2Rect en vez de wtRect/wtLine.
-function _paintWtCallsToCanvas(ctx, calls){
+//
+// indName: registra las mismas hit regions (ver registerIndicatorHit) que
+// ya dejaban wtRect/wtLine/wtLabel en su versión SVG, para que el doble
+// click sobre un dibujo del indicador siga abriendo su panel de settings
+// — se perdía con la migración a canvas porque esos 3 helpers solo corren
+// de verdad contra un <svg> DESCARTABLE (ver _wtCanvasComputeCalls), cuyas
+// hit regions se recortan a propósito (quedarían con coordenadas de
+// cuando se armó el cache, no de la escala actual). Se pasa EXPLÍCITO en
+// vez de leerlo de los args grabados porque Watchtower 2.0 necesita
+// 'Watchtower 2.0', no el 'Watchtower' que wtRect/wtLine asumen por
+// default cuando quien las llama (renderWtKillzones y el resto) no pasa
+// ningún indName — no se les puede pedir que lo hagan sin tocarlas (son
+// compartidas con el Watchtower original).
+function _paintWtCallsToCanvas(ctx, calls, indName){
+  if (indName) window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!==indName);
   calls.forEach(([fn, args]) => {
     if (fn === _wtRectReal) {
       const [, t1, t2, top, bottom, fill, opacity, stroke] = args;
@@ -12945,6 +12959,7 @@ function _paintWtCallsToCanvas(ctx, calls){
         ctx.strokeRect(rx, ry, rw, rh);
         ctx.restore();
       }
+      if (indName) registerIndicatorHit(indName, {kind:'rect', x1:rx, y1:ry, x2:rx+rw, y2:ry+rh, tol:3});
     } else if (fn === _wtLineReal) {
       const [, t1, t2, y, color, width, dash] = args;
       const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
@@ -12955,6 +12970,9 @@ function _paintWtCallsToCanvas(ctx, calls){
       ctx.setLineDash(dash ? String(dash).split(',').map(Number) : []);
       ctx.beginPath(); ctx.moveTo(x1,yy); ctx.lineTo(x2,yy); ctx.stroke();
       ctx.restore();
+      // Mismo trazo invisible más ancho que wtLine en SVG, para que una
+      // línea de 1-2px no sea casi imposible de acertar con el mouse.
+      if (indName) registerIndicatorHit(indName, {kind:'line', x1, x2, y:yy, tol:8});
     } else if (fn === _wtLabelReal) {
       const [, t, y, text, color] = args;
       const x = chart.timeScale().timeToCoordinate(t), yy = candleSeries.priceToCoordinate(y);
@@ -12962,6 +12980,10 @@ function _paintWtCallsToCanvas(ctx, calls){
       ctx.save();
       ctx.fillStyle = color; ctx.font = "10px 'DM Mono',monospace"; ctx.textBaseline = 'middle';
       ctx.fillText(text, x+4, yy);
+      if (indName) {
+        const w = Math.max(40, text.length*6);
+        registerIndicatorHit(indName, {kind:'rect', x1:x, y1:yy-9, x2:x+w, y2:yy+9, tol:0});
+      }
       ctx.restore();
     }
   });
@@ -13723,7 +13745,7 @@ function paintSniperCanvas(ctx){
   const candles = window._lastCandles || [];
   if (candles.length < 5) return;
   const lastTime = candles[candles.length-1].time;
-  _paintWtCallsToCanvas(ctx, _snCanvasComputeCalls(candles, lastTime));
+  _paintWtCallsToCanvas(ctx, _snCanvasComputeCalls(candles, lastTime), 'Sniper');
 }
 class SniperCanvasPrimitive {
   attached(param) { window._sniperCanvasRequestUpdate = () => param.requestUpdate(); }
@@ -13803,7 +13825,7 @@ function paintSweepsCanvas(ctx){
   if (candles.length < 2) return;
   const barStep = candles[1].time - candles[0].time;
   const lastTime = candles[candles.length-1].time;
-  _paintWtCallsToCanvas(ctx, _sweepsCanvasComputeCalls(candles, barStep, lastTime));
+  _paintWtCallsToCanvas(ctx, _sweepsCanvasComputeCalls(candles, barStep, lastTime), 'Sweeps');
 }
 class SweepsCanvasPrimitive {
   attached(param) { window._sweepsCanvasRequestUpdate = () => param.requestUpdate(); }
@@ -14175,7 +14197,7 @@ function paintFractalModelCanvas(ctx){
   if (!STATE.fractalModel.enabled || isIndicatorHidden('Fractal Model')) return;
   const candles = window._lastCandles || [];
   if (candles.length < 20) return;
-  _paintWtCallsToCanvas(ctx, _fmCanvasComputeCalls(candles));
+  _paintWtCallsToCanvas(ctx, _fmCanvasComputeCalls(candles), 'Fractal Model');
 }
 class FractalModelCanvasPrimitive {
   attached(param) { window._fractalModelCanvasRequestUpdate = () => param.requestUpdate(); }
@@ -14461,6 +14483,11 @@ function paintStatMap2Canvas(ctx){
   if (chart.timeScale().timeToCoordinate(lastTime) === null) return;
   const barInterval = candles[1].time - candles[0].time;
   const calls = _sm2CanvasComputeCalls(candles, barInterval, lastTime);
+  // Mismas hit regions que ya dejaban sm2Line/sm2Rect/wtLabel en su versión
+  // SVG — ver el comentario largo en _paintWtCallsToCanvas sobre por qué
+  // hace falta repetirlas acá (el doble click para abrir settings se
+  // perdía con la migración a canvas).
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Stat Map 2');
   calls.forEach(([fn, args]) => {
     if (fn === _sm2LineReal) {
       const [, t1, t2, y, color, width, dash] = args;
@@ -14472,6 +14499,7 @@ function paintStatMap2Canvas(ctx){
       ctx.setLineDash(dash ? String(dash).split(',').map(Number) : []);
       ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke();
       ctx.restore();
+      registerIndicatorHit('Stat Map 2', {kind:'line', x1, x2, y:yy, tol:8});
     } else if (fn === _sm2RectReal) {
       const [, t1, t2, top, bottom, fill] = args;
       const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
@@ -14481,12 +14509,15 @@ function paintStatMap2Canvas(ctx){
       ctx.fillStyle = fill;
       ctx.fillRect(Math.min(x1,x2), Math.min(y1,y2), Math.max(1,Math.abs(x2-x1)), Math.max(1,Math.abs(y2-y1)));
       ctx.restore();
+      registerIndicatorHit('Stat Map 2', {kind:'rect', x1:Math.min(x1,x2), y1:Math.min(y1,y2), x2:Math.max(x1,x2), y2:Math.max(y1,y2), tol:3});
     } else if (fn === _wtLabelReal) {
       const [, t, y, text, color] = args;
       const x = chart.timeScale().timeToCoordinate(t), yy = candleSeries.priceToCoordinate(y);
       if (x==null||yy==null) return;
       ctx.save(); ctx.fillStyle = color; ctx.font = "10px 'DM Mono',monospace"; ctx.textBaseline = 'middle';
       ctx.fillText(text, x+4, yy); ctx.restore();
+      const w = Math.max(40, text.length*6);
+      registerIndicatorHit('Stat Map 2', {kind:'rect', x1:x, y1:yy-9, x2:x+w, y2:yy+9, tol:0});
     }
   });
 }
