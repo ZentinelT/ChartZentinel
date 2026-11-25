@@ -8900,7 +8900,17 @@ function initChart() {
     // el corrimiento real sin asumir la fórmula interna de la librería.
     const p0 = H > 0 ? candleSeries.coordinateToPrice(0) : null;
     const p1 = H > 0 ? candleSeries.coordinateToPrice(H) : null;
-    ps.applyOptions({ scaleMargins: { top, bottom } });
+    // autoScale:false — si queda prendido (default de la librería), cada
+    // tick nuevo que llega mientras se hace zoom (el chart sigue recibiendo
+    // precio en vivo) puede reacomodar el rango de precio por su cuenta,
+    // peleando con nuestros scaleMargins. El transform compuesto de abajo
+    // asume que SOLO nosotros tocamos la escala durante el gesto — si algo
+    // más la mueve sin que nos enteremos, el transform queda viejo y los
+    // dibujos se desenganchan de las velas (esto fue lo que hizo que el
+    // desfasaje empeorara en vez de arreglarse). Mismo apagado que ya hace
+    // la librería sola cuando el usuario arrastra el eje a mano (ver
+    // refreshChart, que lo reactiva después de un refresh).
+    ps.applyOptions({ scaleMargins: { top, bottom }, autoScale: false });
     if (p0 != null && p1 != null) {
       const y0 = candleSeries.priceToCoordinate(p0);
       const y1 = candleSeries.priceToCoordinate(p1);
