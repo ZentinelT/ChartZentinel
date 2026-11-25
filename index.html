@@ -5306,7 +5306,7 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
-  else if (name === 'Stat Map 2') renderStatMap2();
+  else if (name === 'Stat Map 2') { if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
   else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
 }
@@ -5363,7 +5363,8 @@ function setIndSettingsObject(name, obj){
     saveFractalModelState(); renderFractalModel();
   } else if (name === 'Stat Map 2') {
     STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, obj, { enabled: STATE.statMap2.enabled });
-    saveStatMap2State(); renderStatMap2();
+    saveStatMap2State();
+    if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
   } else if (name === 'RSI') {
     STATE.indicatorStyles['RSI'] = obj;
     saveIndicatorStylesState();
@@ -8052,7 +8053,7 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._statMap2Svg, window._drawingLayerSvg]
+  [window._sniperSvg, window._sweepsSvg, window._fractalModelSvg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
 // Doble click sobre CUALQUIER dibujo de un indicador custom abre su panel
@@ -8169,9 +8170,6 @@ class ZentinelBehindDrawingsPrimitive {
               drawBehindDrawingSvgParts(ctx, d);
               drawBehindDrawingText(ctx, d);
             });
-            if (STATE.statMap2 && STATE.statMap2.behindCandles) {
-              paintSvgLayerBehindCandles(ctx, window._statMap2Svg);
-            }
             if (STATE.sniper && STATE.sniper.behindCandles) {
               paintSvgLayerBehindCandles(ctx, window._sniperSvg);
             }
@@ -8807,9 +8805,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderSniper(); renderSweeps(); renderFractalModel(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -8885,7 +8883,6 @@ function initChart() {
   initSniperLayer();
   initSweepsLayer();
   initFractalModelLayer();
-  initStatMap2Layer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
   // ANTES corría en un requestAnimationFrame que se reprogramaba a sí mismo
@@ -11137,7 +11134,7 @@ function addIndicatorSeries(name) {
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
-    else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); renderStatMap2(); }
+    else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
     else if(name==='RSI'){ renderRsi(); }
     return;
   }
@@ -11824,7 +11821,7 @@ function applyIndSettingsForm() {
     s2.showLabels = g('sm2-show-labels').checked;
     s2.labelSide = g('sm2-label-side').value;
     saveStatMap2State();
-    renderStatMap2();
+    if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
   } else if (_indSettingsTarget === 'RSI') {
     const g = id => document.getElementById(id);
     const obLevel = Math.max(51, Math.min(100, Number(g('rsi-ob-level').value)||70));
@@ -11864,7 +11861,7 @@ function removeIndicator(name){
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
-    else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); renderStatMap2(); }
+    else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
     else if(name==='RSI'){ destroyRsiChart(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
@@ -13609,7 +13606,7 @@ function renderSniper(){
   const svg = window._sniperSvg;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sniper');
-  // Ídem renderStatMap2 — ver paintSvgLayerBehindCandles.
+  // Ídem renderSweeps/renderFractalModel — ver paintSvgLayerBehindCandles.
   svg.style.visibility = STATE.sniper.behindCandles ? 'hidden' : '';
   if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
   if (!STATE.sniper.enabled || isIndicatorHidden('Sniper')) return;
@@ -14086,18 +14083,9 @@ function smMonthKey(t){
 // ══════════════════════════════════════════════════════════
 //  STAT MAP 2 — Port del Pine "OHLC StatMap (Multi-Timeframe)"
 //  4 TFs configurables, proyección de N barras fija, cuantiles opcionales.
+//  Pintado en canvas (Series Primitive), ver StatMap2CanvasPrimitive más
+//  abajo — ya no tiene capa <svg> propia.
 // ══════════════════════════════════════════════════════════
-
-function initStatMap2Layer() {
-  const container = document.getElementById('chart-container');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-  window._statMap2Svg = svg;
-  function syncSize(){ syncOverlaySvgSize(svg, container); }
-  new ResizeObserver(syncSize).observe(container);
-  syncSize();
-}
 
 // Calcula la clave de bucket para un timestamp dado el TF seleccionado.
 // Para 1H/4H usa UTC fijo; 1D usa smDayKey (UTC midnight); 1W usa wtWeekKey;
@@ -14210,6 +14198,14 @@ function sm2Rect(svg, t1, t2, top, bottom, fill) {
   registerIndicatorHit('Stat Map 2', {kind:'rect', x1: Math.min(x1,x2), y1: Math.min(y1,y2), x2: Math.max(x1,x2), y2: Math.max(y1,y2), tol: 3});
 }
 
+// Grabación para Stat Map 2 Canvas (ver _sm2CanvasComputeCalls más abajo) —
+// mismo mecanismo y mismo buffer (_wtRecordBuf) que ya usan wtRect/wtLine/
+// wtLabel: sm2DrawSetup ya llama a wtLabel para las etiquetas, así que esa
+// parte queda grabada gratis; solo faltan sus propias sm2Line/sm2Rect.
+const _sm2LineReal = sm2Line, _sm2RectReal = sm2Rect;
+sm2Line = function(...a){ if (_wtRecordBuf) _wtRecordBuf.push([_sm2LineReal, a]); return _sm2LineReal(...a); };
+sm2Rect = function(...a){ if (_wtRecordBuf) _wtRecordBuf.push([_sm2RectReal, a]); return _sm2RectReal(...a); };
+
 // Dibuja los niveles de un setup. endTime: para el período en curso = lastTime + LEVEL_EXTEND_BARS * barInterval;
 // para períodos pasados = startTime del siguiente período (el setup termina donde empieza el siguiente).
 function sm2DrawSetup(svg, setup, endTime, opts) {
@@ -14263,25 +14259,24 @@ function sm2DrawSetup(svg, setup, endTime, opts) {
   }
 }
 
-function renderStatMap2() {
-  if (!window._statMap2Svg) return;
-  if (window._lastCandles && window._lastCandles.length) {
-    const lastT = window._lastCandles[window._lastCandles.length - 1].time;
-    if (chart.timeScale().timeToCoordinate(lastT) === null) return;
-  }
-  const svg = window._statMap2Svg;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  window._indicatorHitRegions = (window._indicatorHitRegions || []).filter(r => r.name !== 'Stat Map 2');
-  svg.style.visibility = STATE.statMap2.behindCandles ? 'hidden' : '';
-  if (window._behindPrimitiveRequestUpdate) window._behindPrimitiveRequestUpdate();
-  if (!STATE.statMap2.enabled || isIndicatorHidden('Stat Map 2')) return;
-  const candles = window._lastCandles || [];
-  if (candles.length < 2) return;
+// ══════════════════════════════════════════════════════════
+//  STAT MAP 2 — migrado a canvas (Series Primitive), misma arquitectura
+//  validada con Watchtower 2.0: pinta en el canvas de la librería en vez
+//  de un <svg> del DOM, así la librería lo repinta como parte de SU
+//  PROPIO paint (scaleMargins, pan, tick...) sin necesitar ningún loop
+//  manual de requestAnimationFrame para seguir el zoom vertical con la
+//  rueda. sm2BuildTfSetups/sm2DrawSetup NO se tocan — se reutilizan TAL
+//  CUAL, grabando sus llamadas a sm2Line/sm2Rect/wtLabel (ver el
+//  mecanismo de grabación justo arriba de sm2DrawSetup) contra un <svg>
+//  descartable para obtener QUÉ dibujar sin reimplementar la lógica.
+let _sm2CanvasScratchSvg = null;
+let _sm2CanvasDrawCache = null; // {key, calls}
+function _sm2CanvasComputeCalls(candles, barInterval, lastTime){
   const s2 = STATE.statMap2;
-  const barInterval = candles[1].time - candles[0].time;
-  const lastTime = candles[candles.length - 1].time;
+  const cacheKey = _candlesFingerprint(candles) + '|' + barInterval + '|' + JSON.stringify(s2);
+  if (_sm2CanvasDrawCache && _sm2CanvasDrawCache.key === cacheKey) return _sm2CanvasDrawCache.calls;
+  if (!_sm2CanvasScratchSvg) _sm2CanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
   const labelSide = s2.labelSide === 'left' ? 'left' : 'right';
-
   const levelOpts = {
     showManip: s2.showManip, showDist: s2.showDist, showMedian: s2.showMedian,
     showAvgHL: s2.showAvgHL, showShading: s2.showShading, showLabels: s2.showLabels, labelSide,
@@ -14290,7 +14285,8 @@ function renderStatMap2() {
     qDistLow: s2.quantileDistLow, qDistHigh: s2.quantileDistHigh,
     qColor: s2.quantileColor, qStyle: s2.quantileStyle, qWidth: s2.quantileWidth,
   };
-
+  const hrBefore = (window._indicatorHitRegions||[]).length;
+  _wtRecordBuf = [];
   for (let n = 1; n <= 4; n++) {
     const tfStr = s2[`tf${n}`];
     if (!tfStr || tfStr === 'None') continue;
@@ -14298,7 +14294,7 @@ function renderStatMap2() {
     const currentEndTime = lastTime + LEVEL_EXTEND_BARS * barInterval;
     setups.forEach((setup, i) => {
       const endTime = i < setups.length - 1 ? setups[i + 1].startTime : currentEndTime;
-      sm2DrawSetup(svg, setup, endTime, Object.assign({
+      sm2DrawSetup(_sm2CanvasScratchSvg, setup, endTime, Object.assign({
         openColor: s2[`tf${n}OpenColor`], openWidth: s2[`tf${n}OpenWidth`], openStyle: s2[`tf${n}OpenStyle`],
         manipColor: s2[`tf${n}ManipColor`], distColor: s2[`tf${n}DistColor`],
         avgHlColor: s2[`tf${n}AvgHlColor`], lineWidth: s2[`tf${n}LineWidth`],
@@ -14306,6 +14302,63 @@ function renderStatMap2() {
         labelPrefix: tfStr + ' ',
       }, levelOpts));
     });
+  }
+  const calls = _wtRecordBuf;
+  _wtRecordBuf = null;
+  while (_sm2CanvasScratchSvg.firstChild) _sm2CanvasScratchSvg.removeChild(_sm2CanvasScratchSvg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
+  _sm2CanvasDrawCache = { key: cacheKey, calls };
+  return calls;
+}
+function paintStatMap2Canvas(ctx){
+  if (!STATE.statMap2.enabled || isIndicatorHidden('Stat Map 2')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 2) return;
+  const lastTime = candles[candles.length - 1].time;
+  if (chart.timeScale().timeToCoordinate(lastTime) === null) return;
+  const barInterval = candles[1].time - candles[0].time;
+  const calls = _sm2CanvasComputeCalls(candles, barInterval, lastTime);
+  calls.forEach(([fn, args]) => {
+    if (fn === _sm2LineReal) {
+      const [, t1, t2, y, color, width, dash] = args;
+      const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+      const yy = candleSeries.priceToCoordinate(y);
+      if (x1==null||x2==null||yy==null) return;
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = width || 1;
+      ctx.setLineDash(dash ? String(dash).split(',').map(Number) : []);
+      ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke();
+      ctx.restore();
+    } else if (fn === _sm2RectReal) {
+      const [, t1, t2, top, bottom, fill] = args;
+      const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+      const y1 = candleSeries.priceToCoordinate(top), y2 = candleSeries.priceToCoordinate(bottom);
+      if (x1==null||x2==null||y1==null||y2==null) return;
+      ctx.save();
+      ctx.fillStyle = fill;
+      ctx.fillRect(Math.min(x1,x2), Math.min(y1,y2), Math.max(1,Math.abs(x2-x1)), Math.max(1,Math.abs(y2-y1)));
+      ctx.restore();
+    } else if (fn === _wtLabelReal) {
+      const [, t, y, text, color] = args;
+      const x = chart.timeScale().timeToCoordinate(t), yy = candleSeries.priceToCoordinate(y);
+      if (x==null||yy==null) return;
+      ctx.save(); ctx.fillStyle = color; ctx.font = "10px 'DM Mono',monospace"; ctx.textBaseline = 'middle';
+      ctx.fillText(text, x+4, yy); ctx.restore();
+    }
+  });
+}
+class StatMap2CanvasPrimitive {
+  attached(param) { window._statMap2CanvasRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._statMap2CanvasRequestUpdate) delete window._statMap2CanvasRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'top',
+      renderer: () => ({
+        draw: (target) => { if (STATE.statMap2.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintStatMap2Canvas(ctx)); },
+        drawBackground: (target) => { if (!STATE.statMap2.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintStatMap2Canvas(ctx)); },
+      }),
+    }];
   }
 }
 
@@ -15384,9 +15437,9 @@ function restoreIndicatorsAndTools(s){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap2();
   renderRsi();
   if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
+  if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -16076,7 +16129,8 @@ function createMainSeries(){
   else if (t === 'bars') candleSeries = chart.addBarSeries({ thinBars: false });
   else                   candleSeries = chart.addCandlestickSeries({}); // candles | hollow | heikin
   candleSeries.attachPrimitive(new ZentinelBehindDrawingsPrimitive());
-  candleSeries.attachPrimitive(new WatchtowerCanvasPrimitive()); // piloto, ver paintWatchtowerCanvas
+  candleSeries.attachPrimitive(new WatchtowerCanvasPrimitive());
+  candleSeries.attachPrimitive(new StatMap2CanvasPrimitive());
   applyMainSeriesColors();
 }
 
@@ -16674,7 +16728,6 @@ function renderSeries(timeframe){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap2();
   renderTradeMarkers();
   renderAlertLines();
 }
@@ -16717,7 +16770,6 @@ function updateFormingCandleLive(bar){
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap2();
   renderTradeMarkers();
 }
 
@@ -17415,14 +17467,13 @@ function _resyncChartLayout(){
   // abajo ya esté bien — nada las vuelve a dibujar solas. Mismo combo que
   // usa el ResizeObserver normal del chart (ver su .observe(container)
   // más arriba) para este mismo caso, pero disparado a mano acá. Watchtower
-  // 2.0 no lo necesita: pinta vía Series Primitive, así que la librería lo
-  // repinta solo como parte de su propio resize.
+  // 2.0 y Stat Map 2 no lo necesitan: pintan vía Series Primitive, así que
+  // la librería los repinta solo como parte de su propio resize.
   clearSvgHighlights();
   if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
   renderSniper();
   renderSweeps();
   renderFractalModel();
-  renderStatMap2();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
 
