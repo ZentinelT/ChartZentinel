@@ -126,13 +126,23 @@ string PositionToJson()
 {
    long nyTime = (long)PositionGetInteger(POSITION_TIME) - BROKER_TO_NY_SECONDS;
    string side = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY) ? "buy" : "sell";
+   string symbol = PositionGetString(POSITION_SYMBOL);
+   // $ por cada unidad de precio que se mueve, para 1.00 lote de ESTE
+   // símbolo (dato del contrato, no depende del precio actual) — así la
+   // app puede proyectar el $ de un SL/TP sin inventar una conversión
+   // propia. point_value = 0 si el bróker no publica tick_size/tick_value
+   // para el símbolo (la app cae a su propio valor manual en ese caso).
+   double tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tickSize   = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
+   double pointValue = (tickSize != 0.0) ? tickValue / tickSize : 0.0;
    return StringFormat(
       "{\"ticket\":%I64u,\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.2f,"
-      "\"price_open\":%.5f,\"sl\":%.5f,\"tp\":%.5f,\"profit\":%.2f,\"time\":%I64d}",
-      PositionGetInteger(POSITION_TICKET), PositionGetString(POSITION_SYMBOL), side,
+      "\"price_open\":%.5f,\"sl\":%.5f,\"tp\":%.5f,\"profit\":%.2f,\"time\":%I64d,"
+      "\"point_value\":%.6f}",
+      PositionGetInteger(POSITION_TICKET), symbol, side,
       PositionGetDouble(POSITION_VOLUME), PositionGetDouble(POSITION_PRICE_OPEN),
       PositionGetDouble(POSITION_SL), PositionGetDouble(POSITION_TP),
-      PositionGetDouble(POSITION_PROFIT), nyTime);
+      PositionGetDouble(POSITION_PROFIT), nyTime, pointValue);
 }
 
 void HandleOrderRequest(const string &lines[], int n, const string respFile)

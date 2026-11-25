@@ -18053,7 +18053,24 @@ function orderPnlValueHtml(t, levelPrice){
   if (mode === 'off' || levelPrice == null) return '';
   const sign = t.side === 'long' ? 1 : -1;
   const pts = (levelPrice - t.entry_price) * sign;
-  const n = mode === 'price' ? pts * t.volume * getTradesPointValue() : pts;
+  let n;
+  if (mode === 'price' && t.real && t.point_value != null) {
+    // Para una operación real, "Point Value" (td_point_value) es una
+    // aproximación manual que el usuario configura UNA vez para toda la
+    // app — no tiene por qué coincidir con el valor real de punto del
+    // símbolo/bróker (reportado: SL/TP con precio correcto pero $ que no
+    // matchea MT5). t.point_value viene directo del bróker (tick_value/
+    // tick_size del símbolo, ver PositionToJson en el EA) — $ por cada
+    // unidad de precio para 1.0 lote, dato FIJO del contrato. Antes se
+    // intentó derivarlo de t._liveProfit/precio-actual, pero eso liga el
+    // $ de un nivel FIJO (SL/TP) al precio que sigue moviéndose tick a
+    // tick mientras el profit real solo se refresca cada 3s (poll) —
+    // resultado: el monto bailaba solo sin que el nivel se moviera un
+    // centavo. Con el dato del contrato no hace falta el precio actual.
+    n = pts * t.volume * t.point_value;
+  } else {
+    n = mode === 'price' ? pts * t.volume * getTradesPointValue() : pts;
+  }
   const text = mode === 'price' ? fmtOrderMoney(n) : fmtOrderPts(pts);
   return `<span class="order-pos-badge-val ${n>=0?'pos':'neg'}">${text}</span>`;
 }
@@ -18154,8 +18171,9 @@ async function pollLiveTrades(){
       // sobre el cálculo propio (lastBar.close - entry) * volume * pointValue
       // cuando está disponible, más preciso para una operación real.
       t._liveProfit = p.profit;
-      if (t.stop_loss !== p.sl || t.take_profit !== p.tp || t.volume !== p.volume) {
+      if (t.stop_loss !== p.sl || t.take_profit !== p.tp || t.volume !== p.volume || t.point_value !== p.point_value) {
         t.stop_loss = p.sl > 0 ? p.sl : null; t.take_profit = p.tp > 0 ? p.tp : null; t.volume = p.volume;
+        if (p.point_value > 0) t.point_value = p.point_value;
       }
       changed = true;
       continue;
@@ -18244,6 +18262,7 @@ function syncTradeFromDrawing(d){
   t.stop_loss = newSl;
   t.take_profit = newTp;
   t.entry_price = d.p1.price;
+  t.sltp_set_time = getSimNow();
   saveOpenTrades(open);
   renderTradesCountBadge();
   renderTradesModalIfOpen();
@@ -18405,6 +18424,7 @@ async function confirmLiveTrade(d){
     source: 'live',
     real: true,
     ticket: p.ticket,
+    point_value: p.point_value > 0 ? p.point_value : null,
   };
   d.tradeId = trade.id;
   const open = getOpenTrades();
@@ -18444,6 +18464,7 @@ async function placeLiveMarketOrder(side, sl, tp){
     source: 'live',
     real: true,
     ticket: p.ticket,
+    point_value: p.point_value > 0 ? p.point_value : null,
   };
   const open = getOpenTrades();
   open.push(trade);
@@ -18838,6 +18859,7 @@ async function commitOrderLineDrag(sess){
     }
     if (sess.field === 'sl') t.stop_loss = sess.price;
     else if (sess.field === 'tp') t.take_profit = sess.price;
+    t.sltp_set_time = getSimNow();
     saveOpenTrades(open);
     renderTradesCountBadge(); // también refresca el panel de operar
     renderTradesModalIfOpen();
@@ -18905,7 +18927,18 @@ function checkOpenTradesAgainstBar(bar, formingLive){
     // sin detectar hasta que la vela cerraba de verdad y recién entonces
     // se usaba su high/low completo — "cierra cuando cierra la vela, no
     // cuando toca el nivel", reportado por el usuario.
-    const sameBucketAsOpen = formingLive && bar.time != null && t.open_time != null && t.open_time >= bar.time;
+    // Mismo riesgo de "mecha vieja" que open_time arriba, pero para cuando
+    // el SL/TP se tocó recién (drag de la línea o el modal de edición) en
+    // vez de cuando se abrió la operación: si la vela en formación ya había
+    // mechado hasta breakeven (o cerca del TP) ANTES de que el usuario
+    // moviera el stop ahí, comparar contra bar.high/low completo la cierra
+    // al instante, con una mecha que en los hechos pasó antes de que el
+    // stop estuviera en ese precio. Se toma el más reciente entre open_time
+    // y sltp_set_time como el punto a partir del cual el rango de esta vela
+    // sí es "real" para el nivel actual.
+    const effectiveSetTime = (t.sltp_set_time != null && (t.open_time == null || t.sltp_set_time > t.open_time))
+      ? t.sltp_set_time : t.open_time;
+    const sameBucketAsOpen = formingLive && bar.time != null && effectiveSetTime != null && effectiveSetTime >= bar.time;
     const hi = sameBucketAsOpen ? bar.close : bar.high;
     const lo = sameBucketAsOpen ? bar.close : bar.low;
     if (t.side === 'long') {
@@ -19107,6 +19140,7 @@ function _applyTradeEdit(id, slInput, tpInput){
   }
   t.stop_loss = newSl;
   t.take_profit = newTp;
+  t.sltp_set_time = getSimNow();
   saveOpenTrades(open);
   // Si había un dibujo apuntando a esta operación, llevarlo al mismo
   // nivel — para que no quede mostrando un SL/TP viejo en el chart.
