@@ -5304,7 +5304,7 @@ function toggleIndicatorVisibility(name){
   renderIndicatorChips();
   if (name === 'Watchtower 2.0') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
   else if (name === 'Sniper') { if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
-  else if (name === 'Sweeps') renderSweeps();
+  else if (name === 'Sweeps') { if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
   else if (name === 'Fractal Model') renderFractalModel();
   else if (name === 'Stat Map 2') { if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
   else if (name === 'RSI') renderRsi();
@@ -5358,7 +5358,8 @@ function setIndSettingsObject(name, obj){
     if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
   } else if (name === 'Sweeps') {
     STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, obj, { enabled: STATE.sweeps.enabled });
-    saveSweepsState(); renderSweeps();
+    saveSweepsState();
+    if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate();
   } else if (name === 'Fractal Model') {
     STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, obj, { enabled: STATE.fractalModel.enabled });
     saveFractalModelState(); renderFractalModel();
@@ -8054,7 +8055,7 @@ function syncOverlaySvgSize(svg, container){
 setInterval(() => {
   const clip = overlayClipPath();
   if (clip === 'none') return;
-  [window._sweepsSvg, window._fractalModelSvg, window._drawingLayerSvg]
+  [window._fractalModelSvg, window._drawingLayerSvg]
     .forEach(svg => { if (svg && svg.style.clipPath !== clip) svg.style.clipPath = clip; });
 }, 1000);
 // Doble click sobre CUALQUIER dibujo de un indicador custom abre su panel
@@ -8754,7 +8755,6 @@ function initChart() {
     chart.applyOptions({ width:container.clientWidth, height:container.clientHeight });
     clearSvgHighlights();
     if (selectedDrawingId && !window._dragSession) highlightSelectedSvg(selectedDrawingId);
-    renderSweeps();
     renderFractalModel();
     syncOverlayPositions();
   }
@@ -8782,7 +8782,6 @@ function initChart() {
     // pedido bastante antes (300 velas de margen) da tiempo a que la
     // respuesta ya esté lista cuando el usuario realmente llega al borde.
     if (range && range.from < 800) loadMoreHistory();
-    renderSweeps();
     renderFractalModel();
     syncOverlayPositions();
   });
@@ -8801,9 +8800,9 @@ function initChart() {
   // rato después de parar de scrollear. Por eso el loop también se prende
   // con 'wheel' y se apaga recién cuando no hubo más eventos en 150ms.
   let _wtDragRaf = null;
-  function _wtDragLoop(){ renderSweeps(); renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
+  function _wtDragLoop(){ renderFractalModel(); syncOverlayPositions(); _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
   function _wtStartLoop(){ if (!_wtDragRaf) _wtDragRaf = requestAnimationFrame(_wtDragLoop); }
-  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderSweeps(); renderFractalModel(); syncOverlayPositions(); } }
+  function _wtStopLoop(){ if (_wtDragRaf) { cancelAnimationFrame(_wtDragRaf); _wtDragRaf = null; renderFractalModel(); syncOverlayPositions(); } }
 
   let _wtMouseDown = false;
   container.addEventListener('mousedown', () => { _wtMouseDown = true; _wtStartLoop(); });
@@ -8876,7 +8875,6 @@ function initChart() {
     _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
   }, { capture:true, passive:false });
 
-  initSweepsLayer();
   initFractalModelLayer();
 
   // El badge y las etiquetas de los dibujos se re-posicionan acá — ESTO
@@ -11127,7 +11125,7 @@ function addIndicatorSeries(name) {
   if(def.custom){
     if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
-    else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
+    else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
     else if(name==='RSI'){ renderRsi(); }
@@ -11761,7 +11759,7 @@ function applyIndSettingsForm() {
     STATE.sweeps.diasLimite = Math.max(0, Math.min(30, Number(g('sw-dias').value)||0));
     STATE.sweeps.horasLimite = Math.max(0, Math.min(23, Number(g('sw-horas').value)||0));
     saveSweepsState();
-    renderSweeps();
+    if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate();
   } else if (_indSettingsTarget === 'Fractal Model') {
     const g = id => document.getElementById(id);
     STATE.fractalModel.biasFilter = g('fm-bias').value;
@@ -11854,7 +11852,7 @@ function removeIndicator(name){
   if(def && def.custom){
     if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
-    else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
+    else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
     else if(name==='RSI'){ destroyRsiChart(); }
@@ -12949,17 +12947,6 @@ class WatchtowerCanvasPrimitive {
 //  fakeout, pruning). El resultado final es el mismo que el streaming de
 //  TradingView, solo cambia CÓMO se llega a él.
 // ══════════════════════════════════════════════════════════
-function initSweepsLayer() {
-  const container = document.getElementById('chart-container');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:14;pointer-events:none;overflow:hidden;';
-  container.appendChild(svg);
-  window._sweepsSvg = svg;
-  function syncSize(){ syncOverlaySvgSize(svg, container); }
-  new ResizeObserver(syncSize).observe(container);
-  syncSize();
-}
-
 // Pine expone "color + transparencia" como un solo picker (input.color);
 // en HTML no existe ese control, así que lo separamos en dos inputs (hex +
 // % transparencia) y los componemos a un rgba() para pasarle a wtLine/wtRect.
@@ -13701,24 +13688,30 @@ class SniperCanvasPrimitive {
 //  i-1, así que un scan del historial ya cargado da el mismo resultado
 //  que el streaming bar-a-bar).
 // ══════════════════════════════════════════════════════════
-function renderSweeps(){
-  if (!window._sweepsSvg) return;
-  const svg = window._sweepsSvg;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  window._indicatorHitRegions = (window._indicatorHitRegions||[]).filter(r=>r.name!=='Sweeps');
-  if (!STATE.sweeps.enabled || isIndicatorHidden('Sweeps')) return;
-  const candles = window._lastCandles||[];
-  if (candles.length<2) return;
+// Migrado a canvas (Series Primitive) — misma arquitectura que Watchtower
+// 2.0/Stat Map 2/Sniper. Acá no había ningún cache previo (el scan es
+// barato, un par de comparaciones por vela), pero se mantiene el mismo
+// patrón de scratch <svg> + grabación para no reimplementar la detección
+// y para reusar _paintWtCallsToCanvas tal cual (wtLine es el único helper
+// que usa). Sweeps nunca tuvo "draw behind candles", así que su primitive
+// no necesita la rama drawBackground que sí tienen los otros.
+let _sweepsCanvasScratchSvg = null;
+let _sweepsCanvasDrawCache = null; // {key, calls}
+function _sweepsCanvasComputeCalls(candles, barStep, lastTime){
   const sw = STATE.sweeps;
-  const barStep = candles[1].time - candles[0].time;
+  const cacheKey = _candlesFingerprint(candles) + '|' + barStep + '|' + JSON.stringify(sw);
+  if (_sweepsCanvasDrawCache && _sweepsCanvasDrawCache.key === cacheKey) return _sweepsCanvasDrawCache.calls;
+  if (!_sweepsCanvasScratchSvg) _sweepsCanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
+  const svg = _sweepsCanvasScratchSvg;
+  const hrBefore = (window._indicatorHitRegions||[]).length;
+  _wtRecordBuf = [];
+
   // "Ahora" para el límite temporal: la última vela cargada, no el reloj
   // del navegador — candles[].time no es epoch real (vení shifteado a NY,
   // ver ZentinelBridge.mq5), así que compararlo contra Date.now() daría
   // un offset de horas. Mismo criterio que ya usan Watchtower/Sniper con
   // lastTime para "hasta dónde está vigente" un nivel.
-  const lastTime = candles[candles.length-1].time;
   const limiteTiempo = lastTime - ((sw.diasLimite*24 + sw.horasLimite) * 3600);
-
   for (let i=1; i<candles.length; i++){
     const prev = candles[i-1], cur = candles[i];
     if (cur.time < limiteTiempo) continue;
@@ -13731,6 +13724,34 @@ function renderSweeps(){
     if (sw.mostrarBajista && sweepDown){
       wtLine(svg, t1, t2, prev.low, sw.colorBajista, sw.anchoLinea, null, 'Sweeps');
     }
+  }
+
+  const calls = _wtRecordBuf;
+  _wtRecordBuf = null;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
+  _sweepsCanvasDrawCache = { key: cacheKey, calls };
+  return calls;
+}
+function paintSweepsCanvas(ctx){
+  if (!STATE.sweeps.enabled || isIndicatorHidden('Sweeps')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 2) return;
+  const barStep = candles[1].time - candles[0].time;
+  const lastTime = candles[candles.length-1].time;
+  _paintWtCallsToCanvas(ctx, _sweepsCanvasComputeCalls(candles, barStep, lastTime));
+}
+class SweepsCanvasPrimitive {
+  attached(param) { window._sweepsCanvasRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._sweepsCanvasRequestUpdate) delete window._sweepsCanvasRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'top',
+      renderer: () => ({
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintSweepsCanvas(ctx)); },
+      }),
+    }];
   }
 }
 
@@ -15459,12 +15480,12 @@ function restoreIndicatorsAndTools(s){
   renderTfBar();
   setActiveTF(STATE.timeframe);
   renderIndList();
-  renderSweeps();
   renderFractalModel();
   renderRsi();
   if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
   if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
+  if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -16157,6 +16178,7 @@ function createMainSeries(){
   candleSeries.attachPrimitive(new WatchtowerCanvasPrimitive());
   candleSeries.attachPrimitive(new StatMap2CanvasPrimitive());
   candleSeries.attachPrimitive(new SniperCanvasPrimitive());
+  candleSeries.attachPrimitive(new SweepsCanvasPrimitive());
   applyMainSeriesColors();
 }
 
@@ -16751,7 +16773,6 @@ function renderSeries(timeframe){
   volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)'})));
   refreshOverlays(candles);
   renderRsi();
-  renderSweeps();
   renderFractalModel();
   renderTradeMarkers();
   renderAlertLines();
@@ -16792,7 +16813,6 @@ function updateFormingCandleLive(bar){
   volumeSeries.update({ time:bar.time, value:bar.volume, color: bar.close>=bar.open?'rgba(38,166,154,.25)':'rgba(239,83,80,.2)' });
   refreshOverlays(window._lastCandles);
   renderRsi();
-  renderSweeps();
   renderFractalModel();
   renderTradeMarkers();
 }
@@ -17481,21 +17501,21 @@ function _resyncChartLayout(){
   // el layout real.
   renderRsi();
   scrollToRealTimeReliably();
-  // El resize de arriba por sí solo NO corrige nada de Sweeps ni de las
-  // líneas/manijas de los dibujos propios — esas cajas y líneas se dibujan
-  // a mano (SVG) convirtiendo tiempo/precio a píxeles EN EL MOMENTO en que
-  // se llama a cada render*; si ese primer renderSeries() de loadChart
-  // corrió con el tamaño todavía mal (la razón de todo este resync), sus
-  // cajas quedaron calculadas con esas coordenadas viejas y se quedan ahí,
-  // gigantes/corridas, por más que el chart de velas de abajo ya esté
-  // bien — nada las vuelve a dibujar solas. Mismo combo que usa el
-  // ResizeObserver normal del chart (ver su .observe(container) más
-  // arriba) para este mismo caso, pero disparado a mano acá. Watchtower
-  // 2.0, Stat Map 2 y Sniper no lo necesitan: pintan vía Series Primitive,
-  // así que la librería los repinta solo como parte de su propio resize.
+  // El resize de arriba por sí solo NO corrige nada de Fractal Model ni de
+  // las líneas/manijas de los dibujos propios — esas cajas y líneas se
+  // dibujan a mano (SVG) convirtiendo tiempo/precio a píxeles EN EL
+  // MOMENTO en que se llama a cada render*; si ese primer renderSeries()
+  // de loadChart corrió con el tamaño todavía mal (la razón de todo este
+  // resync), sus cajas quedaron calculadas con esas coordenadas viejas y
+  // se quedan ahí, gigantes/corridas, por más que el chart de velas de
+  // abajo ya esté bien — nada las vuelve a dibujar solas. Mismo combo que
+  // usa el ResizeObserver normal del chart (ver su .observe(container)
+  // más arriba) para este mismo caso, pero disparado a mano acá. Watchtower
+  // 2.0, Stat Map 2, Sniper y Sweeps no lo necesitan: pintan vía Series
+  // Primitive, así que la librería los repinta solo como parte de su
+  // propio resize.
   clearSvgHighlights();
   if (selectedDrawingId) highlightSelectedSvg(selectedDrawingId);
-  renderSweeps();
   renderFractalModel();
   if (window._syncOverlayPositions) window._syncOverlayPositions();
 }
