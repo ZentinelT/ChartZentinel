@@ -3878,6 +3878,18 @@ function renderLayoutGrid(n){
         trigger.classList.remove('active');
       }
     });
+    // El click de arriba NUNCA llega si el usuario clickea dentro de un
+    // panel: cada panel es un <iframe> (ver isGridShell()), y un click
+    // adentro de un iframe no burbujea al documento del shell — eventos de
+    // documentos distintos. Reportado por el usuario: el menú solo se
+    // cerraba volviendo a tocar el botón. 'blur' en window SÍ dispara apenas
+    // el foco pasa a un iframe (técnica estándar para detectar "se clickeó
+    // un iframe"), así que cubre justo el caso que el listener de 'click'
+    // de arriba no puede ver.
+    window.addEventListener('blur', () => {
+      popup.classList.remove('open');
+      trigger.classList.remove('active');
+    });
   })();
 
   headerRow.appendChild(bar);
