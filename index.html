@@ -8870,7 +8870,13 @@ function initChart() {
   let _vzoomM = 1, _vzoomC = 0; // transform acumulado del gesto en curso (identidad = sin transform)
   function _vzoomApplyTransform(){
     const t = (_vzoomM === 1 && _vzoomC === 0) ? '' : `matrix(1,0,0,${_vzoomM},0,${_vzoomC})`;
-    _VZOOM_HEAVY_LAYERS.forEach(k => { const el = window[k]; if (el) el.style.transform = t; });
+    // transform-origin de CSS es el CENTRO del elemento por defecto, no la
+    // esquina (0,0) — la matriz de más arriba está calculada asumiendo
+    // origen en (0,0) (misma convención que priceToCoordinate). Sin fijarlo
+    // acá el navegador aplica la escala/corrimiento alrededor del centro
+    // del panel, no del borde superior, y el resultado queda desplazado
+    // (esto fue lo que empeoró el desfasaje en vez de arreglarlo).
+    _VZOOM_HEAVY_LAYERS.forEach(k => { const el = window[k]; if (el) { el.style.transformOrigin = '0 0'; el.style.transform = t; } });
   }
   let _vzoomSettleTimer = null;
   function _vzoomSettle(){
