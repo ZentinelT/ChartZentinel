@@ -3442,7 +3442,7 @@ function renderLayoutGrid(n){
   // el shell, operando sobre el panel activo vía paneEval (ver
   // isGridShell()/_gridActiveFrame más abajo) — la grilla entera queda
   // tal cual está, nunca se toca.
-  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades','modal-confirm','modal-calendar']
+  const _sharedModalsHtml = ['modal-chart-settings','modal-save-as','modal-logo-crop','modal-trades','modal-confirm','modal-calendar','modal-indicators']
     .map(id => { const el = document.getElementById(id); return el ? el.outerHTML : ''; }).join('');
 
   document.body.innerHTML = '';
@@ -4072,6 +4072,19 @@ function renderLayoutGrid(n){
   // activo" ni la de paneEval.
   window._gridActiveFrame = () => iframeEls[activePane-1];
   window._gridPaneEval = paneEval;
+  // Para que applyIndicators() (compartida con el modo 1 gráfico), al
+  // correr en el shell, pueda propagar el cambio del panel activo a los
+  // demás cuando "Sync > Indicators" está prendido — mismo criterio que ya
+  // usa el relay de 'zentinel:paneIndicators' más arriba, pero disparado
+  // directo desde acá (el shell ya sabe cuál es el panel activo, no hace
+  // falta que ese panel avise por postMessage).
+  window._gridSyncIndicatorsToOthers = (indicators) => {
+    if (!syncConfig.indicators) return;
+    iframeEls.forEach((el, i) => {
+      if (i === activePane-1) return;
+      el.contentWindow.postMessage({ type:'zentinel:setIndicators', indicators }, '*');
+    });
+  };
   function renderShellWatchlist(){
     const el = shellSidebar.querySelector('#watchlist');
     if (!el) return;
@@ -4502,10 +4515,16 @@ function renderLayoutGrid(n){
   const gcBadge = gbar.querySelector('#api-badge');
   updateApiBadge(gcBadge, STATE.dataSource);
 
-  // Indicators — como Settings, siempre sobre el panel activo.
-  gbar.querySelector('#gc-indicators').addEventListener('click', ()=>{
-    iframeEls[activePane-1].contentWindow.postMessage({ type:'zentinel:openIndicators' }, '*');
-  });
+  // Indicators — como Settings, siempre sobre el panel activo. El modal
+  // vive ACÁ AFUERA, en el shell (ver _sharedModalsHtml al principio de
+  // esta función), igual que Settings/Trades — antes se le mandaba un
+  // postMessage al iframe activo para que ÉL abriera su propio modal_
+  // adentro, con el mismo problema que tenía Settings: quedaba encajonado
+  // en el tamaño de ESE panel en vez de centrado en toda la pantalla.
+  // openIndicatorModal/applyIndicators (compartidas con el modo 1 gráfico)
+  // ya saben detectar isGridShell() y operar sobre el panel activo vía
+  // paneEval.
+  gbar.querySelector('#gc-indicators').addEventListener('click', openIndicatorModal);
 
   // Dashboard — global, no depende de qué panel esté activo (las
   // operaciones del Dashboard son las mismas sin importar el panel).
@@ -11090,11 +11109,20 @@ const INDICATOR_DEFS = [
 ];
 
 function openIndicatorModal() {
+  // En el shell de la grilla (ver isGridShell()) no hay chart/STATE propios
+  // — el modal vive acá afuera, pero lo que hay que marcar como
+  // seleccionado es lo que YA tiene activo el panel activo, no esta
+  // instancia vacía del shell.
+  let activeIndicators = STATE.indicators;
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    if (f) { try { activeIndicators = JSON.parse(window._gridPaneEval(f, 'JSON.stringify(STATE.indicators)') || '[]'); } catch(e){} }
+  }
   const picker = document.getElementById('ind-picker');
   picker.innerHTML = '';
   INDICATOR_DEFS.forEach(def => {
     const row = document.createElement('div');
-    const sel = STATE.indicators.includes(def.name);
+    const sel = activeIndicators.includes(def.name);
     row.className = 'ind-pick-row'+(sel?' selected':'');
     row.innerHTML = `<div class="ind-dot" style="background:${def.color}"></div><div class="ind-pick-name">${def.name}</div><div class="ind-pick-desc">${def.desc}</div><div class="ind-pick-check">${sel?'✓':''}</div>`;
     row.addEventListener('click', ()=>{ row.classList.toggle('selected'); row.querySelector('.ind-pick-check').textContent=row.classList.contains('selected')?'✓':''; });
@@ -11103,31 +11131,53 @@ function openIndicatorModal() {
   openModal('modal-indicators');
 }
 
-function applyIndicators() {
-  const selected=[...document.querySelectorAll('.ind-pick-row.selected')].map(r=>r.querySelector('.ind-pick-name').textContent);
+// Núcleo de "aplicar la selección" — separado de applyIndicators() para
+// poder correrlo DENTRO del panel activo vía paneEval cuando el modal se
+// abrió desde el shell de la grilla (ahí este archivo entero sigue
+// cargado por igual en cada panel, así que la función ya existe ahí,
+// paneEval solo la llama).
+function applyIndicatorsList(selected) {
   STATE.indicators.forEach(name=>{
     if(selected.includes(name)) return;
     const def=INDICATOR_DEFS.find(d=>d.name===name);
     if(def && def.custom){
       if(name==='Watchtower 2.0'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
-      else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
-      else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
-      else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
-      else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); }
+      else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate(); }
+      else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
+      else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
+      else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
       else if(name==='RSI'){ destroyRsiChart(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
   });
   STATE.indicators=selected; saveState();
   selected.forEach(name=>addIndicatorSeries(name));
-  renderIndList(); closeModal('modal-indicators');
-  // Sync de indicadores entre paneles (si está prendido en el shell) — ver
-  // 'zentinel:setIndicators' en el listener de mensajes. No hace falta
-  // flag anti-eco acá: el receptor de ese mensaje nunca llama a
-  // applyIndicators(), así que no hay cómo que esto se dispare en bucle.
-  if (EMBED_MODE && PANE_ID) {
-    window.parent.postMessage({ type:'zentinel:paneIndicators', pane:PANE_ID, indicators: STATE.indicators }, '*');
+  renderIndList();
+}
+
+function applyIndicators() {
+  const selected=[...document.querySelectorAll('.ind-pick-row.selected')].map(r=>r.querySelector('.ind-pick-name').textContent);
+  if (isGridShell() && window._gridActiveFrame) {
+    const f = window._gridActiveFrame();
+    if (f) window._gridPaneEval(f, `applyIndicatorsList(${JSON.stringify(selected)});`);
+    // "Sync across panels > Indicators" (ver el popup del layout picker):
+    // igual que Settings, este modal siempre opera sobre el panel activo
+    // sin importar el selector Activo/Todos — pero si el sync de
+    // Indicators está prendido, el cambio SÍ se propaga a los demás,
+    // mismo criterio que cuando un panel cambia sus propios indicadores
+    // (ver 'zentinel:paneIndicators' en el listener de mensajes).
+    if (window._gridSyncIndicatorsToOthers) window._gridSyncIndicatorsToOthers(selected);
+  } else {
+    applyIndicatorsList(selected);
+    // Sync de indicadores entre paneles (si está prendido en el shell) —
+    // ver 'zentinel:setIndicators' en el listener de mensajes. No hace
+    // falta flag anti-eco acá: el receptor de ese mensaje nunca llama a
+    // applyIndicators(), así que no hay cómo que esto se dispare en bucle.
+    if (EMBED_MODE && PANE_ID) {
+      window.parent.postMessage({ type:'zentinel:paneIndicators', pane:PANE_ID, indicators: selected }, '*');
+    }
   }
+  closeModal('modal-indicators');
 }
 
 function addIndicatorSeries(name) {
@@ -17966,27 +18016,11 @@ window.addEventListener('message', (e) => {
     setActiveTF(STATE.timeframe);
     loadChart(STATE.symbol, STATE.timeframe);
   } else if (msg.type === 'zentinel:setIndicators' && Array.isArray(msg.indicators)) {
-    // Sync de indicadores (ver Sync en el popup de layout) — mismo patrón
-    // que applyIndicators() pero sin pasar por el modal: apaga los que ya
-    // no están en la lista nueva, prende los que faltan.
-    STATE.indicators.forEach(name=>{
-      if (msg.indicators.includes(name)) return;
-      const def=INDICATOR_DEFS.find(d=>d.name===name);
-      if(def && def.custom){
-        if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
-        else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
-        else if(name==='RSI'){ destroyRsiChart(); }
-      }
-      else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
-    });
-    STATE.indicators = [...msg.indicators];
-    saveState();
-    STATE.indicators.forEach(name=>addIndicatorSeries(name));
-    renderIndList();
+    // Sync de indicadores (ver Sync en el popup de layout) — mismo núcleo
+    // que usa applyIndicators(), sin pasar por el modal.
+    applyIndicatorsList(msg.indicators);
   } else if (msg.type === 'zentinel:refresh') {
     refreshChart();
-  } else if (msg.type === 'zentinel:openIndicators') {
-    openIndicatorModal();
   } else if (msg.type === 'zentinel:toggleOrders') {
     toggleOrdersPanel();
   } else if (msg.type === 'zentinel:startReplayPick') {
