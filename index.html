@@ -5249,6 +5249,14 @@ const STATE = {
     biasPosition:'Bottom Right', biasLookbackDays:1, biasThreshold:0.3,
     biasBullColor:'#26a69a', biasBearColor:'#ef5350',
   }, _wtSaved, { kz: _wtKz }),
+  // Prueba piloto: mismo cálculo de killzones+PDH/PDL que Watchtower (lee
+  // STATE.watchtower.kz/pdColor/etc, no tiene config propia a propósito —
+  // ver WatchtowerCanvasPrimitive) pero pintado en el canvas de la
+  // librería (Series Primitive) en vez de un SVG del DOM, para validar si
+  // eso resuelve el desfasaje reportado en zoom vertical rápido con
+  // indicadores pesados activos. Sin tocar Watchtower real: queda aparte,
+  // se puede prender/apagar independiente para comparar.
+  watchtowerCanvas: { enabled: false },
   sniper: Object.assign({}, SNIPER_DEFAULTS, JSON.parse(lsGet(lsKey('td_sniper')) || '{}')),
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   fractalModel: Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(lsGet(lsKey('td_fractal_model')) || '{}')),
@@ -5281,6 +5289,7 @@ const STATE = {
   workspaces: JSON.parse(lsGet('td_workspaces') || '{}'),
 };
 STATE.watchtower.enabled = STATE.indicators.includes('Watchtower');
+STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower Canvas');
 STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
@@ -5298,6 +5307,7 @@ function toggleIndicatorVisibility(name){
   saveHiddenIndicatorsState();
   renderIndicatorChips();
   if (name === 'Watchtower') renderWatchtower();
+  else if (name === 'Watchtower Canvas') { if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
   else if (name === 'Sniper') renderSniper();
   else if (name === 'Sweeps') renderSweeps();
   else if (name === 'Fractal Model') renderFractalModel();
@@ -11094,6 +11104,7 @@ const INDICATOR_DEFS = [
   { name:'VWAP',    desc:'Volume Weighted Avg', color:'#c9a84c', calc:d=>vwap(d)    },
   { name:'RSI', desc:'Relative Strength Index (own pane, 0-100)', color:'#c9a84c', custom:true },
   { name:'Watchtower', desc:'Killzones, PD/PW levels, MNO, ORG, bias (ICT)', color:'#c9a84c', custom:true },
+  { name:'Watchtower Canvas', desc:'Piloto: killzones+PDH/PDL de Watchtower pintados en canvas (Series Primitive) en vez de SVG, para probar si así no atrasa durante zoom vertical rápido', color:'#6bd4a0', custom:true },
   { name:'Sniper', desc:'HTF Sweep + CISD (ICT Zentinel Sniper)', color:'#3d8bfd', custom:true },
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
@@ -11121,6 +11132,7 @@ function applyIndicators() {
     const def=INDICATOR_DEFS.find(d=>d.name===name);
     if(def && def.custom){
       if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); }
+      else if(name==='Watchtower Canvas'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
       else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); }
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); }
@@ -11145,6 +11157,7 @@ function addIndicatorSeries(name) {
   const def=INDICATOR_DEFS.find(d=>d.name===name); if(!def)return;
   if(def.custom){
     if(name==='Watchtower'){ STATE.watchtower.enabled=true; saveWatchtowerState(); renderWatchtower(); }
+    else if(name==='Watchtower Canvas'){ STATE.watchtowerCanvas.enabled=true; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=true; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); renderFractalModel(); }
@@ -11870,6 +11883,7 @@ function removeIndicator(name){
   const def=INDICATOR_DEFS.find(d=>d.name===name);
   if(def && def.custom){
     if(name==='Watchtower'){ STATE.watchtower.enabled=false; saveWatchtowerState(); renderWatchtower(); }
+    else if(name==='Watchtower Canvas'){ STATE.watchtowerCanvas.enabled=false; if(window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate(); }
     else if(name==='Sniper'){ STATE.sniper.enabled=false; saveSniperState(); renderSniper(); }
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); renderSweeps(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); renderFractalModel(); }
@@ -12867,6 +12881,108 @@ function renderWatchtower(){
   // arriba) y su costo ya es insignificante (~0.1ms) — se recalcula
   // siempre, cache-hit o no.
   if(wt.bias) renderWtBias(byDate, dateKeys, lastTime);
+}
+
+// ══════════════════════════════════════════════════════════
+//  WATCHTOWER CANVAS — prueba piloto, ver STATE.watchtowerCanvas más
+//  arriba. Mismo cálculo de killzones+PDH/PDL que Watchtower real
+//  (reutiliza renderWtKillzones/renderWtPrevDay TAL CUAL, sin tocarlas —
+//  cero riesgo para el Watchtower que ya funciona), pero en vez de
+//  dibujar en un <svg> del DOM, se pinta en el canvas de la librería vía
+//  un Series Primitive (mismo mecanismo que ya usa
+//  ZentinelBehindDrawingsPrimitive más arriba para "enviar detrás de las
+//  velas"). La diferencia clave: la librería llama a este draw() como
+//  parte de SU PROPIO repintado (cada cambio de scaleMargins, pan, tick
+//  nuevo...), siempre en el mismo paint que las velas — no hace falta
+//  ningún loop manual de requestAnimationFrame como el que usa el
+//  Watchtower SVG (_wtDragLoop) para "seguir" el zoom vertical con la
+//  rueda. Si esto resuelve el desfasaje reportado, el camino sería migrar
+//  Watchtower (y después Sniper/Sweeps/Fractal Model/Stat Map 2, que
+//  comparten las mismas wtRect/wtLine/wtLabel) a esta arquitectura.
+//
+// Para obtener QUÉ dibujar sin reimplementar la lógica ICT: se llama a
+// renderWtKillzones/renderWtPrevDay pasándoles un <svg> DESCARTABLE (nunca
+// se agrega al documento) mientras _wtRecordBuf está activo — el mismo
+// mecanismo de grabación que ya usa el cache de renderWatchtower. Eso da
+// la lista de llamadas wtRect/wtLine/wtLabel con sus argumentos REALES de
+// precio/tiempo; acá no se reproducen esas llamadas (eso dibujaría SVG de
+// nuevo) sino que se traducen a comandos de canvas, recalculando la
+// posición en pantalla en cada pintado — igual de exacto que el SVG,
+// nunca una aproximación.
+let _wtCanvasScratchSvg = null;
+let _wtCanvasDrawCache = null; // {key, calls}
+function _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep){
+  const cacheKey = _candlesFingerprint(candles) + '|' + barStep + '|' + JSON.stringify(STATE.watchtower);
+  if (_wtCanvasDrawCache && _wtCanvasDrawCache.key === cacheKey) return _wtCanvasDrawCache.calls;
+  if (!_wtCanvasScratchSvg) _wtCanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
+  // renderWtKillzones/renderWtPrevDay llaman a wtRect/wtLine sin pasar
+  // indName -> quedan tageadas 'Watchtower' (su default) en
+  // registerIndicatorHit, aunque el Watchtower real esté apagado. Como acá
+  // no nos interesa esa región de hit-test (la pinta el canvas, no hay SVG
+  // clickeable), se recorta lo que se haya agregado durante este cálculo.
+  const hrBefore = (window._indicatorHitRegions||[]).length;
+  _wtRecordBuf = [];
+  renderWtKillzones(_wtCanvasScratchSvg, byDate, dateKeys, barStep);
+  renderWtPrevDay(_wtCanvasScratchSvg, byDate, dateKeys, lastTime, barStep);
+  const calls = _wtRecordBuf;
+  _wtRecordBuf = null;
+  while (_wtCanvasScratchSvg.firstChild) _wtCanvasScratchSvg.removeChild(_wtCanvasScratchSvg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
+  _wtCanvasDrawCache = { key: cacheKey, calls };
+  return calls;
+}
+function paintWatchtowerCanvas(ctx){
+  if (!STATE.watchtowerCanvas.enabled || isIndicatorHidden('Watchtower Canvas')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 2) return;
+  const barStep = tfToSeconds(STATE.timeframe);
+  const lastTime = candles[candles.length-1].time;
+  const { byDate, dateKeys } = wtGroupByDayCached(candles);
+  const calls = _wtCanvasComputeCalls(candles, byDate, dateKeys, lastTime, barStep);
+  calls.forEach(([fn, args]) => {
+    if (fn === _wtRectReal) {
+      const [, t1, t2, top, bottom, fill, opacity] = args;
+      const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+      const y1 = candleSeries.priceToCoordinate(top), y2 = candleSeries.priceToCoordinate(bottom);
+      if (x1==null||x2==null||y1==null||y2==null) return;
+      if (fill && fill !== 'none') {
+        ctx.save(); ctx.globalAlpha = opacity ?? 1; ctx.fillStyle = fill;
+        ctx.fillRect(Math.min(x1,x2), Math.min(y1,y2), Math.max(1,Math.abs(x2-x1)), Math.max(1,Math.abs(y2-y1)));
+        ctx.restore();
+      }
+    } else if (fn === _wtLineReal) {
+      const [, t1, t2, y, color, width, dash] = args;
+      const x1 = chart.timeScale().timeToCoordinate(t1), x2 = chart.timeScale().timeToCoordinate(t2);
+      const yy = candleSeries.priceToCoordinate(y);
+      if (x1==null||x2==null||yy==null) return;
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = width||1;
+      ctx.setLineDash(dash ? String(dash).split(',').map(Number) : []);
+      ctx.beginPath(); ctx.moveTo(x1,yy); ctx.lineTo(x2,yy); ctx.stroke();
+      ctx.restore();
+    } else if (fn === _wtLabelReal) {
+      const [, t, y, text, color] = args;
+      const x = chart.timeScale().timeToCoordinate(t), yy = candleSeries.priceToCoordinate(y);
+      if (x==null||yy==null) return;
+      ctx.save();
+      ctx.fillStyle = color; ctx.font = "10px 'DM Mono',monospace"; ctx.textBaseline = 'middle';
+      ctx.fillText(text, x+4, yy);
+      ctx.restore();
+    }
+  });
+}
+class WatchtowerCanvasPrimitive {
+  attached(param) { window._watchtowerCanvasRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._watchtowerCanvasRequestUpdate) delete window._watchtowerCanvasRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'top',
+      renderer: () => ({
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx)); },
+      }),
+    }];
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -15302,6 +15418,7 @@ function restoreIndicatorsAndTools(s){
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
   STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
+  STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower Canvas');
   if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
   saveIndicatorStylesState();
@@ -15322,6 +15439,7 @@ function restoreIndicatorsAndTools(s){
   renderFractalModel();
   renderStatMap2();
   renderRsi();
+  if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -16011,6 +16129,7 @@ function createMainSeries(){
   else if (t === 'bars') candleSeries = chart.addBarSeries({ thinBars: false });
   else                   candleSeries = chart.addCandlestickSeries({}); // candles | hollow | heikin
   candleSeries.attachPrimitive(new ZentinelBehindDrawingsPrimitive());
+  candleSeries.attachPrimitive(new WatchtowerCanvasPrimitive()); // piloto, ver paintWatchtowerCanvas
   applyMainSeriesColors();
 }
 
