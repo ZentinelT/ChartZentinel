@@ -8852,77 +8852,19 @@ function initChart() {
   //
   // Reportado por el usuario: con Watchtower (o Sniper/Sweeps/Fractal
   // Model/StatMap2) activos, scrolleando RÁPIDO las velas seguían el
-  // cursor 1:1 pero esos indicadores se quedaban atrás, con retardo
-  // visible. Causa: _wtDragLoop (de más arriba) hace un render COMPLETO
-  // de esos indicadores en cada frame — recalculan TODO desde cero
-  // (Sniper hasta re-simula el historial entero, ver su comentario) — y
-  // eso no llega a terminar en los 16ms de un frame si hay muchos niveles/
-  // cajas, así que se atrasan sin importar cuántos frames corra el loop.
-  // El zoom de margen en sí (scaleMargins) es puramente afín en Y, así
-  // que mientras dura el gesto NO recalculamos esos indicadores: les
-  // aplicamos un CSS transform (matrix) barato que reproduce EXACTO el
-  // mismo desplazamiento/escala que sufrió el panel (medido con dos
-  // coordenadas de referencia vía priceToCoordinate, no adivinado), y
-  // recién al soltar el scroll (_vzoomSettle, mismo debounce de 150ms que
-  // ya usa el resto del drag/wheel) se hace el render real y se saca el
-  // transform.
-  const _VZOOM_HEAVY_LAYERS = ['_watchtowerSvg','_sniperSvg','_sweepsSvg','_fractalModelSvg','_statMap2Svg'];
-  let _vzoomM = 1, _vzoomC = 0; // transform acumulado del gesto en curso (identidad = sin transform)
-  function _vzoomApplyTransform(){
-    const t = (_vzoomM === 1 && _vzoomC === 0) ? '' : `matrix(1,0,0,${_vzoomM},0,${_vzoomC})`;
-    // transform-origin de CSS es el CENTRO del elemento por defecto, no la
-    // esquina (0,0) — la matriz de más arriba está calculada asumiendo
-    // origen en (0,0) (misma convención que priceToCoordinate). Sin fijarlo
-    // acá el navegador aplica la escala/corrimiento alrededor del centro
-    // del panel, no del borde superior, y el resultado queda desplazado
-    // (esto fue lo que empeoró el desfasaje en vez de arreglarlo).
-    _VZOOM_HEAVY_LAYERS.forEach(k => { const el = window[k]; if (el) { el.style.transformOrigin = '0 0'; el.style.transform = t; } });
-  }
-  let _vzoomSettleTimer = null;
-  function _vzoomSettle(){
-    _vzoomSettleTimer = null;
-    _vzoomM = 1; _vzoomC = 0;
-    _VZOOM_HEAVY_LAYERS.forEach(k => { const el = window[k]; if (el) el.style.transform = ''; });
-    renderWatchtower(); renderSniper(); renderSweeps(); renderFractalModel(); renderStatMap2(); syncOverlayPositions();
-  }
-  let _vzoomPendingStep = 0, _vzoomRafId = null;
-  function _vzoomApplyFrame(){
-    _vzoomRafId = null;
-    if (_vzoomPendingStep === 0) return;
-    const step = _vzoomPendingStep; _vzoomPendingStep = 0;
-    const H = container.clientHeight;
-    const ps = chart.priceScale('right');
-    const cur = ps.options().scaleMargins || { top:0.1, bottom:0.1 };
-    const top = Math.min(0.45, Math.max(0.01, cur.top + step));
-    const bottom = Math.min(0.45, Math.max(0.01, cur.bottom + step));
-    // Dos precios de referencia (bordes superior/inferior del panel ANTES
-    // del cambio) — comparar sus coordenadas antes/después da la escala y
-    // el corrimiento real sin asumir la fórmula interna de la librería.
-    const p0 = H > 0 ? candleSeries.coordinateToPrice(0) : null;
-    const p1 = H > 0 ? candleSeries.coordinateToPrice(H) : null;
-    // autoScale:false — si queda prendido (default de la librería), cada
-    // tick nuevo que llega mientras se hace zoom (el chart sigue recibiendo
-    // precio en vivo) puede reacomodar el rango de precio por su cuenta,
-    // peleando con nuestros scaleMargins. El transform compuesto de abajo
-    // asume que SOLO nosotros tocamos la escala durante el gesto — si algo
-    // más la mueve sin que nos enteremos, el transform queda viejo y los
-    // dibujos se desenganchan de las velas (esto fue lo que hizo que el
-    // desfasaje empeorara en vez de arreglarse). Mismo apagado que ya hace
-    // la librería sola cuando el usuario arrastra el eje a mano (ver
-    // refreshChart, que lo reactiva después de un refresh).
-    ps.applyOptions({ scaleMargins: { top, bottom }, autoScale: false });
-    if (p0 != null && p1 != null) {
-      const y0 = candleSeries.priceToCoordinate(p0);
-      const y1 = candleSeries.priceToCoordinate(p1);
-      if (y0 != null && y1 != null && H > 0) {
-        const m2 = (y1 - y0) / H, c2 = y0;
-        _vzoomM = m2 * _vzoomM;
-        _vzoomC = m2 * _vzoomC + c2;
-        _vzoomApplyTransform();
-      }
-    }
-    syncOverlayPositions();
-  }
+  // cursor 1:1 pero esos indicadores se quedaban atrás. Se probó (dos
+  // veces, ambas empeoraron el problema en vez de arreglarlo) reemplazar
+  // el render real por un CSS transform barato calculado a partir de
+  // scaleMargins durante el gesto — primero por un bug de transform-origin,
+  // después porque autoScale (prendido por default, y el chart recibe
+  // precio en vivo todo el tiempo) podía recalcular el rango de precio por
+  // su cuenta en paralelo sin que el transform se enterara, desincronizándolo
+  // de la escala real. Se abandonó ese camino: acá se usa el MISMO
+  // mecanismo ya probado que el arrastre del eje con mouse (_wtStartLoop/
+  // _wtStopLoop, más arriba) — render real en cada frame del gesto, sin
+  // atajos. Si la lentitud de Sniper/Watchtower con muchos niveles sigue
+  // siendo un problema real, hay que optimizar esos renders en sí, no
+  // esconderlo con un transform que puede desincronizarse.
   container.addEventListener('wheel', (e) => {
     if (!STATE.chartSettings.verticalScrollZoom) return;
     const scaleW = chart.priceScale('right').width() || 0;
@@ -8935,10 +8877,19 @@ function initChart() {
     if (localX < boundary) return; // scroll fuera del eje de precio: comportamiento normal
     e.preventDefault();
     e.stopPropagation(); // corta acá: nunca llega al listener nativo de la librería
-    _vzoomPendingStep += (e.deltaY < 0 ? -0.01 : 0.01);
-    if (_vzoomRafId == null) _vzoomRafId = requestAnimationFrame(_vzoomApplyFrame);
-    clearTimeout(_vzoomSettleTimer);
-    _vzoomSettleTimer = setTimeout(_vzoomSettle, 150);
+    const ps = chart.priceScale('right');
+    const cur = ps.options().scaleMargins || { top:0.1, bottom:0.1 };
+    const step = e.deltaY < 0 ? -0.01 : 0.01;
+    const top = Math.min(0.45, Math.max(0.01, cur.top + step));
+    const bottom = Math.min(0.45, Math.max(0.01, cur.bottom + step));
+    // autoScale:false — si no, un tick de precio en vivo llegando a mitad
+    // del gesto reacomoda el rango por su cuenta, igual que ya hace la
+    // librería sola cuando el usuario arrastra el eje a mano (ver
+    // refreshChart, que lo reactiva después de un refresh).
+    ps.applyOptions({ scaleMargins: { top, bottom }, autoScale: false });
+    _wtStartLoop();
+    clearTimeout(_wtWheelTimer);
+    _wtWheelTimer = setTimeout(() => { _wtWheelTimer = null; if (!_wtMouseDown) _wtStopLoop(); }, 150);
   }, { capture:true, passive:false });
 
   initWatchtowerLayer();
