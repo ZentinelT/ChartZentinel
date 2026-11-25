@@ -12399,6 +12399,20 @@ function wtLabel(svg,t,y,text,color,indName){
   registerIndicatorHit(indName, {kind:'rect', x1:boxX, y1:yy-9, x2:boxX+w, y2:yy+9, tol:0});
 }
 
+// Graba (sin cambiar nada de cómo dibujan) cada llamada a wtRect/wtLine/
+// wtLabel mientras _wtRecordBuf esté activo — ver el cache de
+// renderWatchtower más abajo. Reasignar el nombre de función en vez de
+// tocar cada call site (45 en todo el archivo, entre Watchtower/Sniper/
+// Sweeps/Fractal Model/Stat Map 2) para no arriesgar romper ninguno de
+// esos renders: siguen llamando a wtRect/wtLine/wtLabel exactamente
+// igual, esta capa es transparente cuando no hay grabación activa
+// (_wtRecordBuf===null, el caso normal).
+let _wtRecordBuf = null;
+const _wtRectReal = wtRect, _wtLineReal = wtLine, _wtLabelReal = wtLabel;
+wtRect = function(...a){ if (_wtRecordBuf) _wtRecordBuf.push([_wtRectReal, a]); return _wtRectReal(...a); };
+wtLine = function(...a){ if (_wtRecordBuf) _wtRecordBuf.push([_wtLineReal, a]); return _wtLineReal(...a); };
+wtLabel = function(...a){ if (_wtRecordBuf) _wtRecordBuf.push([_wtLabelReal, a]); return _wtLabelReal(...a); };
+
 function wtGroupByDay(candles){
   const byDate=new Map();
   candles.forEach(c=>{ const dk=wtDayKey(c.time); if(!byDate.has(dk))byDate.set(dk,[]); byDate.get(dk).push(c); });
@@ -12789,6 +12803,7 @@ function renderWtBias(byDate, dateKeys, lastTime){
   }
 }
 
+let _wtDrawCache = null; // {key, calls} — ver cache dentro de renderWatchtower
 function renderWatchtower(){
   if(!window._watchtowerSvg) return;
   const svg=window._watchtowerSvg;
@@ -12820,12 +12835,38 @@ function renderWatchtower(){
   const lastTime=candles[candles.length-1].time;
   const { byDate, dateKeys } = wtGroupByDayCached(candles);
 
-  if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
-  if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep);
-  if(wt.pwLevels)  renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep);
-  if(wt.mno)       renderWtMNO(svg, byDate, dateKeys, lastTime, barStep);
-  if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
-  if(wt.bias)      renderWtBias(byDate, dateKeys, lastTime);
+  // renderWtKillzones/PrevDay/PrevWeek/MNO/ORG recorren TODAS las velas del
+  // historial (agrupar por día, filtrar por sesión, armar pivots) para
+  // decidir QUÉ cajas/líneas van — eso no cambia mientras no cambien las
+  // velas ni la config de Watchtower, solo cambia la ESCALA de precio con
+  // la que se dibujan. Medido: esa lógica sola tarda 5-10ms (por encima del
+  // presupuesto de 16ms de un frame si hay otro indicador pesado activo a
+  // la vez) — eso es lo que reportó el usuario como "los dibujos van más
+  // lento que las velas" durante zoom vertical rápido con la rueda (corre
+  // en cada frame del gesto, ver _wtDragLoop). Se cachea la LISTA de
+  // llamadas a wtRect/wtLine/wtLabel (grabadas en su valor real de precio/
+  // tiempo, no en píxeles) por huella de velas+config de Watchtower; en un
+  // cache-hit se reproducen esas llamadas directo — cada una recalcula su
+  // posición en pantalla con priceToCoordinate/timeToCoordinate real, así
+  // que el resultado sigue siendo exacto para la escala ACTUAL, nunca una
+  // aproximación. Las funciones renderWt* de abajo no se tocan.
+  const cacheKey = _candlesFingerprint(candles) + '|' + barStep + '|' + JSON.stringify(wt);
+  if (_wtDrawCache && _wtDrawCache.key === cacheKey) {
+    _wtDrawCache.calls.forEach(([fn,args]) => fn(...args));
+  } else {
+    _wtRecordBuf = [];
+    if(wt.killzones) renderWtKillzones(svg, byDate, dateKeys, barStep);
+    if(wt.pdLevels)  renderWtPrevDay(svg, byDate, dateKeys, lastTime, barStep);
+    if(wt.pwLevels)  renderWtPrevWeek(svg, candles, dateKeys, lastTime, barStep);
+    if(wt.mno)       renderWtMNO(svg, byDate, dateKeys, lastTime, barStep);
+    if(wt.org)       renderWtORG(svg, byDate, dateKeys, lastTime, barStep);
+    _wtDrawCache = { key: cacheKey, calls: _wtRecordBuf };
+    _wtRecordBuf = null;
+  }
+  // El badge de bias es HTML aparte (no SVG, no entra en el cache de
+  // arriba) y su costo ya es insignificante (~0.1ms) — se recalcula
+  // siempre, cache-hit o no.
+  if(wt.bias) renderWtBias(byDate, dateKeys, lastTime);
 }
 
 // ══════════════════════════════════════════════════════════
