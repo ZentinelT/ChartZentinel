@@ -12972,23 +12972,23 @@ class WatchtowerCanvasPrimitive {
   updateAllViews() {}
   paneViews() {
     return [{
-      zOrder: () => 'top',
+      // "Draw behind candles" (STATE.watchtower.behindCandles) NO se logra
+      // alternando entre draw()/drawBackground() con zOrder fijo — probado
+      // a mano: el motor de la librería compone cada pane en DOS <canvas>
+      // apilados (uno con la grilla+velas, otro "de arriba" para crosshair/
+      // overlays), y es el valor de zOrder — no cuál de los dos hooks se
+      // use — el que decide a cuál de esos dos canvas va a parar TODO lo
+      // que pinte este primitive: zOrder:'top' → el canvas de arriba
+      // (siempre encima de las velas, sea draw() o drawBackground() el que
+      // pinte); zOrder:'bottom' → el canvas de fondo, pintado ANTES que el
+      // cuerpo de la vela (ahí sí queda detrás, pero SIEMPRE, sin importar
+      // qué hook se use). Por eso zOrder tiene que ser dinámico según el
+      // toggle, con un solo hook (draw) hace falta — drawBackground queda
+      // vacío porque la interfaz lo exige, no es opcional.
+      zOrder: () => STATE.watchtower.behindCandles ? 'bottom' : 'top',
       renderer: () => ({
-        // "Draw behind candles" es el mismo STATE.watchtower.behindCandles
-        // que ya usa el Watchtower SVG (panel de settings compartido, ver
-        // openIndicatorSettings) — acá se replica con el mismo truco que
-        // ZentinelBehindDrawingsPrimitive más arriba: draw() SIEMPRE pinta
-        // por encima de las velas sin importar zOrder, drawBackground() es
-        // el único hook que pinta ANTES. Nunca se ejecutan los dos a la
-        // vez (si uno pinta, el otro vuelve sin hacer nada).
-        draw: (target) => {
-          if (STATE.watchtower.behindCandles) return;
-          target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx));
-        },
-        drawBackground: (target) => {
-          if (!STATE.watchtower.behindCandles) return;
-          target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx));
-        },
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx)); },
+        drawBackground: () => {},
       }),
     }];
   }
@@ -13731,10 +13731,14 @@ class SniperCanvasPrimitive {
   updateAllViews() {}
   paneViews() {
     return [{
-      zOrder: () => 'top',
+      // zOrder dinámico, no draw()/drawBackground() con zOrder fijo — ver
+      // el comentario largo en WatchtowerCanvasPrimitive: es el VALOR de
+      // zOrder, no cuál hook se use, lo que decide a cuál de los dos
+      // <canvas> del pane va a parar esto (el de velas o el de encima).
+      zOrder: () => STATE.sniper.behindCandles ? 'bottom' : 'top',
       renderer: () => ({
-        draw: (target) => { if (STATE.sniper.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintSniperCanvas(ctx)); },
-        drawBackground: (target) => { if (!STATE.sniper.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintSniperCanvas(ctx)); },
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintSniperCanvas(ctx)); },
+        drawBackground: () => {},
       }),
     }];
   }
@@ -13807,6 +13811,10 @@ class SweepsCanvasPrimitive {
   updateAllViews() {}
   paneViews() {
     return [{
+      // 'top' fijo: Sweeps no tiene "draw behind candles" (STATE.sweeps no
+      // tiene ese campo), así que siempre va al canvas de encima — ver el
+      // comentario largo en WatchtowerCanvasPrimitive sobre qué decide
+      // zOrder acá (a cuál de los dos <canvas> del pane va a parar esto).
       zOrder: () => 'top',
       renderer: () => ({
         draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintSweepsCanvas(ctx)); },
@@ -14175,6 +14183,10 @@ class FractalModelCanvasPrimitive {
   updateAllViews() {}
   paneViews() {
     return [{
+      // 'top' fijo: Fractal Model no tiene "draw behind candles" (STATE.
+      // fractalModel no tiene ese campo), así que siempre va al canvas de
+      // encima — ver el comentario largo en WatchtowerCanvasPrimitive sobre
+      // qué decide zOrder acá.
       zOrder: () => 'top',
       renderer: () => ({
         draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintFractalModelCanvas(ctx)); },
@@ -14484,10 +14496,14 @@ class StatMap2CanvasPrimitive {
   updateAllViews() {}
   paneViews() {
     return [{
-      zOrder: () => 'top',
+      // zOrder dinámico, no draw()/drawBackground() con zOrder fijo — ver
+      // el comentario largo en WatchtowerCanvasPrimitive: es el VALOR de
+      // zOrder, no cuál hook se use, lo que decide a cuál de los dos
+      // <canvas> del pane va a parar esto (el de velas o el de encima).
+      zOrder: () => STATE.statMap2.behindCandles ? 'bottom' : 'top',
       renderer: () => ({
-        draw: (target) => { if (STATE.statMap2.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintStatMap2Canvas(ctx)); },
-        drawBackground: (target) => { if (!STATE.statMap2.behindCandles) return; target.useMediaCoordinateSpace(({ context: ctx }) => paintStatMap2Canvas(ctx)); },
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintStatMap2Canvas(ctx)); },
+        drawBackground: () => {},
       }),
     }];
   }
