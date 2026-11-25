@@ -5342,7 +5342,7 @@ function saveIndicatorTemplatesState(){ lsSet('td_ind_templates', JSON.stringify
 // Watchtower/Sniper/Sweeps es su propio STATE.xxx; para cualquier otro
 // indicador "simple" (EMA, RSI...) es su entrada en indicatorStyles.
 function getIndSettingsObject(name){
-  if (name === 'Watchtower') return STATE.watchtower;
+  if (name === 'Watchtower' || name === 'Watchtower Canvas') return STATE.watchtower;
   if (name === 'Sniper') return STATE.sniper;
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
@@ -5352,10 +5352,11 @@ function getIndSettingsObject(name){
   return getIndicatorStyle(name, def || {});
 }
 function setIndSettingsObject(name, obj){
-  if (name === 'Watchtower') {
+  if (name === 'Watchtower' || name === 'Watchtower Canvas') {
     STATE.watchtower = Object.assign({}, obj, { enabled: STATE.watchtower.enabled });
     saveWatchtowerState(); renderWatchtower();
     ensureWeeklyHistoryForWatchtower();
+    if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   } else if (name === 'Sniper') {
     STATE.sniper = Object.assign({}, SNIPER_DEFAULTS, obj, { enabled: STATE.sniper.enabled });
     saveSniperState(); renderSniper();
@@ -11255,7 +11256,10 @@ function openIndicatorSettings(name) {
   if (window._indSettingsResetPosition) window._indSettingsResetPosition();
   document.getElementById('ind-settings-title').textContent = name + ' — Settings';
   const body = document.getElementById('ind-settings-body');
-  if (name === 'Watchtower') {
+  if (name === 'Watchtower' || name === 'Watchtower Canvas') {
+    // Watchtower Canvas no tiene config propia a propósito (ver
+    // STATE.watchtowerCanvas) — lee/escribe el MISMO STATE.watchtower que
+    // el Watchtower real, así que comparte este panel tal cual.
     const togglesHtml = WT_TOGGLE_DEFS.map(t => `
       <label class="wt-set-row">
         <span>${t.label}</span>
@@ -11689,7 +11693,7 @@ function saveIndicatorSettings() {
 // guardar lo que el usuario tiene tipeado AHORA, no lo último persistido)
 // sin cerrar el modal debajo del prompt() del nombre.
 function applyIndSettingsForm() {
-  if (_indSettingsTarget === 'Watchtower') {
+  if (_indSettingsTarget === 'Watchtower' || _indSettingsTarget === 'Watchtower Canvas') {
     document.querySelectorAll('#ind-settings-body [data-wt-key]').forEach(inp => {
       STATE.watchtower[inp.dataset.wtKey] = inp.checked;
     });
@@ -11743,6 +11747,10 @@ function applyIndSettingsForm() {
     saveWatchtowerState();
     renderWatchtower();
     ensureWeeklyHistoryForWatchtower(); // si recién ahora prendió PW, completa el historial que falte
+    // Watchtower Canvas lee el MISMO STATE.watchtower — alcanza con pedirle
+    // un repintado, su cache (ver _wtCanvasComputeCalls) ya invalida solo
+    // porque el JSON.stringify(STATE.watchtower) de la key cambió.
+    if (window._watchtowerCanvasRequestUpdate) window._watchtowerCanvasRequestUpdate();
   } else if (_indSettingsTarget === 'Sniper') {
     const g = id => document.getElementById(id);
     STATE.sniper.behindCandles = g('sn-behind-candles').checked;
@@ -13005,7 +13013,21 @@ class WatchtowerCanvasPrimitive {
     return [{
       zOrder: () => 'top',
       renderer: () => ({
-        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx)); },
+        // "Draw behind candles" es el mismo STATE.watchtower.behindCandles
+        // que ya usa el Watchtower SVG (panel de settings compartido, ver
+        // openIndicatorSettings) — acá se replica con el mismo truco que
+        // ZentinelBehindDrawingsPrimitive más arriba: draw() SIEMPRE pinta
+        // por encima de las velas sin importar zOrder, drawBackground() es
+        // el único hook que pinta ANTES. Nunca se ejecutan los dos a la
+        // vez (si uno pinta, el otro vuelve sin hacer nada).
+        draw: (target) => {
+          if (STATE.watchtower.behindCandles) return;
+          target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx));
+        },
+        drawBackground: (target) => {
+          if (!STATE.watchtower.behindCandles) return;
+          target.useMediaCoordinateSpace(({ context: ctx }) => paintWatchtowerCanvas(ctx));
+        },
       }),
     }];
   }
