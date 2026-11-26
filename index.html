@@ -5249,6 +5249,38 @@ const STAT_MAP_2_DEFAULTS = {
   // Etiquetas
   showLabels:true, labelSide:'right',
 };
+// Puerto de "FVG Multi TF + Volumen en Velas 2.1" (Pine v6) que pegó el
+// usuario 2026-11-26 — SOLO la parte de FVG Multi-Timeframe (el usuario
+// pidió dejar el coloreado de velas por volumen para otra etapa). TF
+// actual + 7 HTFs fijos (M3/M5/M15/M30/H1/H4/D, igual que el Pine), cada
+// uno con su propio bull/bear/count/colores. Reusa la misma arquitectura
+// de fetch+cache que Sniper usa para M15/H4 (ver snFetchTf/snGetFvgData
+// más abajo) generalizada a una lista de TFs — ver FMTF_TIMEFRAMES.
+const FMTF_TIMEFRAMES = [
+  { key:'m3',  tf:'3min',  cap:'M3'  },
+  { key:'m5',  tf:'5min',  cap:'M5'  },
+  { key:'m15', tf:'15min', cap:'M15' },
+  { key:'m30', tf:'30min', cap:'M30' },
+  { key:'h1',  tf:'1h',    cap:'H1'  },
+  { key:'h4',  tf:'4h',    cap:'H4'  },
+  { key:'d',   tf:'1day',  cap:'D'   },
+];
+const FVG_MULTI_TF_DEFAULTS = {
+  enabled:false,
+  hideFilledBull:true, hideFilledBear:true,
+  showHtfLevels:true,
+  level25Color:'rgba(255,235,59,0.5)', level50Color:'rgba(255,255,255,0.7)',
+  levelStyle:'dashed', levelWidth:1,
+  showCurrentBull:true, showCurrentBear:true, currentCount:1,
+  currentBullColor:'rgba(76,175,80,0.2)', currentBearColor:'rgba(158,158,158,0.2)',
+  showM3Bull:false, showM3Bear:false, m3Count:1, m3BullColor:'rgba(76,175,80,0.2)', m3BearColor:'rgba(158,158,158,0.2)',
+  showM5Bull:false, showM5Bear:false, m5Count:1, m5BullColor:'rgba(76,175,80,0.2)', m5BearColor:'rgba(158,158,158,0.2)',
+  showM15Bull:false, showM15Bear:false, m15Count:1, m15BullColor:'rgba(76,175,80,0.2)', m15BearColor:'rgba(158,158,158,0.2)',
+  showM30Bull:false, showM30Bear:false, m30Count:1, m30BullColor:'rgba(76,175,80,0.2)', m30BearColor:'rgba(158,158,158,0.2)',
+  showH1Bull:false, showH1Bear:false, h1Count:1, h1BullColor:'rgba(76,175,80,0.2)', h1BearColor:'rgba(158,158,158,0.2)',
+  showH4Bull:false, showH4Bear:false, h4Count:1, h4BullColor:'rgba(76,175,80,0.2)', h4BearColor:'rgba(158,158,158,0.2)',
+  showDBull:false, showDBear:false, dCount:1, dBullColor:'rgba(76,175,80,0.2)', dBearColor:'rgba(158,158,158,0.2)',
+};
 const STATE = {
   dataSource: lsGet(lsKey('td_datasource')) || 'binance', // 'mt5' | 'binance'
   // Tipo de gráfico de la serie principal — 'candles' | 'hollow' | 'bars'
@@ -5289,6 +5321,7 @@ const STATE = {
   sweeps: Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(lsGet(lsKey('td_sweeps')) || '{}')),
   fractalModel: Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(lsGet(lsKey('td_fractal_model')) || '{}')),
   statMap2: Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(lsGet(lsKey('td_stat_map2')) || '{}')),
+  fvgMultiTf: Object.assign({}, FVG_MULTI_TF_DEFAULTS, JSON.parse(lsGet(lsKey('td_fvg_multitf')) || '{}')),
   chartSettings: Object.assign({}, CHART_SETTINGS_DEFAULTS, JSON.parse(lsGet(lsKey('td_chart_settings')) || '{}')),
   indicatorStyles: JSON.parse(lsGet(lsKey('td_ind_styles')) || '{}'),
   // Templates NOMBRADOS por indicador — {nombreIndicador: {nombreTemplate:
@@ -5321,11 +5354,13 @@ STATE.sniper.enabled = STATE.indicators.includes('Sniper');
 STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
 STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
 STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
+STATE.fvgMultiTf.enabled = STATE.indicators.includes('FVG Multi TF');
 function saveWatchtowerState(){ lsSet(lsKey('td_watchtower'), JSON.stringify(STATE.watchtower)); }
 function saveSniperState(){ lsSet(lsKey('td_sniper'), JSON.stringify(STATE.sniper)); }
 function saveFractalModelState(){ lsSet(lsKey('td_fractal_model'), JSON.stringify(STATE.fractalModel)); }
 function saveSweepsState(){ lsSet(lsKey('td_sweeps'), JSON.stringify(STATE.sweeps)); }
 function saveStatMap2State(){ lsSet(lsKey('td_stat_map2'), JSON.stringify(STATE.statMap2)); }
+function saveFvgMultiTfState(){ lsSet(lsKey('td_fvg_multitf'), JSON.stringify(STATE.fvgMultiTf)); }
 function saveHiddenIndicatorsState(){ lsSet(lsKey('td_ind_hidden'), JSON.stringify(STATE.hiddenIndicators)); }
 function isIndicatorHidden(name){ return STATE.hiddenIndicators.includes(name); }
 function toggleIndicatorVisibility(name){
@@ -5338,6 +5373,7 @@ function toggleIndicatorVisibility(name){
   else if (name === 'Sweeps') { if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
   else if (name === 'Fractal Model') { if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
   else if (name === 'Stat Map 2') { if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
+  else if (name === 'FVG Multi TF') { if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate(); }
   else if (name === 'RSI') renderRsi();
   else if (overlays[name]) overlays[name].applyOptions({ visible: !isIndicatorHidden(name) });
 }
@@ -5373,6 +5409,7 @@ function getIndSettingsObject(name){
   if (name === 'Sweeps') return STATE.sweeps;
   if (name === 'Fractal Model') return STATE.fractalModel;
   if (name === 'Stat Map 2') return STATE.statMap2;
+  if (name === 'FVG Multi TF') return STATE.fvgMultiTf;
   if (name === 'RSI') return getRsiSettings();
   const def = INDICATOR_DEFS.find(d => d.name === name);
   return getIndicatorStyle(name, def || {});
@@ -5399,6 +5436,10 @@ function setIndSettingsObject(name, obj){
     STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, obj, { enabled: STATE.statMap2.enabled });
     saveStatMap2State();
     if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
+  } else if (name === 'FVG Multi TF') {
+    STATE.fvgMultiTf = Object.assign({}, FVG_MULTI_TF_DEFAULTS, obj, { enabled: STATE.fvgMultiTf.enabled });
+    saveFvgMultiTfState();
+    if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate();
   } else if (name === 'RSI') {
     STATE.indicatorStyles['RSI'] = obj;
     saveIndicatorStylesState();
@@ -11106,6 +11147,7 @@ const INDICATOR_DEFS = [
   { name:'Sweeps', desc:'Liquidity sweeps on the current TF (prior-bar high/low swept and rejected)', color:'#e8a33d', custom:true },
   { name:'Fractal Model', desc:'HTF sweep + C2/C3/C4 + CISD + Early CISD (FM°)', color:'#3d8bfd', custom:true },
   { name:'Stat Map 2', desc:'Port del OHLC StatMap Multi-Timeframe — 4 TFs configurables con niveles Manip/Dist/AvgHL', color:'#aa44ff', custom:true },
+  { name:'FVG Multi TF', desc:'Fair Value Gaps en el TF actual + M3/M5/M15/M30/H1/H4/D, con niveles internos 0.25/0.50/0.75 en los HTF', color:'#ffb300', custom:true },
 ];
 
 function openIndicatorModal() {
@@ -11146,6 +11188,7 @@ function applyIndicatorsList(selected) {
       else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
       else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
       else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
+      else if(name==='FVG Multi TF'){ STATE.fvgMultiTf.enabled=false; saveFvgMultiTfState(); if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate(); }
       else if(name==='RSI'){ destroyRsiChart(); }
     }
     else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
@@ -11188,6 +11231,7 @@ function addIndicatorSeries(name) {
     else if(name==='Sweeps'){ STATE.sweeps.enabled=true; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=true; saveFractalModelState(); if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=true; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
+    else if(name==='FVG Multi TF'){ STATE.fvgMultiTf.enabled=true; saveFvgMultiTfState(); if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate(); }
     else if(name==='RSI'){ renderRsi(); }
     return;
   }
@@ -11606,6 +11650,44 @@ function openIndicatorSettings(name) {
       <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Labels</div>
       <label class="wt-set-row"><span>Show</span><input type="checkbox" id="sm2-show-labels" ${s2.showLabels?'checked':''}></label>
       <div class="wt-set-row" style="gap:8px"><span style="flex:1">Side</span><select id="sm2-label-side" class="dtb-select" style="flex:1;"><option value="left" ${s2.labelSide==='left'?'selected':''}>Left</option><option value="right" ${s2.labelSide==='right'?'selected':''}>Right</option></select></div>`;
+  } else if (name === 'FVG Multi TF') {
+    const f = STATE.fvgMultiTf;
+    const lvl25 = snParseRgba(f.level25Color), lvl50 = snParseRgba(f.level50Color);
+    const cur25 = snParseRgba(f.currentBullColor), curB = snParseRgba(f.currentBearColor);
+    let html = `
+      <div class="wt-set-row" style="border-bottom:none;color:var(--text-dim);font-size:11px;text-transform:uppercase">Filled FVG</div>
+      <label class="wt-set-row"><span>Hide filled (bull)</span><input type="checkbox" id="fmtf-hide-filled-bull" ${f.hideFilledBull?'checked':''}></label>
+      <label class="wt-set-row"><span>Hide filled (bear)</span><input type="checkbox" id="fmtf-hide-filled-bear" ${f.hideFilledBear?'checked':''}></label>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Internal Levels (HTF only)</div>
+      <label class="wt-set-row"><span>Show 0.25 / 0.50 / 0.75</span><input type="checkbox" id="fmtf-show-levels" ${f.showHtfLevels?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Level 0.25/0.75 color</span><input type="color" id="fmtf-level25-color" value="${lvl25.hex}"><input type="number" id="fmtf-level25-color-tr" min="0" max="100" step="1" value="${lvl25.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Level 0.50 color</span><input type="color" id="fmtf-level50-color" value="${lvl50.hex}"><input type="number" id="fmtf-level50-color-tr" min="0" max="100" step="1" value="${lvl50.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px">
+        <span style="flex:1">Line style</span>
+        <select id="fmtf-level-style" class="dtb-select" style="flex:1;">
+          <option value="solid" ${f.levelStyle==='solid'?'selected':''}>Solid</option>
+          <option value="dashed" ${f.levelStyle==='dashed'?'selected':''}>Dashed</option>
+          <option value="dotted" ${f.levelStyle==='dotted'?'selected':''}>Dotted</option>
+        </select>
+      </div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Line width</span><input type="number" id="fmtf-level-width" min="1" max="4" step="1" value="${f.levelWidth}" style="width:56px"></div>
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">Current Timeframe</div>
+      <label class="wt-set-row"><span>Show bullish FVG</span><input type="checkbox" id="fmtf-show-current-bull" ${f.showCurrentBull?'checked':''}></label>
+      <label class="wt-set-row"><span>Show bearish FVG</span><input type="checkbox" id="fmtf-show-current-bear" ${f.showCurrentBear?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (how many to show)</span><input type="number" id="fmtf-current-count" min="1" max="20" step="1" value="${f.currentCount}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bull</span><input type="color" id="fmtf-current-bull-color" value="${cur25.hex}"><input type="number" id="fmtf-current-bull-color-tr" min="0" max="100" step="1" value="${cur25.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bear</span><input type="color" id="fmtf-current-bear-color" value="${curB.hex}"><input type="number" id="fmtf-current-bear-color-tr" min="0" max="100" step="1" value="${curB.transparency}" style="width:48px" title="Transparency %"></div>`;
+    FMTF_TIMEFRAMES.forEach(d => {
+      const bc = snParseRgba(f[d.key+'BullColor']), be = snParseRgba(f[d.key+'BearColor']);
+      html += `
+      <div class="wt-set-row" style="border-bottom:none;padding-top:12px;color:var(--text-dim);font-size:11px;text-transform:uppercase">FVG · ${d.cap}</div>
+      <label class="wt-set-row"><span>Show ${d.cap} bull</span><input type="checkbox" id="fmtf-show-${d.key}-bull" ${f['show'+d.cap+'Bull']?'checked':''}></label>
+      <label class="wt-set-row"><span>Show ${d.cap} bear</span><input type="checkbox" id="fmtf-show-${d.key}-bear" ${f['show'+d.cap+'Bear']?'checked':''}></label>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">N (how many to show)</span><input type="number" id="fmtf-${d.key}-count" min="1" max="20" step="1" value="${f[d.key+'Count']}" style="width:56px"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bull</span><input type="color" id="fmtf-${d.key}-bull-color" value="${bc.hex}"><input type="number" id="fmtf-${d.key}-bull-color-tr" min="0" max="100" step="1" value="${bc.transparency}" style="width:48px" title="Transparency %"></div>
+      <div class="wt-set-row" style="gap:8px"><span style="flex:1">Color bear</span><input type="color" id="fmtf-${d.key}-bear-color" value="${be.hex}"><input type="number" id="fmtf-${d.key}-bear-color-tr" min="0" max="100" step="1" value="${be.transparency}" style="width:48px" title="Transparency %"></div>`;
+    });
+    body.innerHTML = html;
   } else if (name === 'RSI') {
     const s = getRsiSettings();
     body.innerHTML = `
@@ -11875,6 +11957,30 @@ function applyIndSettingsForm() {
     s2.labelSide = g('sm2-label-side').value;
     saveStatMap2State();
     if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate();
+  } else if (_indSettingsTarget === 'FVG Multi TF') {
+    const g = id => document.getElementById(id);
+    const f = STATE.fvgMultiTf;
+    f.hideFilledBull = g('fmtf-hide-filled-bull').checked;
+    f.hideFilledBear = g('fmtf-hide-filled-bear').checked;
+    f.showHtfLevels = g('fmtf-show-levels').checked;
+    f.level25Color = snRgba(g('fmtf-level25-color').value, Number(g('fmtf-level25-color-tr').value)||0);
+    f.level50Color = snRgba(g('fmtf-level50-color').value, Number(g('fmtf-level50-color-tr').value)||0);
+    f.levelStyle = g('fmtf-level-style').value;
+    f.levelWidth = Math.max(1, Math.min(4, Number(g('fmtf-level-width').value)||1));
+    f.showCurrentBull = g('fmtf-show-current-bull').checked;
+    f.showCurrentBear = g('fmtf-show-current-bear').checked;
+    f.currentCount = Math.max(1, Math.min(20, Number(g('fmtf-current-count').value)||1));
+    f.currentBullColor = snRgba(g('fmtf-current-bull-color').value, Number(g('fmtf-current-bull-color-tr').value)||0);
+    f.currentBearColor = snRgba(g('fmtf-current-bear-color').value, Number(g('fmtf-current-bear-color-tr').value)||0);
+    FMTF_TIMEFRAMES.forEach(d => {
+      f['show'+d.cap+'Bull'] = g(`fmtf-show-${d.key}-bull`).checked;
+      f['show'+d.cap+'Bear'] = g(`fmtf-show-${d.key}-bear`).checked;
+      f[d.key+'Count'] = Math.max(1, Math.min(20, Number(g(`fmtf-${d.key}-count`).value)||1));
+      f[d.key+'BullColor'] = snRgba(g(`fmtf-${d.key}-bull-color`).value, Number(g(`fmtf-${d.key}-bull-color-tr`).value)||0);
+      f[d.key+'BearColor'] = snRgba(g(`fmtf-${d.key}-bear-color`).value, Number(g(`fmtf-${d.key}-bear-color-tr`).value)||0);
+    });
+    saveFvgMultiTfState();
+    if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate();
   } else if (_indSettingsTarget === 'RSI') {
     const g = id => document.getElementById(id);
     const obLevel = Math.max(51, Math.min(100, Number(g('rsi-ob-level').value)||70));
@@ -11915,6 +12021,7 @@ function removeIndicator(name){
     else if(name==='Sweeps'){ STATE.sweeps.enabled=false; saveSweepsState(); if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate(); }
     else if(name==='Fractal Model'){ STATE.fractalModel.enabled=false; saveFractalModelState(); if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate(); }
     else if(name==='Stat Map 2'){ STATE.statMap2.enabled=false; saveStatMap2State(); if (window._statMap2CanvasRequestUpdate) window._statMap2CanvasRequestUpdate(); }
+    else if(name==='FVG Multi TF'){ STATE.fvgMultiTf.enabled=false; saveFvgMultiTfState(); if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate(); }
     else if(name==='RSI'){ destroyRsiChart(); }
   }
   else if(overlays[name]){ chart.removeSeries(overlays[name]); delete overlays[name]; }
@@ -13767,6 +13874,215 @@ class SniperCanvasPrimitive {
 }
 
 // ══════════════════════════════════════════════════════════
+//  FVG MULTI TF — port de "FVG Multi TF + Volumen en Velas 2.1" (Pine v6,
+//  solo la parte de FVG — el usuario pidió dejar el coloreado de velas
+//  por volumen para otra etapa). TF actual (sin niveles internos) + 7 HTFs
+//  fijos — M3/M5/M15/M30/H1/H4/D (FMTF_TIMEFRAMES más arriba) — cada uno
+//  con niveles internos 0.25/0.50/0.75 opcionales.
+//
+//  Detección: mismo patrón de 3 velas que ya usa Sniper para M15/H4
+//  (snDetectFvgs) pero con el criterio de "filled" del Pine, que es por
+//  CUERPO (min(open,close)<=bottom / max(open,close)>=top), no por close
+//  únicamente como snDetectFvgs — de ahí fmtfDetectFvgs en vez de reusar
+//  snDetectFvgs tal cual. Igual que snDetectFvgs, se excluye la última
+//  vela (en formación) tanto de crear un FVG nuevo como de invalidar uno
+//  existente — mismo criterio anti-parpadeo ya establecido en el resto del
+//  puerto (ver el comentario largo de snDetectFvgs).
+function fmtfDetectFvgs(candles){
+  const bull=[], bear=[];
+  const confirmedLen = Math.max(0, candles.length - 1);
+  for (let i=2;i<confirmedLen;i++){
+    const c0=candles[i-2], c2=candles[i];
+    if (c0.high < c2.low)  bull.push({ startIdx:i-2, createIdx:i, top:c2.low, bottom:c0.high, filledIdx:null });
+    if (c0.low  > c2.high) bear.push({ startIdx:i-2, createIdx:i, top:c0.low, bottom:c2.high, filledIdx:null });
+  }
+  function markFilled(list, isBull){
+    list.forEach(f=>{
+      for (let k=f.createIdx+1; k<confirmedLen; k++){
+        const c=candles[k];
+        const bodyLo=Math.min(c.open,c.close), bodyHi=Math.max(c.open,c.close);
+        const invalid = isBull ? (bodyLo <= f.bottom) : (bodyHi >= f.top);
+        if (invalid){ f.filledIdx=k; break; }
+      }
+    });
+  }
+  markFilled(bull,true); markFilled(bear,false);
+  return {bull,bear};
+}
+
+// Fetch+cache de las 7 HTFs — mismo patrón que snGetFvgData/snEnsureFvgData
+// (ver más arriba) generalizado a una lista de TFs en vez de M15/H4 fijos;
+// reusa snFetchTf tal cual (ya es genérico). Refresca cada 5 min, igual
+// que Sniper — pedir al puente en cada repintado (pan/zoom/tick) sería
+// un pedido de red por frame.
+const _fmtfCache = {};
+const _fmtfReplayCache = {}; // ver fmtfGetData — una entrada por símbolo, atada al cutTime actual del replay
+const FMTF_REFRESH_MS = 5*60*1000;
+const FMTF_BARS = 1000;
+
+function _fmtfEmptyEntry(){
+  const e = { fetchedAt:0, pending:true };
+  FMTF_TIMEFRAMES.forEach(d => { e[d.key]=[]; e[d.key+'Fvgs']={bull:[],bear:[]}; });
+  return e;
+}
+function _fmtfFillEntry(entry, results){
+  results.forEach((candles, i) => {
+    const d = FMTF_TIMEFRAMES[i];
+    if (candles) { entry[d.key] = candles; entry[d.key+'Fvgs'] = fmtfDetectFvgs(candles); }
+  });
+}
+
+async function fmtfEnsureData(symbol){
+  const entry = _fmtfCache[symbol];
+  const results = await Promise.all(FMTF_TIMEFRAMES.map(d => snFetchTf(symbol, d.tf, FMTF_BARS)));
+  _fmtfFillEntry(entry, results);
+  entry.fetchedAt = Date.now();
+  entry.pending = false;
+  if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate();
+}
+
+async function fmtfEnsureDataReplay(symbol, cutTime, entry, targetBucket){
+  const results = await Promise.all(FMTF_TIMEFRAMES.map(d => snFetchTf(symbol, d.tf, FMTF_BARS, cutTime)));
+  // Igual que snEnsureFvgDataReplay: si para cuando esto contesta el
+  // replay ya pidió un bucket más nuevo (o se apagó, o cambió de símbolo),
+  // esta respuesta ya no corresponde a nada que se esté mostrando.
+  if (!window._replay || entry.cutBucket !== targetBucket) return;
+  _fmtfFillEntry(entry, results);
+  entry.fetchedAt = Date.now();
+  entry.pending = false;
+  if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate();
+}
+
+const _fmtfReplayTimers = {}; // ver fmtfGetData — un debounce por símbolo
+
+function fmtfGetData(symbol){
+  // Mismo criterio que snGetFvgData: en replay, las HTF no pueden venir
+  // del fetch "en vivo" de siempre (_fmtfCache, siempre trae las últimas
+  // FMTF_BARS velas REALES) — hay que pedirlas con before=cutTime (el
+  // cierre de la última vela real del replay) y cachear por (symbol,
+  // cutTime), redondeado al bucket de la HTF más fina (M3, 180s: ninguna
+  // HTF de la lista puede cambiar más seguido que eso).
+  if (window._replay){
+    const candles = window._lastCandles||[];
+    const lastTime = candles.length ? candles[candles.length-1].time : 0;
+    const cutTime = lastTime + tfToSeconds(STATE.timeframe);
+    const cutBucket = Math.floor(cutTime/180)*180;
+    let entry = _fmtfReplayCache[symbol];
+    if (!entry){
+      entry = _fmtfReplayCache[symbol] = Object.assign(_fmtfEmptyEntry(), { cutBucket:null, cutTime });
+    }
+    if (entry.cutBucket !== cutBucket){
+      entry.cutBucket = cutBucket;
+      entry.cutTime = cutTime;
+      // Debounce (ver snGetFvgData): en reproducción rápida el replay
+      // cruza varios buckets de 3min por segundo — pedirle al puente en
+      // CADA uno encola pedidos que ya van a estar obsoletos.
+      clearTimeout(_fmtfReplayTimers[symbol]);
+      _fmtfReplayTimers[symbol] = setTimeout(()=>{
+        if (window._replay && entry.cutBucket === cutBucket) fmtfEnsureDataReplay(symbol, cutTime, entry, cutBucket);
+      }, 400);
+    }
+    return entry;
+  }
+  let entry = _fmtfCache[symbol];
+  if (!entry){
+    entry = _fmtfCache[symbol] = _fmtfEmptyEntry();
+    fmtfEnsureData(symbol);
+  } else if (!entry.pending && Date.now()-entry.fetchedAt > FMTF_REFRESH_MS){
+    entry.pending = true;
+    fmtfEnsureData(symbol);
+  }
+  return entry;
+}
+
+// Niveles internos 0.25/0.50/0.75 de un FVG HTF — mismo cálculo que
+// f_create_levels del Pine (rng = top-bottom, niveles desde bottom).
+function fmtfDrawLevels(svg, top, bottom, t1, t2, cfg){
+  const rng = top - bottom;
+  const dash = wtStyleToDash(cfg.levelStyle);
+  wtLine(svg, t1, t2, bottom + rng*0.25, cfg.level25Color, cfg.levelWidth, dash, 'FVG Multi TF');
+  wtLine(svg, t1, t2, bottom + rng*0.50, cfg.level50Color, cfg.levelWidth, dash, 'FVG Multi TF');
+  wtLine(svg, t1, t2, bottom + rng*0.75, cfg.level25Color, cfg.levelWidth, dash, 'FVG Multi TF');
+}
+
+// Mismo patrón que snDrawFvgBoxes (ver más arriba, mismo razonamiento del
+// comentario de ahí sobre por qué medir la extensión en velas del CHART y
+// no de la HTF del FVG) + el agregado de niveles internos para HTF.
+function fmtfDrawFvgBoxes(svg, chartCandles, mtfCandles, list, color, showToggle, maxCount, hideFilled, lastTime, barStepMtf, drawLevels, cfg){
+  if (!showToggle || !mtfCandles.length) return;
+  const chartBarStep = chartCandles.length>1 ? (chartCandles[1].time-chartCandles[0].time) : barStepMtf;
+  let shown = hideFilled ? list.filter(f=>f.filledIdx==null) : list;
+  shown = shown.slice().sort((a,b)=>b.createIdx-a.createIdx).slice(0, maxCount);
+  shown.forEach(f=>{
+    const rawT1 = mtfCandles[f.startIdx].time;
+    const t1 = wtNearestCandleTime(chartCandles, rawT1);
+    const t2 = f.filledIdx!=null
+      ? wtNearestCandleTime(chartCandles, mtfCandles[f.filledIdx].time)
+      : lastTime + LEVEL_EXTEND_BARS*chartBarStep;
+    wtRect(svg, t1, t2, f.top, f.bottom, color, 1, 'none', 'FVG Multi TF');
+    if (drawLevels && cfg.showHtfLevels) fmtfDrawLevels(svg, f.top, f.bottom, t1, t2, cfg);
+  });
+}
+
+let _fmtfCanvasScratchSvg = null;
+let _fmtfCanvasDrawCache = null; // {key, calls}
+function _fmtfCanvasComputeCalls(candles, lastTime){
+  const cfg = STATE.fvgMultiTf;
+  const fvgData = fmtfGetData(STATE.symbol);
+  const cacheKey = _candlesFingerprint(candles) + '|' + STATE.timeframe + '|' + JSON.stringify(cfg) + '|' + fvgData.fetchedAt;
+  if (_fmtfCanvasDrawCache && _fmtfCanvasDrawCache.key === cacheKey) return _fmtfCanvasDrawCache.calls;
+  if (!_fmtfCanvasScratchSvg) _fmtfCanvasScratchSvg = document.createElementNS(WT_SVG_NS, 'svg');
+  const svg = _fmtfCanvasScratchSvg;
+  const hrBefore = (window._indicatorHitRegions||[]).length;
+  _wtRecordBuf = [];
+
+  const barStep = candles.length>1 ? candles[1].time-candles[0].time : 60;
+  const curFvgs = fmtfDetectFvgs(candles);
+  fmtfDrawFvgBoxes(svg, candles, candles, curFvgs.bull, cfg.currentBullColor, cfg.showCurrentBull, cfg.currentCount, cfg.hideFilledBull, lastTime, barStep, false, cfg);
+  fmtfDrawFvgBoxes(svg, candles, candles, curFvgs.bear, cfg.currentBearColor, cfg.showCurrentBear, cfg.currentCount, cfg.hideFilledBear, lastTime, barStep, false, cfg);
+
+  FMTF_TIMEFRAMES.forEach(d => {
+    const tfCandles = fvgData[d.key] || [];
+    if (!tfCandles.length) return;
+    const tfFvgs = fvgData[d.key+'Fvgs'] || {bull:[],bear:[]};
+    const tfStep = tfCandles.length>1 ? tfCandles[1].time-tfCandles[0].time : barStep;
+    fmtfDrawFvgBoxes(svg, candles, tfCandles, tfFvgs.bull, cfg[d.key+'BullColor'], cfg['show'+d.cap+'Bull'], cfg[d.key+'Count'], cfg.hideFilledBull, lastTime, tfStep, true, cfg);
+    fmtfDrawFvgBoxes(svg, candles, tfCandles, tfFvgs.bear, cfg[d.key+'BearColor'], cfg['show'+d.cap+'Bear'], cfg[d.key+'Count'], cfg.hideFilledBear, lastTime, tfStep, true, cfg);
+  });
+
+  const calls = _wtRecordBuf;
+  _wtRecordBuf = null;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  window._indicatorHitRegions = (window._indicatorHitRegions||[]).slice(0, hrBefore);
+  _fmtfCanvasDrawCache = { key: cacheKey, calls };
+  return calls;
+}
+function paintFvgMultiTfCanvas(ctx){
+  if (!STATE.fvgMultiTf.enabled || isIndicatorHidden('FVG Multi TF')) return;
+  const candles = window._lastCandles || [];
+  if (candles.length < 5) return;
+  const lastTime = candles[candles.length-1].time;
+  _paintWtCallsToCanvas(ctx, _fmtfCanvasComputeCalls(candles, lastTime), 'FVG Multi TF');
+}
+// Sin "draw behind candles" (el Pine original no lo tiene para las cajas
+// de box.new) — mismo criterio que Sweeps/Fractal Model: zOrder fijo en
+// 'top', sin la rama drawBackground que sí tienen Watchtower/Sniper/Stat Map 2.
+class FvgMultiTfCanvasPrimitive {
+  attached(param) { window._fvgMultiTfCanvasRequestUpdate = () => param.requestUpdate(); }
+  detached() { if (window._fvgMultiTfCanvasRequestUpdate) delete window._fvgMultiTfCanvasRequestUpdate; }
+  updateAllViews() {}
+  paneViews() {
+    return [{
+      zOrder: () => 'top',
+      renderer: () => ({
+        draw: (target) => { target.useMediaCoordinateSpace(({ context: ctx }) => paintFvgMultiTfCanvas(ctx)); },
+        drawBackground: () => {},
+      }),
+    }];
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 //  SWEEPS — port de la parte "Sweeps en TF actual" de
 //  "SweepS Fractales HTF + Actual" (Pine v6). Solo ese bloque: sin el
 //  sweep HTF (eso ya lo cubre Sniper) y sin la máquina de estados `var`
@@ -15461,6 +15777,7 @@ function captureWorkspace(){
     sweeps: JSON.parse(JSON.stringify(STATE.sweeps)),
     fractalModel: JSON.parse(JSON.stringify(STATE.fractalModel)),
     statMap2: JSON.parse(JSON.stringify(STATE.statMap2)),
+    fvgMultiTf: JSON.parse(JSON.stringify(STATE.fvgMultiTf)),
     toolDefaults: { ...toolDefaults },
     // Dibujos manuales (trendlines, fibs, rects, herramienta de posición...)
     // tal cual quedan en pantalla, con sus horarios/precios crudos — igual
@@ -15571,7 +15888,7 @@ function captureAppState(){
   return JSON.parse(JSON.stringify({
     chartSettings: STATE.chartSettings, indicators: STATE.indicators, indicatorStyles: STATE.indicatorStyles,
     watchtower: STATE.watchtower, sniper: STATE.sniper, sweeps: STATE.sweeps,
-    fractalModel: STATE.fractalModel, statMap2: STATE.statMap2, toolDefaults: toolDefaults,
+    fractalModel: STATE.fractalModel, statMap2: STATE.statMap2, fvgMultiTf: STATE.fvgMultiTf, toolDefaults: toolDefaults,
   }));
 }
 // Mitad "Theme" de restoreAppState — también la usa applyPreset solo,
@@ -15592,11 +15909,13 @@ function restoreIndicatorsAndTools(s){
   STATE.sweeps = Object.assign({}, SWEEPS_DEFAULTS, JSON.parse(JSON.stringify(s.sweeps || {})));
   STATE.fractalModel = Object.assign({}, FRACTAL_MODEL_DEFAULTS, JSON.parse(JSON.stringify(s.fractalModel || {})));
   STATE.statMap2 = Object.assign({}, STAT_MAP_2_DEFAULTS, JSON.parse(JSON.stringify(s.statMap2 || {})));
+  STATE.fvgMultiTf = Object.assign({}, FVG_MULTI_TF_DEFAULTS, JSON.parse(JSON.stringify(s.fvgMultiTf || {})));
   STATE.indicators = [...(s.indicators || [])];
   STATE.sniper.enabled = STATE.indicators.includes('Sniper');
   STATE.sweeps.enabled = STATE.indicators.includes('Sweeps');
   STATE.fractalModel.enabled = STATE.indicators.includes('Fractal Model');
   STATE.statMap2.enabled = STATE.indicators.includes('Stat Map 2');
+  STATE.fvgMultiTf.enabled = STATE.indicators.includes('FVG Multi TF');
   STATE.watchtowerCanvas.enabled = STATE.indicators.includes('Watchtower 2.0');
   if (s.toolDefaults) Object.assign(toolDefaults, s.toolDefaults);
 
@@ -15618,6 +15937,7 @@ function restoreIndicatorsAndTools(s){
   if (window._sniperCanvasRequestUpdate) window._sniperCanvasRequestUpdate();
   if (window._sweepsCanvasRequestUpdate) window._sweepsCanvasRequestUpdate();
   if (window._fractalModelCanvasRequestUpdate) window._fractalModelCanvasRequestUpdate();
+  if (window._fvgMultiTfCanvasRequestUpdate) window._fvgMultiTfCanvasRequestUpdate();
 }
 // Compone las dos mitades de arriba — mismo resultado neto que antes del
 // split, así el Undo (único que usa esta función) no cambia de
@@ -16312,6 +16632,7 @@ function createMainSeries(){
   candleSeries.attachPrimitive(new SniperCanvasPrimitive());
   candleSeries.attachPrimitive(new SweepsCanvasPrimitive());
   candleSeries.attachPrimitive(new FractalModelCanvasPrimitive());
+  candleSeries.attachPrimitive(new FvgMultiTfCanvasPrimitive());
   applyMainSeriesColors();
 }
 
